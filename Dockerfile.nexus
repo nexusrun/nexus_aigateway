@@ -14,7 +14,6 @@ RUN mkdir -p /out/config /out/.cache /out/data \
 
 FROM gcr.io/distroless/static-debian12:nonroot
 
-LABEL io.modelcontextprotocol.server.name="io.github.ENTERPILOT/gomodel"
 
 COPY --from=builder /out/gomodel /gomodel
 COPY --from=builder /out/config/*.yaml /app/config/
