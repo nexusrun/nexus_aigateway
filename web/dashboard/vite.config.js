@@ -17,13 +17,13 @@ export default defineConfig(({ command }) => ({
   plugins: [paraglideVitePlugin(paraglideOptions), svelte()],
   resolve: {
     alias: {
-      $lib: path.resolve(__dirname, "src/lib"),
-      $pages: path.resolve(__dirname, "src/pages"),
+      $lib: path.resolve(import.meta.dirname, "src/lib"),
+      $pages: path.resolve(import.meta.dirname, "src/pages"),
     },
   },
   build: {
     outDir: path.resolve(
-      __dirname,
+      import.meta.dirname,
       "../../internal/admin/dashboard/static/dist",
     ),
     emptyOutDir: true,
