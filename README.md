@@ -6,10 +6,6 @@
   NEXUS AI Gateway - The last AI gateway you will ever need
 </h1>
 
-<p align="center">
-  <a href="https://github.com/saifelyzal/nexusruntime/actions/workflows/test.yml"><img alt="CI" src="https://github.com/saifelyzal/nexusruntime/actions/workflows/test.yml/badge.svg"></a>
-  <a href="https://github.com/saifelyzal/nexusruntime/blob/main/go.mod"><img alt="GO Version" src="https://img.shields.io/github/go-mod/go-version/saifelyzal/nexusruntime?label=GO"></a>
-  <a href="https://discord.gg/gaEB9BQSPH"><img alt="Discord" src="https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white"></a>
 </p>
 
 
@@ -180,15 +176,6 @@ for the full list of settings.
 - [Observability](https://aigateway.nexusai.run/docs/guides/prometheus-metrics?utm_source=readme) - Prometheus metrics, [OpenTelemetry](https://aigateway.nexusai.run/docs/guides/opentelemetry?utm_source=readme) traces, audit logs, and live request streaming in the dashboard
 - [Playground](https://aigateway.nexusai.run/docs/features/playground?utm_source=readme) - try any model or virtual model from the dashboard and inspect the exact request and response JSON
 
-## NEXUS AI Gateway Pro
-
-[NEXUS AI Gateway Pro](https://aigateway.nexusai.run/docs/pro/overview?utm_source=readme) is the commercial build: the same gateway, configuration, and dashboard, with licensed extensions.
-
-- [Prompt compression](https://aigateway.nexusai.run/docs/pro/compression?utm_source=readme) - remove repeated and structural context before it reaches the provider, without changing the request shape
-- [Intelligent routing](https://aigateway.nexusai.run/docs/pro/intelligent-routing?utm_source=readme) - classify each request as easy or hard, then pick the healthiest and cheapest provider in that tier
-- [OIDC single sign-on](https://aigateway.nexusai.run/docs/pro/sso?utm_source=readme) - protect the dashboard with your identity provider using Authorization Code flow with PKCE
-
-More in the documentation...
 
 ## Roadmap
 
