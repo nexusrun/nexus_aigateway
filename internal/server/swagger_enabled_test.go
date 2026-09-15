@@ -46,8 +46,8 @@ func TestSwaggerDocJson_ReturnsExpectedContent(t *testing.T) {
 	}
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "GoModel") {
-		t.Errorf("expected doc.json to contain GoModel API title, got: %s", body[:min(300, len(body))])
+	if !strings.Contains(body, "NEXUS AI Gateway") {
+		t.Errorf("expected doc.json to contain NEXUS AI Gateway title, got: %s", body[:min(300, len(body))])
 	}
 	if !strings.Contains(body, "swagger") {
 		t.Errorf("expected doc.json to contain swagger spec, got: %s", body[:min(300, len(body))])
