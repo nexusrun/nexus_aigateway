@@ -1,49 +1,25 @@
-# Build stage — run on the build host's native arch for speed, cross-compile for target
-FROM --platform=$BUILDPLATFORM golang:1.27.1-alpine3.24 AS builder
+FROM golang:1.27.1-alpine3.24 AS builder
+RUN apk add --no-cache git ca-certificates nodejs npm
+ARG REPO_URL=https://github.com/nexusrun/nexus_aigateway.git
+ARG REPO_REF=main
+ARG VERSION=nexus
+WORKDIR /src
+RUN git clone "${REPO_URL}" . && git checkout "${REPO_REF}"
+RUN cd web/dashboard && npm ci --no-audit --no-fund --ignore-scripts && npm run build
+RUN CGO_ENABLED=0 go build -ldflags="-s -w -X github.com/nexusrun/nexus_aigateway/internal/version.Version=${VERSION} -X github.com/nexusrun/nexus_aigateway/internal/version.Commit=$(git rev-parse --short HEAD)" -o /usr/local/bin/gomodel ./cmd/gomodel
 
-ARG TARGETOS
-ARG TARGETARCH
-ARG TARGETVARIANT
+RUN mkdir -p /out/config /out/.cache /out/data \
+	&& cp /src/config/*.yaml /out/config/ \
+	&& cp /usr/local/bin/gomodel /out/gomodel
 
-WORKDIR /app
-
-# Install ca-certificates for HTTPS requests.
-# Do not pin the apk revision here: Alpine rotates package revisions
-# within a release branch, which breaks Docker builds over time.
-RUN apk add --no-cache ca-certificates
-
-# Download dependencies first for better layer caching
-#COPY go.mod go.sum ./
-#RUN go mod download
-
-# Copy source and cross-compile for the target platform
-COPY . .
-ARG VERSION=dev
-ARG COMMIT=none
-ARG DATE=unknown
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOARM=${TARGETVARIANT#v} go build \
-	-ldflags="-s -w -X github.com/nexusrun/nexus_aigateway/internal/version.Version=${VERSION} -X github.com/nexusrun/nexus_aigateway/internal/version.Commit=${COMMIT} -X github.com/nexusrun/nexus_aigateway/internal/version.Date=${DATE}" \
-	-o /gomodel ./cmd/gomodel
-
-# Create .cache and data directories for runtime (with placeholder for COPY)
-RUN mkdir -p /app/.cache /app/data && touch /app/.cache/.keep /app/data/.keep
-
-# Runtime stage
 FROM gcr.io/distroless/static-debian12:nonroot
 
 
-# Copy binary and runtime config
-COPY --from=builder /gomodel /gomodel
-COPY --from=builder /app/config/*.yaml /app/config/
-
-# Create writable .cache and data directories for nonroot user (UID=65532)
-COPY --from=builder --chown=65532:65532 /app/.cache /app/.cache
-COPY --from=builder --chown=65532:65532 /app/data /app/data
+COPY --from=builder /out/gomodel /gomodel
+COPY --from=builder /out/config/*.yaml /app/config/
+COPY --from=builder --chown=65532:65532 /out/.cache /app/.cache
+COPY --from=builder --chown=65532:65532 /out/data /app/data
 
 WORKDIR /app
-
 EXPOSE 8080
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD ["/gomodel", "--health"]
-
 ENTRYPOINT ["/gomodel"]
