@@ -7,4 +7,4 @@ nexus deploy source --repo https://github.com/nexusrun/nexus_aigateway.git \
 --no-health-check no \
 --env-file /Users/ihope/build/aigateway/.env \
 --repo-secret gitrepo \
---dockerfile "$(cat /Users/ihope/build/aigateway/Dockerfile.nexus)"
+--dockerfile Dockerfile.nexus
