@@ -4,7 +4,7 @@ ARG REPO_URL=https://github.com/nexusrun/nexus_aigateway.git
 ARG REPO_REF=main
 ARG VERSION=nexus
 WORKDIR /src
-RUN git clone "${REPO_URL}" . && git checkout "${REPO_REF}"
+RUN git clone --depth 1 --branch "${REPO_REF}" "${REPO_URL}" .
 RUN cd web/dashboard && npm install --include=dev --package-lock=false --no-audit --no-fund --ignore-scripts && npm run build
 RUN CGO_ENABLED=0 go build -ldflags="-s -w -X github.com/nexusrun/nexus_aigateway/internal/version.Version=${VERSION} -X github.com/nexusrun/nexus_aigateway/internal/version.Commit=$(git rev-parse --short HEAD)" -o /usr/local/bin/gomodel ./cmd/gomodel
 
