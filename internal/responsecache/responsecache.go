@@ -11,11 +11,11 @@ import (
 	"github.com/labstack/echo/v5"
 	"github.com/tidwall/gjson"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/internal/cache"
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/embedding"
-	"github.com/enterpilot/gomodel/internal/usage"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/internal/cache"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/embedding"
+	"github.com/nexusrun/nexus_aigateway/internal/usage"
 )
 
 const responseCachePrefix = "gomodel:response:"

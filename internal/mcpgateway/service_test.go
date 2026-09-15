@@ -13,9 +13,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/usage"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/usage"
 )
 
 // newTestUpstream serves a real MCP server over streamable HTTP and returns

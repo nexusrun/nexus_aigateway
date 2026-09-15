@@ -10,9 +10,9 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/enterpilot/gomodel/internal/storage/sqlx"
-	"github.com/enterpilot/gomodel/internal/storage/sqlx/sqlxtest"
-	"github.com/enterpilot/gomodel/internal/usage"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlx"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlx/sqlxtest"
+	"github.com/nexusrun/nexus_aigateway/internal/usage"
 )
 
 func runSQLStoreTest(t *testing.T, body func(t *testing.T, store *SQLStore)) {

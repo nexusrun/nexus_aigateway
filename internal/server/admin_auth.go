@@ -6,7 +6,7 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"github.com/enterpilot/gomodel/internal/adminauth"
+	"github.com/nexusrun/nexus_aigateway/internal/adminauth"
 )
 
 type adminLoginRequest struct {

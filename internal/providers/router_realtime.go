@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // RealtimeTarget resolves the upstream realtime websocket for the model's owning

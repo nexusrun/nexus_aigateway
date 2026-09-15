@@ -11,8 +11,8 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 func TestBuildImageUploadBody(t *testing.T) {

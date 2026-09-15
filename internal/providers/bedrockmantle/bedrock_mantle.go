@@ -14,10 +14,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/httpclient"
-	"github.com/enterpilot/gomodel/internal/providers"
-	"github.com/enterpilot/gomodel/internal/providers/openai"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/httpclient"
+	"github.com/nexusrun/nexus_aigateway/internal/providers"
+	"github.com/nexusrun/nexus_aigateway/internal/providers/openai"
 )
 
 const providerName = "bedrock-mantle"

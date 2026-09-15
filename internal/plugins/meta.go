@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // MetaFromContext snapshots the request facts a hook may read from the

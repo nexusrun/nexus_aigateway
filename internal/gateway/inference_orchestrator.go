@@ -5,9 +5,9 @@ import (
 	"io"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/streaming"
-	"github.com/enterpilot/gomodel/internal/usage"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/streaming"
+	"github.com/nexusrun/nexus_aigateway/internal/usage"
 )
 
 // RouteGate reports whether a provider/model route currently has rate-limit

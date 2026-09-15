@@ -11,7 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/storage"
+	"github.com/nexusrun/nexus_aigateway/internal/storage"
 )
 
 // clearProviderEnvVars unsets all known provider-related environment variables.

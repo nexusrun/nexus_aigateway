@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // PrepareChatRequest resolves workflow/model policy and applies translated request patching.

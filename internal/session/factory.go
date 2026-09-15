@@ -3,7 +3,7 @@ package session
 import (
 	"strings"
 
-	"github.com/enterpilot/gomodel/config"
+	"github.com/nexusrun/nexus_aigateway/config"
 )
 
 // NewDetectorFromConfig builds the request session detector from application

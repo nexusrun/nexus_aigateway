@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 func TestBufferedSSEStream_ReplayUnchanged(t *testing.T) {

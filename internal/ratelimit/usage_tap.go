@@ -3,7 +3,7 @@ package ratelimit
 import (
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/usage"
+	"github.com/nexusrun/nexus_aigateway/internal/usage"
 )
 
 // UsageTap decorates a usage logger so every recorded entry also feeds token

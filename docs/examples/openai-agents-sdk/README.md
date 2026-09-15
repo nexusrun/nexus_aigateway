@@ -8,7 +8,7 @@ Start GoModel first:
 docker run --rm -p 8080:8080 \
   -e GOMODEL_MASTER_KEY="change-me" \
   -e OPENAI_API_KEY="sk-..." \
-  enterpilot/gomodel
+  nexusrun/nexus_aigateway
 ```
 
 Then run one of the examples:

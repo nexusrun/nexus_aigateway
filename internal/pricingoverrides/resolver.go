@@ -3,7 +3,7 @@ package pricingoverrides
 import (
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // ResolvePricing resolves base pricing and applies the most specific DB override.

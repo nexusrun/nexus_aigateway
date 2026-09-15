@@ -10,9 +10,9 @@ import (
 
 	"github.com/goccy/go-json"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/storage/sqlx"
-	"github.com/enterpilot/gomodel/internal/storage/sqlx/sqlxtest"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlx"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlx/sqlxtest"
 )
 
 // These cases matter most on PostgreSQL: the atomic JSON mutations they cover

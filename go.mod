@@ -1,4 +1,4 @@
-module github.com/enterpilot/gomodel
+module github.com/nexusrun/nexus_aigateway
 
 go 1.27.1
 

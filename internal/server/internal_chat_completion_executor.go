@@ -12,11 +12,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/enterpilot/gomodel/internal/auditlog"
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/gateway"
-	"github.com/enterpilot/gomodel/internal/responsecache"
-	"github.com/enterpilot/gomodel/internal/usage"
+	"github.com/nexusrun/nexus_aigateway/internal/auditlog"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/gateway"
+	"github.com/nexusrun/nexus_aigateway/internal/responsecache"
+	"github.com/nexusrun/nexus_aigateway/internal/usage"
 )
 
 // InternalChatCompletionExecutorConfig configures the transport-free translated

@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // RequestState is the per-request plugin state shared by every Exchange built

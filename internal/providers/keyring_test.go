@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 func TestNewKeyring(t *testing.T) {

@@ -3,7 +3,7 @@ package plugins
 import (
 	"testing"
 
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // editorPlugin is a mutating plugin whose configuration decides whether it

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/internal/providers"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/internal/providers"
 )
 
 // recordAuthServer serves /models and records the Authorization header of every

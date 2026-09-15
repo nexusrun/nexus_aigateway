@@ -15,7 +15,7 @@ func TestStdlibOnly(t *testing.T) {
 	}
 	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
 		line = strings.TrimSpace(line)
-		if line == "" || line == "github.com/enterpilot/gomodel/pluginapi" {
+		if line == "" || line == "github.com/nexusrun/nexus_aigateway/pluginapi" {
 			continue
 		}
 		t.Errorf("pluginapi must import the standard library only, found dependency %q", line)

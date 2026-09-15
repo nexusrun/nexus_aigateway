@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/storage/sqlx"
-	"github.com/enterpilot/gomodel/internal/storage/sqlx/sqlxtest"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlx"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlx/sqlxtest"
 )
 
 // requireTrigramIndex opens a store and reader on a PostgreSQL database that

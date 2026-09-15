@@ -16,10 +16,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/enterpilot/gomodel/internal/auditlog"
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/providers"
-	"github.com/enterpilot/gomodel/internal/server"
+	"github.com/nexusrun/nexus_aigateway/internal/auditlog"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/providers"
+	"github.com/nexusrun/nexus_aigateway/internal/server"
 )
 
 // mockLogStore is an in-memory log store for testing

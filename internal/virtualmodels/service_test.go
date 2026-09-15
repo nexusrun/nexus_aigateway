@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 func newTestService(t *testing.T) *Service {

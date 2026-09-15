@@ -1,12 +1,12 @@
 package usage
 
 import (
-	"github.com/enterpilot/gomodel/internal/storage/sqlutil"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlutil"
 
 	"fmt"
 	"regexp"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 func normalizeUsageUserPathFilter(raw string) (string, error) {

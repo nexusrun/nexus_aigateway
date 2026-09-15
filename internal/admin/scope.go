@@ -3,7 +3,7 @@ package admin
 import (
 	"github.com/labstack/echo/v5"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // Admin scoping. A credential bound to a user path (a managed key or an

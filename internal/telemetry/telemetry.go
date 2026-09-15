@@ -24,13 +24,13 @@ import (
 	sdkTrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.39.0"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/internal/llmclient"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/internal/llmclient"
 )
 
 const (
 	defaultServiceName  = "gomodel"
-	instrumentationName = "github.com/enterpilot/gomodel/internal/telemetry"
+	instrumentationName = "github.com/nexusrun/nexus_aigateway/internal/telemetry"
 	// closeTimeout bounds the final flush so an unreachable collector cannot
 	// hold up gateway shutdown.
 	closeTimeout = 10 * time.Second

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/enterpilot/gomodel/config"
+	"github.com/nexusrun/nexus_aigateway/config"
 )
 
 // captureSlog routes the default logger into a buffer for the test's lifetime.

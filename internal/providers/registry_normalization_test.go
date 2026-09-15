@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // The registry and router trim caller input at the boundary and store

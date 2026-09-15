@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/ext"
-	"github.com/enterpilot/gomodel/internal/providers"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/ext"
+	"github.com/nexusrun/nexus_aigateway/internal/providers"
 )
 
 // TestNewThenShutdown covers the whole lifecycle: every subsystem is built on

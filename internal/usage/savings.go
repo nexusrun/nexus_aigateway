@@ -1,6 +1,6 @@
 package usage
 
-import "github.com/enterpilot/gomodel/internal/core"
+import "github.com/nexusrun/nexus_aigateway/internal/core"
 
 // ApplyRewriteSavings folds a request-rewrite savings estimate into a usage
 // entry: RewriteTokensSaved always, and RewriteCostSaved when the request's

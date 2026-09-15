@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/llmclient"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/llmclient"
 )
 
 // newNativeTestProvider builds an AI Studio provider in native mode pointed at

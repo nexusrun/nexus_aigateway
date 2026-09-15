@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/storage/sqlx"
-	"github.com/enterpilot/gomodel/internal/storage/sqlx/sqlxtest"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlx"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlx/sqlxtest"
 )
 
 func TestStore_RoundTripRedirectAndPolicy(t *testing.T) {

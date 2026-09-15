@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/enterpilot/gomodel/config"
+	"github.com/nexusrun/nexus_aigateway/config"
 )
 
 func TestReadyProbeURL(t *testing.T) {

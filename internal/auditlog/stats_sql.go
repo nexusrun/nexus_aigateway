@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/storage/sqlutil"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlutil"
 )
 
 // GetRequestStats returns time-bucketed status-class counts and per-provider

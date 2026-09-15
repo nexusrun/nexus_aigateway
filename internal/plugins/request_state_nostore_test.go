@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 func TestRequestStateNoStore(t *testing.T) {

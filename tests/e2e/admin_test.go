@@ -16,9 +16,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/enterpilot/gomodel/internal/admin"
-	"github.com/enterpilot/gomodel/internal/providers"
-	"github.com/enterpilot/gomodel/internal/usage"
+	"github.com/nexusrun/nexus_aigateway/internal/admin"
+	"github.com/nexusrun/nexus_aigateway/internal/providers"
+	"github.com/nexusrun/nexus_aigateway/internal/usage"
 )
 
 type e2ePricingRecalculator struct {

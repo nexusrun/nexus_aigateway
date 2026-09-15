@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/cache"
+	"github.com/nexusrun/nexus_aigateway/internal/cache"
 )
 
 // NewRedisModelCacheWithStore creates a Cache from an existing Store, letting

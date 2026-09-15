@@ -5,7 +5,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/enterpilot/gomodel/run"
+	"github.com/nexusrun/nexus_aigateway/run"
 )
 
 // @title          GoModel API

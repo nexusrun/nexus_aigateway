@@ -18,7 +18,7 @@ import (
 
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 
-	"github.com/enterpilot/gomodel/run"
+	"github.com/nexusrun/nexus_aigateway/run"
 )
 
 const (

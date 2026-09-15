@@ -4,7 +4,7 @@ import (
 	"slices"
 	"sort"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // providerAdvertisedLocked reports whether providerName's models belong in

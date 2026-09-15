@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // redactor is a transform-mode hook that rewrites "secret" to "[x]" in each

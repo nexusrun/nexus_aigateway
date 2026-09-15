@@ -9,11 +9,11 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/internal/httpclient"
-	"github.com/enterpilot/gomodel/internal/storage"
-	"github.com/enterpilot/gomodel/internal/storage/sqlx"
-	"github.com/enterpilot/gomodel/internal/usage"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/internal/httpclient"
+	"github.com/nexusrun/nexus_aigateway/internal/storage"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlx"
+	"github.com/nexusrun/nexus_aigateway/internal/usage"
 )
 
 // Result holds the initialized MCP gateway and any owned resources.

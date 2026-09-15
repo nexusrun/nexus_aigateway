@@ -8,8 +8,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
-	"github.com/enterpilot/gomodel/internal/storage"
-	"github.com/enterpilot/gomodel/internal/storage/sqlx"
+	"github.com/nexusrun/nexus_aigateway/internal/storage"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlx"
 )
 
 // legacyTables are the pre-v0.1.44 stores that virtual models replaced.

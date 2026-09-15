@@ -29,7 +29,7 @@ over time. The full narrative write-up is the June 2026 article:
 A simple, like-for-like setup:
 
 - One gateway at a time, in Docker, on an AWS `c7i.large` (2 vCPU, 4 GiB), each
-  from its latest public image (`enterpilot/gomodel`, `litellm/litellm:main-stable`,
+  from its latest public image (`nexusrun/nexus_aigateway`, `litellm/litellm:main-stable`,
   `portkeyai/gateway`, `maximhq/bifrost`). The version and image digest each run
   measured are recorded next to its results in the repository.
 - The same shared mock backend for everyone, so we measure only gateway overhead.
@@ -103,7 +103,7 @@ That measures whatever the four images resolve to today. To repeat the
 August 20, 2026 snapshot on the same gateway releases, pass their versions:
 
 ```bash
-GOMODEL_IMAGE=enterpilot/gomodel:0.1.79 \
+GOMODEL_IMAGE=nexusrun/nexus_aigateway:0.1.79 \
 LITELLM_IMAGE=litellm/litellm:v1.97.0 \
 PORTKEY_IMAGE=portkeyai/gateway:1.15.2 \
 BIFROST_IMAGE=maximhq/bifrost:v1.6.11 \

@@ -6,10 +6,10 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/llmclient"
-	"github.com/enterpilot/gomodel/internal/providers"
-	"github.com/enterpilot/gomodel/internal/providers/openai"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/llmclient"
+	"github.com/nexusrun/nexus_aigateway/internal/providers"
+	"github.com/nexusrun/nexus_aigateway/internal/providers/openai"
 )
 
 const defaultAPIVersion = "2024-10-21"

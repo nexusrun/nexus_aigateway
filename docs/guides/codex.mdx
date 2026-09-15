@@ -38,7 +38,7 @@ export CHATGPT_API_KEY=$(jq -r .tokens.access_token ~/.codex/auth.json)
 docker run --rm -p 8080:8080 \
   -e GOMODEL_MASTER_KEY="change-me" \
   -e CHATGPT_API_KEY="$CHATGPT_API_KEY" \
-  enterpilot/gomodel
+  nexusrun/nexus_aigateway
 ```
 
 See the [ChatGPT provider page](/providers/chatgpt) for the model list, the

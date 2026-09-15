@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/httpclient"
-	"github.com/enterpilot/gomodel/internal/plugins/exchange"
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/httpclient"
+	"github.com/nexusrun/nexus_aigateway/internal/plugins/exchange"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // ChatCompleter runs a gateway-internal chat completion (routing, usage and

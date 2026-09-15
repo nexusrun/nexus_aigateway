@@ -10,10 +10,10 @@ import (
 
 	"github.com/google/uuid"
 
-	batchstore "github.com/enterpilot/gomodel/internal/batch"
-	"github.com/enterpilot/gomodel/internal/batchrewrite"
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/usage"
+	batchstore "github.com/nexusrun/nexus_aigateway/internal/batch"
+	"github.com/nexusrun/nexus_aigateway/internal/batchrewrite"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/usage"
 )
 
 // BatchConfig configures native batch orchestration.

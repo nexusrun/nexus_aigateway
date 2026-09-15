@@ -10,9 +10,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/enterpilot/gomodel/ext"
-	"github.com/enterpilot/gomodel/internal/server"
-	"github.com/enterpilot/gomodel/internal/session"
+	"github.com/nexusrun/nexus_aigateway/ext"
+	"github.com/nexusrun/nexus_aigateway/internal/server"
+	"github.com/nexusrun/nexus_aigateway/internal/session"
 )
 
 // recordingRewriter captures the ext.Input the stack hands to a request

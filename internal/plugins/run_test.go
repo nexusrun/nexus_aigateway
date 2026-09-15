@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 func TestRunPromptOrderingAndEdits(t *testing.T) {

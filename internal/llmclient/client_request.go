@@ -12,7 +12,7 @@ import (
 
 	"github.com/goccy/go-json"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // maxErrorBodyBytes caps how much of an upstream error body is read into

@@ -14,7 +14,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // Host is a fake [pluginapi.Host]. Its zero value is usable: inference

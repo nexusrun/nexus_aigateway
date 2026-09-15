@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/enterpilot/gomodel/ext"
+	"github.com/nexusrun/nexus_aigateway/ext"
 )
 
 // adaptiveTarget delegates the choice among the viable pool to the installed

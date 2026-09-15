@@ -10,7 +10,7 @@ import (
 
 	"github.com/goccy/go-json"
 
-	"github.com/enterpilot/gomodel/internal/llmclient"
+	"github.com/nexusrun/nexus_aigateway/internal/llmclient"
 )
 
 // Anthropic counts tokens exactly through /v1/messages/count_tokens. The

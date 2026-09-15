@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/modelselectors"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/modelselectors"
 )
 
 // resolvedTarget is one redirect destination with its selector parsed at build

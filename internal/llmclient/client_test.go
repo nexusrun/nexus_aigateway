@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	goconfig "github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/internal/core"
+	goconfig "github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 func TestClient_Do_Success(t *testing.T) {

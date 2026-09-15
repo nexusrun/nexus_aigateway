@@ -28,14 +28,14 @@ your collector:
 # Add to your .env file, then:
 # OTEL_ENABLED=true
 # OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
-docker run --rm -p 8080:8080 --env-file .env enterpilot/gomodel
+docker run --rm -p 8080:8080 --env-file .env nexusrun/nexus_aigateway
 ```
 
 ```bash Docker (inline -e)
 docker run --rm -p 8080:8080 \
   -e OTEL_ENABLED=true \
   -e OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318 \
-  enterpilot/gomodel
+  nexusrun/nexus_aigateway
 ```
 
 ```bash Binary
@@ -205,7 +205,7 @@ A minimal `docker-compose.yml` that shows traces in Jaeger:
 ```yaml
 services:
   gomodel:
-    image: enterpilot/gomodel
+    image: nexusrun/nexus_aigateway
     env_file: .env
     environment:
       OTEL_ENABLED: "true"

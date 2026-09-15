@@ -2,7 +2,7 @@ package exchange
 
 import "maps"
 
-import "github.com/enterpilot/gomodel/internal/core"
+import "github.com/nexusrun/nexus_aigateway/internal/core"
 
 func cloneToolCalls(toolCalls []core.ToolCall) []core.ToolCall {
 	if len(toolCalls) == 0 {

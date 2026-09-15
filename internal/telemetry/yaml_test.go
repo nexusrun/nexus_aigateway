@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/internal/llmclient"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/internal/llmclient"
 )
 
 // YAML settings must reach the SDK: the exporter uses the configured endpoint

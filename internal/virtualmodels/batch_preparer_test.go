@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // decodedChatItem builds a decoded chat batch request for per-item rewrite tests.

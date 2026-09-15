@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/storage/sqlutil"
-	"github.com/enterpilot/gomodel/internal/storage/sqlx"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlutil"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlx"
 )
 
 // SQLStore stores batches in a SQL database.

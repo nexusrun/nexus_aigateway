@@ -195,7 +195,7 @@ the in-container path GoModel expects:
 ```bash
 docker run --rm -p 8080:8080 \
   -v "$PWD/config.yml:/app/config/config.yaml:ro" \
-  enterpilot/gomodel:latest
+  nexusrun/nexus_aigateway:latest
 ```
 
 With Docker Compose:
@@ -203,7 +203,7 @@ With Docker Compose:
 ```yaml
 services:
   gomodel:
-    image: enterpilot/gomodel:latest
+    image: nexusrun/nexus_aigateway:latest
     ports:
       - "8080:8080"
     volumes:

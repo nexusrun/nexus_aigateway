@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/auditlog"
-	"github.com/enterpilot/gomodel/internal/cache"
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/responsecache"
+	"github.com/nexusrun/nexus_aigateway/internal/auditlog"
+	"github.com/nexusrun/nexus_aigateway/internal/cache"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/responsecache"
 )
 
 type contextCapturingProvider struct {

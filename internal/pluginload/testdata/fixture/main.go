@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"sync/atomic"
 
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // GoModelBuildInfo mirrors what `gomodel plugin build` stamps into a plugin.

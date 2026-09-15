@@ -37,7 +37,7 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // GoModelPlugin is the constructor GoModel looks up. It returns a fresh

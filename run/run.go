@@ -25,11 +25,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/ext"
-	"github.com/enterpilot/gomodel/internal/app"
-	"github.com/enterpilot/gomodel/internal/version"
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/ext"
+	"github.com/nexusrun/nexus_aigateway/internal/app"
+	"github.com/nexusrun/nexus_aigateway/internal/version"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 var shutdownTimeout = 30 * time.Second

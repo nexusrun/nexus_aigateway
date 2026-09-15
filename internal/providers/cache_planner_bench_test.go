@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // benchChatRequest builds a multi-turn conversation of ~1.8KB messages, the

@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // Record is one instance's contribution to a chain run, kept for audit.

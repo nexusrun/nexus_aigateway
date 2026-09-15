@@ -14,8 +14,8 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/enterpilot/gomodel/pluginapi"
-	"github.com/enterpilot/gomodel/pluginapi/plugintest"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi/plugintest"
 )
 
 // analyzer is a fake Presidio analyzer: it finds e-mail addresses, credit

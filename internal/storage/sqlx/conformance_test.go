@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/storage/sqlx"
-	"github.com/enterpilot/gomodel/internal/storage/sqlx/sqlxtest"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlx"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlx/sqlxtest"
 )
 
 // The conformance suite pins the behaviour store code is allowed to rely on.

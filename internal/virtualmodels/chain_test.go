@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // upsertRedirect stores an enabled redirect over the given target models.

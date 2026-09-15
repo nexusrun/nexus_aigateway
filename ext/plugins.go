@@ -1,6 +1,6 @@
 package ext
 
-import "github.com/enterpilot/gomodel/pluginapi"
+import "github.com/nexusrun/nexus_aigateway/pluginapi"
 
 // PluginFactory builds a fresh plugin value. Every configured instance of
 // the plugin type gets its own value, so plugins can keep per-instance state.

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // slowMockProvider simulates network latency to provoke race conditions

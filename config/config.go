@@ -15,7 +15,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/enterpilot/gomodel/internal/storage"
+	"github.com/nexusrun/nexus_aigateway/internal/storage"
 )
 
 // Config holds the application configuration.

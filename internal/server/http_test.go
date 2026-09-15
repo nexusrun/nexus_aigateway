@@ -10,15 +10,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/admin"
-	"github.com/enterpilot/gomodel/internal/admin/dashboard"
+	"github.com/nexusrun/nexus_aigateway/internal/admin"
+	"github.com/nexusrun/nexus_aigateway/internal/admin/dashboard"
 	"github.com/stretchr/testify/require"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/providers"
-	"github.com/enterpilot/gomodel/internal/usage"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/providers"
+	"github.com/nexusrun/nexus_aigateway/internal/usage"
 
-	_ "github.com/enterpilot/gomodel/cmd/gomodel/docs"
+	_ "github.com/nexusrun/nexus_aigateway/cmd/gomodel/docs"
 
 	"github.com/labstack/echo/v5"
 )

@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // applyKeyedLimitEnv merges <prefix>* env entries into keyed config entries.

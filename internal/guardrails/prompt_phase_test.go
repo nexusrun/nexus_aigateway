@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/plugins"
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/internal/plugins"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // runawayPlugin is a mutating prompt plugin that ignores its context and

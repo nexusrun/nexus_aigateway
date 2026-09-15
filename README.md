@@ -30,7 +30,7 @@
 Clone the repository, create a protected environment file, and authenticate the NEXUS AI CLI:
 
 ```bash
-git clone https://github.com/saifelyzal/nexusruntime.git
+git clone https://github.com/saifelyzal/aigateway.git
 cd nexusruntime
 cp .env.template .env
 nexus auth login
@@ -48,7 +48,7 @@ Push the current source to the repository that NEXUS AI will build, then deploy 
 git push origin main
 
 nexus deploy source \
-  --repo https://github.com/saifelyzal/nexusruntime.git \
+  --repo https://github.com/saifelyzal/aigateway.git \
   --name aigateway \
   --branch main \
   --provider docker \

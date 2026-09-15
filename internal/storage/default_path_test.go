@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/platformdir"
+	"github.com/nexusrun/nexus_aigateway/internal/platformdir"
 )
 
 func TestDefaultSQLitePath(t *testing.T) {

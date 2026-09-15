@@ -5,8 +5,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/filestore"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/filestore"
 )
 
 // listScopedFiles serves GET /v1/files for a user-path scoped credential from

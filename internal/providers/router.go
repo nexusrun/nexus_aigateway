@@ -9,8 +9,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/llmclient"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/llmclient"
 )
 
 // ErrRegistryNotInitialized is returned when the router is used before the registry has any models.

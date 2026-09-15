@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/llmclient"
+	"github.com/nexusrun/nexus_aigateway/internal/llmclient"
 )
 
 func TestDashboardVirtualModelStrategies_IncludesRoutePlugins(t *testing.T) {

@@ -4,8 +4,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/internal/providers"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/internal/providers"
 )
 
 // TestDefaultProviderFactoryCredentialForms pins the credential form the

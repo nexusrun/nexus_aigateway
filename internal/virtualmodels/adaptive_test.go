@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/enterpilot/gomodel/ext"
+	"github.com/nexusrun/nexus_aigateway/ext"
 )
 
 // scriptedSelector answers Select with a fixed qualified model (or declines)

@@ -3,8 +3,8 @@ package providers
 import (
 	"testing"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // resolveKeys is a shorthand for the API key set the given provider ends up with.

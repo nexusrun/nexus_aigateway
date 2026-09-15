@@ -10,12 +10,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/internal/cache"
-	"github.com/enterpilot/gomodel/internal/cache/modelcache"
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/modeldata"
-	"github.com/enterpilot/gomodel/internal/platformdir"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/internal/cache"
+	"github.com/nexusrun/nexus_aigateway/internal/cache/modelcache"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/modeldata"
+	"github.com/nexusrun/nexus_aigateway/internal/platformdir"
 )
 
 // InitResult holds the initialized provider infrastructure and cleanup functions.

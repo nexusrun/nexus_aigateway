@@ -11,8 +11,8 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"github.com/enterpilot/gomodel/internal/auditlog"
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/auditlog"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 type failoverResolverStub struct {

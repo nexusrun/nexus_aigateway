@@ -1,7 +1,7 @@
 package providers
 
 import (
-	"github.com/enterpilot/gomodel/config"
+	"github.com/nexusrun/nexus_aigateway/config"
 	"sort"
 	"strings"
 	"time"

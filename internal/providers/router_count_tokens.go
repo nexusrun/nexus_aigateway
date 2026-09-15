@@ -3,7 +3,7 @@ package providers
 import (
 	"context"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // CountMessagesTokens routes a Messages token count to the provider that

@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/storage/sqlx"
-	"github.com/enterpilot/gomodel/internal/storage/sqlx/sqlxtest"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlx"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlx/sqlxtest"
 )
 
 func newTestStore(t *testing.T, db sqlx.DB) *SQLStore {

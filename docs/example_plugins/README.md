@@ -34,7 +34,7 @@ The default static binary and image refuse `.so` files with a clear error.
 Go's `plugin` package only opens a shared object built with the **same Go
 version**, the **same build flags** (`-trimpath`, `-race`, `-tags`), and
 **identical sources of every shared package**: the standard library and
-`github.com/enterpilot/gomodel/pluginapi`. Nothing else in GoModel is shared
+`github.com/nexusrun/nexus_aigateway/pluginapi`. Nothing else in GoModel is shared
 with a plugin, so internal changes never affect one, but every GoModel
 release and every Go toolchain update (patch releases included) requires a
 rebuild.
@@ -65,7 +65,7 @@ only `pluginapi`:
 ```sh
 mkdir acme-guard && cd acme-guard
 go mod init example.com/acme-guard
-go get github.com/enterpilot/gomodel@v0.1.91     # the host's `gomodel --version`
+go get github.com/nexusrun/nexus_aigateway@v0.1.91     # the host's `gomodel --version`
 ```
 
 ```go
@@ -76,7 +76,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 func GoModelPlugin() pluginapi.Plugin { return &guard{} }
@@ -99,7 +99,7 @@ For local development against a GoModel checkout, point the module at it:
 
 ```
 // go.mod
-replace github.com/enterpilot/gomodel => ../gomodel
+replace github.com/nexusrun/nexus_aigateway => ../gomodel
 ```
 
 Build with the host binary and inspect the result:

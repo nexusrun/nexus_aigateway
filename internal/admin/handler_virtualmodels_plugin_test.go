@@ -11,9 +11,9 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"github.com/enterpilot/gomodel/internal/plugins"
-	"github.com/enterpilot/gomodel/internal/plugins/builtin/routeexample"
-	"github.com/enterpilot/gomodel/internal/virtualmodels"
+	"github.com/nexusrun/nexus_aigateway/internal/plugins"
+	"github.com/nexusrun/nexus_aigateway/internal/plugins/builtin/routeexample"
+	"github.com/nexusrun/nexus_aigateway/internal/virtualmodels"
 )
 
 // newPluginVMHandler builds a handler whose virtual models service resolves

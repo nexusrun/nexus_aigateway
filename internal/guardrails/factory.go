@@ -9,9 +9,9 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
-	"github.com/enterpilot/gomodel/internal/plugins"
-	"github.com/enterpilot/gomodel/internal/storage"
-	"github.com/enterpilot/gomodel/internal/storage/sqlx"
+	"github.com/nexusrun/nexus_aigateway/internal/plugins"
+	"github.com/nexusrun/nexus_aigateway/internal/storage"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlx"
 )
 
 // Result holds the initialized guardrail service and any owned resources.

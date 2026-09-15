@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // Ref points a chain at an instance running at a step.

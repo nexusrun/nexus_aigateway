@@ -1,4 +1,0 @@
-# Lint/install profile: the defaults plus a master key and a provider key.
-secretEnv:
-  GOMODEL_MASTER_KEY: ci-master-key
-  OPENAI_API_KEY: sk-ci-placeholder

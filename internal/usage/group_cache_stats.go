@@ -8,7 +8,7 @@ import (
 
 	"github.com/goccy/go-json"
 
-	"github.com/enterpilot/gomodel/internal/storage/sqlutil"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlutil"
 )
 
 // GroupCacheStats aggregates the cache figures for one chart group (a model,

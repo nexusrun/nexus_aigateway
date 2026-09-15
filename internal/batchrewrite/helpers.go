@@ -6,7 +6,7 @@ import (
 	"maps"
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 const defaultCleanupLogMessage = "failed to delete rewritten batch input file"

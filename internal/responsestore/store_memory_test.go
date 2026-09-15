@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 func TestMemoryStoreExpiresResponses(t *testing.T) {

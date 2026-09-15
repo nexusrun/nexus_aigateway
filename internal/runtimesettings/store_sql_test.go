@@ -5,8 +5,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/storage"
-	"github.com/enterpilot/gomodel/internal/storage/sqlx"
+	"github.com/nexusrun/nexus_aigateway/internal/storage"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlx"
 )
 
 func newSQLiteStore(t *testing.T) *SQLStore {

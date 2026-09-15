@@ -16,11 +16,11 @@ import (
 	"github.com/stretchr/testify/require"
 	_ "modernc.org/sqlite"
 
-	"github.com/enterpilot/gomodel/internal/admin"
-	"github.com/enterpilot/gomodel/internal/budget"
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/storage/sqlx"
-	"github.com/enterpilot/gomodel/internal/usage"
+	"github.com/nexusrun/nexus_aigateway/internal/admin"
+	"github.com/nexusrun/nexus_aigateway/internal/budget"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlx"
+	"github.com/nexusrun/nexus_aigateway/internal/usage"
 )
 
 const sqliteBudgetAmount = 0.01

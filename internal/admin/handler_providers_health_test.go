@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/providers"
-	"github.com/enterpilot/gomodel/internal/providers/health"
+	"github.com/nexusrun/nexus_aigateway/internal/providers"
+	"github.com/nexusrun/nexus_aigateway/internal/providers/health"
 )
 
 func TestApplyRequestHealth(t *testing.T) {

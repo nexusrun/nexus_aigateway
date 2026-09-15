@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/internal/cache/modelcache"
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/internal/cache/modelcache"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 type mockInitCache struct {

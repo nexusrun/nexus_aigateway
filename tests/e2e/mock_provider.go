@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // MockLLMServer simulates an upstream LLM provider (like OpenAI).

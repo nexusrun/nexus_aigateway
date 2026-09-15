@@ -12,10 +12,10 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"github.com/enterpilot/gomodel/internal/authkeys"
-	"github.com/enterpilot/gomodel/internal/storage/sqlx/sqlxtest"
-	"github.com/enterpilot/gomodel/internal/users"
-	"github.com/enterpilot/gomodel/internal/virtualmodels"
+	"github.com/nexusrun/nexus_aigateway/internal/authkeys"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlx/sqlxtest"
+	"github.com/nexusrun/nexus_aigateway/internal/users"
+	"github.com/nexusrun/nexus_aigateway/internal/virtualmodels"
 )
 
 type userTestCatalog []string

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/ext"
+	"github.com/nexusrun/nexus_aigateway/ext"
 )
 
 func TestAuthenticationEventRecorderWritesDurableAuditEntry(t *testing.T) {

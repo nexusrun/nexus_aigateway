@@ -11,10 +11,10 @@ import (
 
 	"github.com/goccy/go-json"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/plugins"
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/plugins"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // scriptedStrategy answers Select with a fixed target (or fails in a scripted

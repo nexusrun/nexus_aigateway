@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/llmclient"
-	"github.com/enterpilot/gomodel/internal/providers"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/llmclient"
+	"github.com/nexusrun/nexus_aigateway/internal/providers"
 )
 
 func TestNew_ConstructsRegisteredProvider(t *testing.T) {

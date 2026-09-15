@@ -15,7 +15,7 @@ import (
 
 	"github.com/joho/godotenv"
 
-	"github.com/enterpilot/gomodel/config"
+	"github.com/nexusrun/nexus_aigateway/config"
 )
 
 // reloadSignal asks a running gateway to re-read its configuration, the same

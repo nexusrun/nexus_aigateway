@@ -9,7 +9,7 @@ import (
 
 // hostModule is the module path plugins share with this binary through the
 // pluginapi package.
-const hostModule = "github.com/enterpilot/gomodel"
+const hostModule = "github.com/nexusrun/nexus_aigateway"
 
 // BuildFlags are the go build flags that change compiled package hashes and
 // therefore must match between a host and its plugins.

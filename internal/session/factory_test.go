@@ -3,7 +3,7 @@ package session
 import (
 	"testing"
 
-	"github.com/enterpilot/gomodel/config"
+	"github.com/nexusrun/nexus_aigateway/config"
 )
 
 func TestNewDetectorFromConfigDisabled(t *testing.T) {

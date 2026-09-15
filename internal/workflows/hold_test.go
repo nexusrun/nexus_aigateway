@@ -3,8 +3,8 @@ package workflows
 import (
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/plugins"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/plugins"
 )
 
 // Compiled workflows hold their plugin instances while live, so the

@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/version"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/version"
 )
 
 const (

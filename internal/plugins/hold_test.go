@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 func TestClosedInstanceRefusesCalls(t *testing.T) {

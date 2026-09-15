@@ -3,8 +3,8 @@ package bedrockmantle
 import (
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/llmclient"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/llmclient"
 )
 
 func requestRouter(mode string) func(*llmclient.Request) {

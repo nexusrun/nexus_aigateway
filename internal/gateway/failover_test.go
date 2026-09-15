@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // stubFailoverResolver returns a fixed selector list regardless of input.

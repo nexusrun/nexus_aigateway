@@ -6,8 +6,8 @@
 // identifier, and the dashboard's own hostname; it never carries API keys,
 // provider credentials, model names, prompts, or usage data.
 //
-// Every outbound request is jittered so gateways started together — a Helm
-// rollout, a restarted docker-compose stack — do not query in lockstep.
+// Every outbound request is jittered so gateways started together — a rolling
+// deployment or a restarted docker-compose stack — do not query in lockstep.
 package versioncheck
 
 import (
@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/version"
+	"github.com/nexusrun/nexus_aigateway/internal/version"
 )
 
 // maxManifestBytes bounds what a manifest response can cost us. A version

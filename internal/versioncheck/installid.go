@@ -12,7 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/enterpilot/gomodel/internal/platformdir"
+	"github.com/nexusrun/nexus_aigateway/internal/platformdir"
 )
 
 // installIDFile stores the anonymous per-deployment identifier next to the

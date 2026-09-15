@@ -10,12 +10,12 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"github.com/enterpilot/gomodel/internal/auditlog"
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/gateway"
-	"github.com/enterpilot/gomodel/internal/guardrails"
-	"github.com/enterpilot/gomodel/internal/plugins"
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/internal/auditlog"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/gateway"
+	"github.com/nexusrun/nexus_aigateway/internal/guardrails"
+	"github.com/nexusrun/nexus_aigateway/internal/plugins"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // PluginChainsResolver resolves the per-request plugin chains (response and

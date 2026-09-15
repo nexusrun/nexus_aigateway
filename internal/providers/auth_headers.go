@@ -3,7 +3,7 @@ package providers
 import (
 	"net/http"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // AuthHeaderConfig describes how a provider populates outbound request headers.

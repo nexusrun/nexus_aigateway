@@ -4,7 +4,7 @@ import (
 	"maps"
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // CloneChatRequestForStreamUsage clones chat stream options before usage mutation.

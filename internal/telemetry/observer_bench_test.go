@@ -13,7 +13,7 @@ import (
 	sdkTrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
-	"github.com/enterpilot/gomodel/internal/llmclient"
+	"github.com/nexusrun/nexus_aigateway/internal/llmclient"
 )
 
 // The synchronous cost a request pays on the hot path with export enabled.

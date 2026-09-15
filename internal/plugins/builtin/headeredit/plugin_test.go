@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/enterpilot/gomodel/pluginapi"
-	"github.com/enterpilot/gomodel/pluginapi/plugintest"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi/plugintest"
 )
 
 func newPlugin(t *testing.T, cfg string) *Plugin {

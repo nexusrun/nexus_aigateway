@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/usage"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/usage"
 )
 
 // LogUsage writes one non-streaming usage entry when usage is enabled.

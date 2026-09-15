@@ -11,7 +11,7 @@ A plugin is a Go value that implements `pluginapi.Plugin` plus one or more
 optional hook interfaces. Every [guardrail](/advanced/guardrails) is an
 instance of a plugin, and so is a custom routing strategy for a
 [virtual model](/features/virtual-models). There is one contract, in the
-`github.com/enterpilot/gomodel/pluginapi` package, and three ways to ship a
+`github.com/nexusrun/nexus_aigateway/pluginapi` package, and three ways to ship a
 plugin:
 
 | How | When to use it | Registered by |
@@ -464,7 +464,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 type wordBlock struct {

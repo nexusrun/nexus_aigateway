@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // ListModels returns all models from the lookup.

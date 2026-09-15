@@ -5,8 +5,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 
 	"github.com/labstack/echo/v5"
 )

@@ -66,7 +66,7 @@ type ResponseCacheConfig struct {
 
 // SimpleCacheConfig holds configuration for exact-match response caching.
 // When the simple block is omitted from config.yaml, this layer stays off unless
-// RESPONSE_CACHE_SIMPLE_ENABLED=true is set (e.g. Helm without a response-cache YAML fragment).
+// RESPONSE_CACHE_SIMPLE_ENABLED=true is set (e.g. when the response-cache YAML fragment is omitted).
 // Omitted enabled (nil) means true whenever the simple block exists.
 type SimpleCacheConfig struct {
 	Enabled *bool                `yaml:"enabled"`

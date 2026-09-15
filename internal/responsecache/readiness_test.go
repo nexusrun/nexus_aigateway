@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/cache"
+	"github.com/nexusrun/nexus_aigateway/internal/cache"
 )
 
 // pingableStore is a cache.Store that also implements cache.Pinger.

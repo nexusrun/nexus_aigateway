@@ -18,15 +18,15 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/enterpilot/gomodel/internal/admin"
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/guardrails"
-	"github.com/enterpilot/gomodel/internal/pluginload"
-	"github.com/enterpilot/gomodel/internal/plugins"
-	"github.com/enterpilot/gomodel/internal/plugins/builtin"
-	"github.com/enterpilot/gomodel/internal/providers"
-	"github.com/enterpilot/gomodel/internal/storage"
-	"github.com/enterpilot/gomodel/internal/workflows"
+	"github.com/nexusrun/nexus_aigateway/internal/admin"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/guardrails"
+	"github.com/nexusrun/nexus_aigateway/internal/pluginload"
+	"github.com/nexusrun/nexus_aigateway/internal/plugins"
+	"github.com/nexusrun/nexus_aigateway/internal/plugins/builtin"
+	"github.com/nexusrun/nexus_aigateway/internal/providers"
+	"github.com/nexusrun/nexus_aigateway/internal/storage"
+	"github.com/nexusrun/nexus_aigateway/internal/workflows"
 )
 
 // Admin endpoints exercised by the plugin tests.

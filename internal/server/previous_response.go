@@ -10,9 +10,9 @@ import (
 
 	"github.com/goccy/go-json"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/gateway"
-	"github.com/enterpilot/gomodel/internal/responsestore"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/gateway"
+	"github.com/nexusrun/nexus_aigateway/internal/responsestore"
 )
 
 // PatchResponsesAttempt resolves previous_response_id for an attempt whose

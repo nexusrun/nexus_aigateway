@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/enterpilot/gomodel/pluginapi"
-	"github.com/enterpilot/gomodel/pluginapi/plugintest"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi/plugintest"
 )
 
 func replyWith(text string) *pluginapi.Completion {

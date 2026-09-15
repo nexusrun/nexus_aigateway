@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/version"
-	"github.com/enterpilot/gomodel/internal/versioncheck"
+	"github.com/nexusrun/nexus_aigateway/internal/version"
+	"github.com/nexusrun/nexus_aigateway/internal/versioncheck"
 
 	"github.com/labstack/echo/v5"
 )

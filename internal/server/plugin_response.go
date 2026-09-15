@@ -6,10 +6,10 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/plugins"
-	"github.com/enterpilot/gomodel/internal/plugins/exchange"
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/plugins"
+	"github.com/nexusrun/nexus_aigateway/internal/plugins/exchange"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // responsePhase runs the response chain over one non-streaming completion.

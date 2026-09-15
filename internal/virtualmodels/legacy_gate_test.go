@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/internal/storage"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/internal/storage"
 )
 
 func newSQLiteStorage(t *testing.T) storage.SQLiteStorage {

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // mockImageEditProvider supports edits as well as generation, mirroring the

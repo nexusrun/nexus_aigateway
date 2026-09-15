@@ -13,10 +13,10 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/providers"
-	"github.com/enterpilot/gomodel/internal/usage"
-	"github.com/enterpilot/gomodel/internal/virtualmodels"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/providers"
+	"github.com/nexusrun/nexus_aigateway/internal/usage"
+	"github.com/nexusrun/nexus_aigateway/internal/virtualmodels"
 )
 
 type mockPricingRecalculator struct {

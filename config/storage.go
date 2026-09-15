@@ -1,6 +1,6 @@
 package config
 
-import "github.com/enterpilot/gomodel/internal/storage"
+import "github.com/nexusrun/nexus_aigateway/internal/storage"
 
 // StorageConfig holds database storage configuration (used by audit logging, usage tracking, future IAM, etc.)
 type StorageConfig struct {

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // Factory builds a fresh plugin value. Every configured instance gets its own

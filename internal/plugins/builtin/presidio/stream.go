@@ -3,7 +3,7 @@ package presidio
 import (
 	"context"
 
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // StreamPolicy transforms text in flight for anonymize and warn, in chunks

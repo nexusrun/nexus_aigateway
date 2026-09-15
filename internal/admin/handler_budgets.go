@@ -9,8 +9,8 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"github.com/enterpilot/gomodel/internal/budget"
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/budget"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // ListBudgets handles GET /admin/budgets.

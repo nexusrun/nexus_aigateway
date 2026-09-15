@@ -14,12 +14,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/enterpilot/gomodel/internal/anthropicapi"
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/llmclient"
-	"github.com/enterpilot/gomodel/internal/providers"
-	"github.com/enterpilot/gomodel/internal/providers/anthropic"
-	"github.com/enterpilot/gomodel/internal/providers/gemini"
+	"github.com/nexusrun/nexus_aigateway/internal/anthropicapi"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/llmclient"
+	"github.com/nexusrun/nexus_aigateway/internal/providers"
+	"github.com/nexusrun/nexus_aigateway/internal/providers/anthropic"
+	"github.com/nexusrun/nexus_aigateway/internal/providers/gemini"
 )
 
 // newCapturingJSONClient answers every request with the JSON fixture and

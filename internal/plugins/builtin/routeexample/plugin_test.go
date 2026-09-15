@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 func candidate(qualified string, inputPrice float64) pluginapi.RouteCandidate {

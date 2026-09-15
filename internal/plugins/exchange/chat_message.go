@@ -3,8 +3,8 @@ package exchange
 import (
 	"github.com/goccy/go-json"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 var ephemeralCacheControl = json.RawMessage(`{"type":"ephemeral"}`)

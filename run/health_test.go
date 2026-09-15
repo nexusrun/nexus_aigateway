@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/config"
+	"github.com/nexusrun/nexus_aigateway/config"
 )
 
 func TestHealthProbeURL(t *testing.T) {

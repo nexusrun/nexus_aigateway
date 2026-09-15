@@ -8,13 +8,13 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/auditlog"
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/providers"
-	"github.com/enterpilot/gomodel/internal/ratelimit"
-	"github.com/enterpilot/gomodel/internal/server"
-	"github.com/enterpilot/gomodel/internal/session"
-	"github.com/enterpilot/gomodel/internal/usage"
+	"github.com/nexusrun/nexus_aigateway/internal/auditlog"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/providers"
+	"github.com/nexusrun/nexus_aigateway/internal/ratelimit"
+	"github.com/nexusrun/nexus_aigateway/internal/server"
+	"github.com/nexusrun/nexus_aigateway/internal/session"
+	"github.com/nexusrun/nexus_aigateway/internal/usage"
 )
 
 // benchRateLimitStore is a minimal in-memory ratelimit.Store carrying one

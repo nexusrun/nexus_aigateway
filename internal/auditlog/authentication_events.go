@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/enterpilot/gomodel/ext"
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/ext"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 const authenticationEventProvider = "authentication"

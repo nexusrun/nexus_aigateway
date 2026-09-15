@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/enterpilot/gomodel/internal/mcpgateway"
+	"github.com/nexusrun/nexus_aigateway/internal/mcpgateway"
 )
 
 // startMockMCPServer serves a real MCP upstream (built with the same SDK the

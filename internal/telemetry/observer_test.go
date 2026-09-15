@@ -15,7 +15,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	apiTrace "go.opentelemetry.io/otel/trace"
 
-	"github.com/enterpilot/gomodel/internal/llmclient"
+	"github.com/nexusrun/nexus_aigateway/internal/llmclient"
 )
 
 func TestObserverRecordsBufferedGenAISpanAndDuration(t *testing.T) {

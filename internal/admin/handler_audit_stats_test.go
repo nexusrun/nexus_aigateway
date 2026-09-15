@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/auditlog"
+	"github.com/nexusrun/nexus_aigateway/internal/auditlog"
 )
 
 func TestAuditStats_NilReader(t *testing.T) {

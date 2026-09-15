@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/platformdir"
+	"github.com/nexusrun/nexus_aigateway/internal/platformdir"
 )
 
 // Body size limit constants

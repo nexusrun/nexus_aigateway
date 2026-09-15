@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/providers"
+	"github.com/nexusrun/nexus_aigateway/internal/providers"
 )
 
 // TestClassifyProviderStatus_HealthyForAllowlistInventory locks in the

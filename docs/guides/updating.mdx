@@ -105,12 +105,12 @@ anyone else.
 Then replace the container, passing the same mount and environment flags back:
 
 ```bash
-docker pull enterpilot/gomodel
+docker pull nexusrun/nexus_aigateway
 docker rm -f gomodel
 docker run -d --name gomodel -p 8080:8080 \
   -v gomodel_data:/app/data \
   --env-file .env \
-  enterpilot/gomodel
+  nexusrun/nexus_aigateway
 ```
 
 ### Binary
@@ -176,7 +176,7 @@ Updates default to the latest release. To stay on a known version, pin it:
 <Tabs>
   <Tab title="Docker">
     ```bash
-    docker pull enterpilot/gomodel:X.Y.Z
+    docker pull nexusrun/nexus_aigateway:X.Y.Z
     ```
 
     Use the version tag in your compose file instead of `latest`.

@@ -7,7 +7,7 @@ is kept as the design rationale. Where the implementation deviates from the
 text below, the code and the ADR win:
 
 - `pluginapi` is a package in the main module, not a separate module. A
-  `.so` therefore pins `github.com/enterpilot/gomodel` at the host version;
+  `.so` therefore pins `github.com/nexusrun/nexus_aigateway` at the host version;
   splitting it into its own module remains a tag-time option for v1.
 - A guardrail is a plugin instance, but not every plugin instance is a
   guardrail: `Manifest.Guardrail` (added 2026-09-07) marks the plugins whose
@@ -130,7 +130,7 @@ Takeaways applied below:
 
 ### 3.1 Package layout
 
-A new Go module `github.com/enterpilot/gomodel/pluginapi`, versioned
+A new Go module `github.com/nexusrun/nexus_aigateway/pluginapi`, versioned
 separately from the gateway, holds every type a plugin touches. It must
 depend on the standard library only. This is not a style preference: Go's
 `plugin` package refuses to load a `.so` unless every package shared between

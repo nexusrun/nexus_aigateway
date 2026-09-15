@@ -15,9 +15,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/llmclient"
-	"github.com/enterpilot/gomodel/internal/providers/openai"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/llmclient"
+	"github.com/nexusrun/nexus_aigateway/internal/providers/openai"
 )
 
 func openAIAudioProvider(t *testing.T, routes map[string]replayRoute) core.AudioProvider {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // pendingSnapshot is one in-flight snapshot write: the user path it is

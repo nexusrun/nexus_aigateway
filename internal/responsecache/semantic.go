@@ -20,9 +20,9 @@ import (
 
 	"github.com/cespare/xxhash/v2"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/embedding"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/embedding"
 )
 
 // semanticCacheWriteJob carries one vector-store insert handed to a background

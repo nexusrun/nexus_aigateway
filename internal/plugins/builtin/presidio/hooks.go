@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // Decision codes recorded in the audit trail.

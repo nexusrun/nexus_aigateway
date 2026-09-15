@@ -3,8 +3,8 @@ package users
 import (
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/modelselectors"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/modelselectors"
 )
 
 // NormalizeAllowedModels validates and canonicalizes a model allowlist. It

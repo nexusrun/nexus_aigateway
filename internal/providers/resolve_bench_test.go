@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // buildBenchRegistry creates a registry holding exactly totalModels models,

@@ -14,9 +14,9 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/enterpilot/gomodel/internal/providers"
-	openai_provider "github.com/enterpilot/gomodel/internal/providers/openai"
-	"github.com/enterpilot/gomodel/internal/server"
+	"github.com/nexusrun/nexus_aigateway/internal/providers"
+	openai_provider "github.com/nexusrun/nexus_aigateway/internal/providers/openai"
+	"github.com/nexusrun/nexus_aigateway/internal/server"
 )
 
 const (

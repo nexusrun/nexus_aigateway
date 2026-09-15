@@ -3,7 +3,7 @@ package providers
 import (
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 func TestEnsureProviderBatchID(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/enterpilot/gomodel/config"
+	"github.com/nexusrun/nexus_aigateway/config"
 )
 
 // VecResult holds a single semantic cache lookup result.

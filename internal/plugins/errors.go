@@ -3,7 +3,7 @@ package plugins
 import (
 	"fmt"
 
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // PluginError reports a fail-closed instance failure (error, panic, or

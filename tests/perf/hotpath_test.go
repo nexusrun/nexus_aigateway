@@ -13,12 +13,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/auditlog"
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/providers"
-	"github.com/enterpilot/gomodel/internal/server"
-	"github.com/enterpilot/gomodel/internal/streaming"
-	"github.com/enterpilot/gomodel/internal/usage"
+	"github.com/nexusrun/nexus_aigateway/internal/auditlog"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/providers"
+	"github.com/nexusrun/nexus_aigateway/internal/server"
+	"github.com/nexusrun/nexus_aigateway/internal/streaming"
+	"github.com/nexusrun/nexus_aigateway/internal/usage"
 )
 
 const (

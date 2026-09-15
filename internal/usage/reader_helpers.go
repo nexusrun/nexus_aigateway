@@ -1,7 +1,7 @@
 package usage
 
 import (
-	"github.com/enterpilot/gomodel/internal/storage/sqlutil"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlutil"
 )
 
 // usageGroupedProviderNameSQL returns a SQL expression that collapses blank

@@ -1,6 +1,6 @@
 package admin
 
-import "github.com/enterpilot/gomodel/internal/auditlog"
+import "github.com/nexusrun/nexus_aigateway/internal/auditlog"
 
 // Audit list projection.
 //

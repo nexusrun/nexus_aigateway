@@ -4,7 +4,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // OpenAIRealtimeURL derives an OpenAI-style realtime websocket URL from an

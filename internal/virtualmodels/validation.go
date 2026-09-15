@@ -6,9 +6,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/modelselectors"
-	"github.com/enterpilot/gomodel/internal/validation"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/modelselectors"
+	"github.com/nexusrun/nexus_aigateway/internal/validation"
 )
 
 const (

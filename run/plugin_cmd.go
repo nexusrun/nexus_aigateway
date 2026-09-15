@@ -17,8 +17,8 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/enterpilot/gomodel/internal/pluginload"
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/internal/pluginload"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // pluginCommand is the CLI word that selects the plugin tooling subcommands.
@@ -233,7 +233,7 @@ func buildInfoSource(info pluginapi.BuildInfo) string {
 
 package main
 
-import "github.com/enterpilot/gomodel/pluginapi"
+import "github.com/nexusrun/nexus_aigateway/pluginapi"
 
 // GoModelBuildInfo records the toolchain this plugin was built with. GoModel
 // reads it to explain a refused load.

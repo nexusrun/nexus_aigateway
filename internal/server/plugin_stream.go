@@ -10,11 +10,11 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/plugins"
-	"github.com/enterpilot/gomodel/internal/plugins/exchange"
-	"github.com/enterpilot/gomodel/internal/streaming"
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/plugins"
+	"github.com/nexusrun/nexus_aigateway/internal/plugins/exchange"
+	"github.com/nexusrun/nexus_aigateway/internal/streaming"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // streamDialect binds the pieces of one canonical stream dialect a plugin

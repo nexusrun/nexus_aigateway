@@ -8,8 +8,8 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"github.com/enterpilot/gomodel/internal/conversationstore"
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/conversationstore"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // CreateConversationItems handles POST /v1/conversations/{id}/items.

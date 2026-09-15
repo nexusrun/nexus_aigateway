@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/internal/cache"
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/internal/cache"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 	"github.com/labstack/echo/v5"
 )
 

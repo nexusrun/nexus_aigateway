@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // SessionConfig controls session keeping: identifying which requests belong to

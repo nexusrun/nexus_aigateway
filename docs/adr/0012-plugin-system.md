@@ -26,7 +26,7 @@ contract. This ADR records what was built.
 
 ### 1. One contract package, in the main module, standard library only
 
-The public contract lives in `github.com/enterpilot/gomodel/pluginapi`, a
+The public contract lives in `github.com/nexusrun/nexus_aigateway/pluginapi`, a
 package of the main module rather than a separate Go module. It imports the
 standard library only; a test enforces this.
 

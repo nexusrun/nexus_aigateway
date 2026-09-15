@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/enterpilot/gomodel/internal/storage/sqlx"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlx"
 )
 
 // migrateCreatedAtToUnixSeconds converts a PostgreSQL workflow_versions

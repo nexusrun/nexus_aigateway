@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/enterpilot/gomodel/ext"
-	"github.com/enterpilot/gomodel/internal/admin"
+	"github.com/nexusrun/nexus_aigateway/ext"
+	"github.com/nexusrun/nexus_aigateway/internal/admin"
 )
 
 func newAdminGateServer(masterKey string) *Server {

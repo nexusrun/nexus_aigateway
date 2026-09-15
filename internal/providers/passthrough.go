@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // PassthroughEndpoint normalizes a provider-relative passthrough endpoint into

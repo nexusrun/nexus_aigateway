@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/enterpilot/gomodel/internal/storage/sqlutil"
-	"github.com/enterpilot/gomodel/internal/storage/sqlx"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlutil"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlx"
 )
 
 // SQLCredentialStore stores admin-managed provider credentials in a SQL

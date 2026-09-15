@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // pricedModel builds a catalog model with input/output per-Mtok pricing.

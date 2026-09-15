@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/conversationstore"
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/conversationstore"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 type appendFailingConversationStore struct {

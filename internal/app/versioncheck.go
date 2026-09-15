@@ -6,12 +6,12 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/internal/platformdir"
-	"github.com/enterpilot/gomodel/internal/runtimesettings"
-	"github.com/enterpilot/gomodel/internal/storage"
-	"github.com/enterpilot/gomodel/internal/version"
-	"github.com/enterpilot/gomodel/internal/versioncheck"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/internal/platformdir"
+	"github.com/nexusrun/nexus_aigateway/internal/runtimesettings"
+	"github.com/nexusrun/nexus_aigateway/internal/storage"
+	"github.com/nexusrun/nexus_aigateway/internal/version"
+	"github.com/nexusrun/nexus_aigateway/internal/versioncheck"
 )
 
 // newVersionChecker builds the update checker from configuration. The install

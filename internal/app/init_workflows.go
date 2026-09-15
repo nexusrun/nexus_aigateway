@@ -8,17 +8,17 @@ import (
 
 	"github.com/goccy/go-json"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/ext"
-	"github.com/enterpilot/gomodel/internal/authkeys"
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/guardrails"
-	"github.com/enterpilot/gomodel/internal/pluginload"
-	"github.com/enterpilot/gomodel/internal/plugins"
-	"github.com/enterpilot/gomodel/internal/plugins/builtin"
-	"github.com/enterpilot/gomodel/internal/server"
-	"github.com/enterpilot/gomodel/internal/virtualmodels"
-	"github.com/enterpilot/gomodel/internal/workflows"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/ext"
+	"github.com/nexusrun/nexus_aigateway/internal/authkeys"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/guardrails"
+	"github.com/nexusrun/nexus_aigateway/internal/pluginload"
+	"github.com/nexusrun/nexus_aigateway/internal/plugins"
+	"github.com/nexusrun/nexus_aigateway/internal/plugins/builtin"
+	"github.com/nexusrun/nexus_aigateway/internal/server"
+	"github.com/nexusrun/nexus_aigateway/internal/virtualmodels"
+	"github.com/nexusrun/nexus_aigateway/internal/workflows"
 )
 
 // initWorkflows builds guardrails, the workflows that reference them, and

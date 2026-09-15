@@ -3,7 +3,7 @@ package virtualmodels
 import (
 	"strings"
 
-	"github.com/enterpilot/gomodel/config"
+	"github.com/nexusrun/nexus_aigateway/config"
 )
 
 // ConfigModels converts declarative config.yaml / VIRTUAL_MODELS entries into

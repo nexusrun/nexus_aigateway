@@ -3,7 +3,7 @@ package server
 import (
 	"sync"
 
-	"github.com/enterpilot/gomodel/internal/usage"
+	"github.com/nexusrun/nexus_aigateway/internal/usage"
 )
 
 type usageCaptureLogger struct {

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 func seedGroupCacheStatsFixture(t *testing.T) (*sql.DB, context.Context) {

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 type chatFunc func(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error)

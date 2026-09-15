@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/pluginload"
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/internal/pluginload"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // raceEnabled is set by race_test.go; plugins built without -race cannot be
@@ -125,7 +125,7 @@ func TestParsePluginBuildArgs(t *testing.T) {
 
 func TestBuildInfoOverlay(t *testing.T) {
 	src := buildInfoSource(pluginapi.BuildInfo{GoVersion: "go1.99.0", PluginAPIVersion: "9.9.9"})
-	for _, want := range []string{"package main", `"github.com/enterpilot/gomodel/pluginapi"`, `var GoModelBuildInfo = pluginapi.BuildInfo{GoVersion: "go1.99.0", PluginAPIVersion: "9.9.9"}`, "DO NOT EDIT"} {
+	for _, want := range []string{"package main", `"github.com/nexusrun/nexus_aigateway/pluginapi"`, `var GoModelBuildInfo = pluginapi.BuildInfo{GoVersion: "go1.99.0", PluginAPIVersion: "9.9.9"}`, "DO NOT EDIT"} {
 		if !strings.Contains(src, want) {
 			t.Errorf("generated source lacks %q:\n%s", want, src)
 		}

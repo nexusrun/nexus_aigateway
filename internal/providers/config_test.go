@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/config"
+	"github.com/nexusrun/nexus_aigateway/config"
 )
 
 var globalRetry = config.RetryConfig{

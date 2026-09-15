@@ -11,7 +11,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/validation"
+	"github.com/nexusrun/nexus_aigateway/internal/validation"
 )
 
 // User is one persisted access policy keyed by user path.

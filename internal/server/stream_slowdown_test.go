@@ -12,9 +12,9 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"github.com/enterpilot/gomodel/internal/gateway"
-	"github.com/enterpilot/gomodel/internal/streaming"
-	"github.com/enterpilot/gomodel/internal/usage"
+	"github.com/nexusrun/nexus_aigateway/internal/gateway"
+	"github.com/nexusrun/nexus_aigateway/internal/streaming"
+	"github.com/nexusrun/nexus_aigateway/internal/usage"
 )
 
 func TestSlowedStreamRecordsUsageConsumedBeforeClientCancellation(t *testing.T) {

@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/budget"
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/ratelimit"
-	"github.com/enterpilot/gomodel/internal/usage"
+	"github.com/nexusrun/nexus_aigateway/internal/budget"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/ratelimit"
+	"github.com/nexusrun/nexus_aigateway/internal/usage"
 )
 
 type fakeUsageSummarizer struct {

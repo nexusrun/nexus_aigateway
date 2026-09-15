@@ -6,16 +6,16 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/ext"
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/guardrails"
-	"github.com/enterpilot/gomodel/internal/httpclient"
-	"github.com/enterpilot/gomodel/internal/live"
-	"github.com/enterpilot/gomodel/internal/providers/health"
-	"github.com/enterpilot/gomodel/internal/responsecache"
-	"github.com/enterpilot/gomodel/internal/server"
-	"github.com/enterpilot/gomodel/internal/usage"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/ext"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/guardrails"
+	"github.com/nexusrun/nexus_aigateway/internal/httpclient"
+	"github.com/nexusrun/nexus_aigateway/internal/live"
+	"github.com/nexusrun/nexus_aigateway/internal/providers/health"
+	"github.com/nexusrun/nexus_aigateway/internal/responsecache"
+	"github.com/nexusrun/nexus_aigateway/internal/server"
+	"github.com/nexusrun/nexus_aigateway/internal/usage"
 )
 
 // bootstrap carries the state New threads through its initialization phases:

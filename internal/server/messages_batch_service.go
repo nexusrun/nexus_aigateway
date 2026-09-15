@@ -5,9 +5,9 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"github.com/enterpilot/gomodel/internal/anthropicapi"
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/gateway"
+	"github.com/nexusrun/nexus_aigateway/internal/anthropicapi"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/gateway"
 )
 
 // Anthropic Message Batches dialect (/v1/messages/batches*). Requests are

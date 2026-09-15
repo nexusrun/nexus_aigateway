@@ -6,7 +6,7 @@ import (
 
 	"github.com/goccy/go-json"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // ConvertResponsesInputToMessages converts a Responses API input payload into Chat API messages.

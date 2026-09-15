@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // op is what an edit does to a header.

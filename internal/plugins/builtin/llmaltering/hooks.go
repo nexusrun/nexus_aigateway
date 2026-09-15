@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // OnPrompt rewrites the text parts of every message whose role is selected,

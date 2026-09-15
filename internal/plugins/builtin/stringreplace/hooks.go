@@ -3,7 +3,7 @@ package stringreplace
 import (
 	"context"
 
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // Code is the Decision.Code recorded when a rule matches and on_match is

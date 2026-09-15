@@ -3,7 +3,7 @@ package server
 import (
 	"sort"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // ExposedModelLister surfaces additional public models to include in GET /v1/models.

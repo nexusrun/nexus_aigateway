@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/validation"
+	"github.com/nexusrun/nexus_aigateway/internal/validation"
 )
 
 // ErrNotFound indicates a requested guardrail was not found.

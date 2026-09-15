@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/storage/sqlx"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlx"
 )
 
 // ErrNotFound indicates a requested file mapping was not found.

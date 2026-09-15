@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // fakeRoute is a test routing strategy whose schema and behaviour are shared

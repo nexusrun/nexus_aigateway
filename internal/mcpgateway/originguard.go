@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // originGuard decides whether one downstream request may reach the MCP

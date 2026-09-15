@@ -8,14 +8,14 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"github.com/enterpilot/gomodel/internal/authkeys"
-	"github.com/enterpilot/gomodel/internal/budget"
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/guardrails"
-	"github.com/enterpilot/gomodel/internal/pricingoverrides"
-	"github.com/enterpilot/gomodel/internal/ratelimit"
-	"github.com/enterpilot/gomodel/internal/virtualmodels"
-	"github.com/enterpilot/gomodel/internal/workflows"
+	"github.com/nexusrun/nexus_aigateway/internal/authkeys"
+	"github.com/nexusrun/nexus_aigateway/internal/budget"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/guardrails"
+	"github.com/nexusrun/nexus_aigateway/internal/pricingoverrides"
+	"github.com/nexusrun/nexus_aigateway/internal/ratelimit"
+	"github.com/nexusrun/nexus_aigateway/internal/virtualmodels"
+	"github.com/nexusrun/nexus_aigateway/internal/workflows"
 )
 
 func budgetServiceError(message string, err error) error {

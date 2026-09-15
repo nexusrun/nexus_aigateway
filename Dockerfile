@@ -22,7 +22,7 @@ ARG VERSION=dev
 ARG COMMIT=none
 ARG DATE=unknown
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOARM=${TARGETVARIANT#v} go build \
-	-ldflags="-s -w -X github.com/enterpilot/gomodel/internal/version.Version=${VERSION} -X github.com/enterpilot/gomodel/internal/version.Commit=${COMMIT} -X github.com/enterpilot/gomodel/internal/version.Date=${DATE}" \
+	-ldflags="-s -w -X github.com/nexusrun/nexus_aigateway/internal/version.Version=${VERSION} -X github.com/nexusrun/nexus_aigateway/internal/version.Commit=${COMMIT} -X github.com/nexusrun/nexus_aigateway/internal/version.Date=${DATE}" \
 	-o /gomodel ./cmd/gomodel
 
 # Create .cache and data directories for runtime (with placeholder for COPY)
@@ -31,8 +31,6 @@ RUN mkdir -p /app/.cache /app/data && touch /app/.cache/.keep /app/data/.keep
 # Runtime stage
 FROM gcr.io/distroless/static-debian12:nonroot
 
-# Ownership proof for the MCP Registry; must match the name in server.json
-LABEL io.modelcontextprotocol.server.name="io.github.ENTERPILOT/gomodel"
 
 # Copy binary and runtime config
 COPY --from=builder /gomodel /gomodel

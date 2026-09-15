@@ -13,11 +13,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	batchstore "github.com/enterpilot/gomodel/internal/batch"
-	"github.com/enterpilot/gomodel/internal/conversationstore"
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/filestore"
-	"github.com/enterpilot/gomodel/internal/responsestore"
+	batchstore "github.com/nexusrun/nexus_aigateway/internal/batch"
+	"github.com/nexusrun/nexus_aigateway/internal/conversationstore"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/filestore"
+	"github.com/nexusrun/nexus_aigateway/internal/responsestore"
 )
 
 // Bearer tokens accepted by scopedObjectServer and the scope each resolves to.

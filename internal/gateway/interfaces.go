@@ -4,7 +4,7 @@ package gateway
 import (
 	"context"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // ModelResolver resolves raw request selectors into concrete model selectors

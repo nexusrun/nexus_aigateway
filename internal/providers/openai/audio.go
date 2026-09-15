@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/llmclient"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/llmclient"
 )
 
 // CreateSpeech implements OpenAI text-to-speech (POST /audio/speech). The upstream

@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // Action values for the "action" config key: what happens when an entity

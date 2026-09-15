@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/versioncheck"
+	"github.com/nexusrun/nexus_aigateway/internal/versioncheck"
 )
 
 // versionTestServer wires a gateway whose update check reads manifests from a

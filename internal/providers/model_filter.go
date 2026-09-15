@@ -5,8 +5,8 @@ import (
 	"maps"
 	"strings"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // modelFilter is the resolved form of config.ModelFilter, evaluated against one

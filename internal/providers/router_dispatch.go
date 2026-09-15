@@ -6,7 +6,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // assertProviderCapability narrows a resolved provider to capability T. It

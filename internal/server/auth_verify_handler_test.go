@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/enterpilot/gomodel/ext"
+	"github.com/nexusrun/nexus_aigateway/ext"
 )
 
 func getAuthVerify(t *testing.T, cfg *Config, token string) (*httptest.ResponseRecorder, authVerifyResponse) {

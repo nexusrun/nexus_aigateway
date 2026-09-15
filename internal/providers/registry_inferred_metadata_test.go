@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/modeldata"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/modeldata"
 )
 
 // TestInitialize_InfersEmbeddingModesForUnknownModels verifies the last-resort

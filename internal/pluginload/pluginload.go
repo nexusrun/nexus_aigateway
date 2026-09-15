@@ -25,8 +25,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // HostBuildInfo describes the toolchain this binary was built with. Plugins

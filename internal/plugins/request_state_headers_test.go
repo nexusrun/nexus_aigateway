@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 func TestApplyRequestHeadersReplaysOnlyEdits(t *testing.T) {

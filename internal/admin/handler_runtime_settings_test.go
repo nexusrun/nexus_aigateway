@@ -13,9 +13,9 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"github.com/enterpilot/gomodel/ext"
-	"github.com/enterpilot/gomodel/internal/runtimesettings"
-	"github.com/enterpilot/gomodel/internal/storage"
+	"github.com/nexusrun/nexus_aigateway/ext"
+	"github.com/nexusrun/nexus_aigateway/internal/runtimesettings"
+	"github.com/nexusrun/nexus_aigateway/internal/storage"
 )
 
 type adminTestRuntimeSetting struct {

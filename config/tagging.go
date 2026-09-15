@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // DefaultTaggingDelimiter separates multiple labels inside one header value.

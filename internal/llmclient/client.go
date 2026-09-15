@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/internal/httpclient"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/internal/httpclient"
 )
 
 // RequestInfo contains metadata about a request for observability hooks

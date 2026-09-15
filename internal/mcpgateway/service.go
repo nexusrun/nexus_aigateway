@@ -13,9 +13,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/usage"
-	"github.com/enterpilot/gomodel/internal/version"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/usage"
+	"github.com/nexusrun/nexus_aigateway/internal/version"
 )
 
 // sessionIdleTimeout closes downstream sessions that stop sending requests,

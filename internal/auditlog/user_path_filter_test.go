@@ -3,7 +3,7 @@ package auditlog
 import (
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/storage/sqlutil"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlutil"
 )
 
 func TestAuditUserPathSubtreeBounds(t *testing.T) {

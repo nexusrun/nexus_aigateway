@@ -3,7 +3,7 @@ package openai
 import (
 	"context"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // BatchSurface is an embeddable facet exposing CompatibleProvider's native

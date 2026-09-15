@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/responsestore"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/responsestore"
 )
 
 func TestResponsesUtilityRoutesRejectNullBody(t *testing.T) {

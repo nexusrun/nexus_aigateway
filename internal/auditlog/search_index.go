@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/storage/sqlx"
+	"github.com/nexusrun/nexus_aigateway/internal/storage/sqlx"
 )
 
 // searchColumns are the plain-text columns the free-text search sweeps, in

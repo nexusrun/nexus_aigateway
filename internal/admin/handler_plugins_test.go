@@ -3,8 +3,8 @@ package admin
 import (
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/plugins"
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/internal/plugins"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 func TestPluginViewFromEntry_ReportsGuardrail(t *testing.T) {

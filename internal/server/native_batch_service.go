@@ -7,11 +7,11 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"github.com/enterpilot/gomodel/internal/auditlog"
-	batchstore "github.com/enterpilot/gomodel/internal/batch"
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/gateway"
-	"github.com/enterpilot/gomodel/internal/usage"
+	"github.com/nexusrun/nexus_aigateway/internal/auditlog"
+	batchstore "github.com/nexusrun/nexus_aigateway/internal/batch"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/gateway"
+	"github.com/nexusrun/nexus_aigateway/internal/usage"
 )
 
 // nativeBatchService adapts Echo requests to the transport-independent native

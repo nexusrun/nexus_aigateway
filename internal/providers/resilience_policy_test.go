@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/enterpilot/gomodel/config"
+	"github.com/nexusrun/nexus_aigateway/config"
 	"gopkg.in/yaml.v3"
 )
 

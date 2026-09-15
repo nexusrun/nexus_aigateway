@@ -17,8 +17,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/enterpilot/gomodel/config"
-	"github.com/enterpilot/gomodel/internal/version"
+	"github.com/nexusrun/nexus_aigateway/config"
+	"github.com/nexusrun/nexus_aigateway/internal/version"
 
 	"github.com/labstack/echo/v5"
 )

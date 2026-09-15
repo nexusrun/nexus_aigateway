@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // stuckPrompt ignores its context and only returns after d.

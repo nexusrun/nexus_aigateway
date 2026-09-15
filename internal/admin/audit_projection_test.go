@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/auditlog"
+	"github.com/nexusrun/nexus_aigateway/internal/auditlog"
 )
 
 // fullAuditEntry builds an entry carrying every heavy payload the list

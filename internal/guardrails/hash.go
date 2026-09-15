@@ -1,6 +1,6 @@
 package guardrails
 
-import "github.com/enterpilot/gomodel/internal/plugins"
+import "github.com/nexusrun/nexus_aigateway/internal/plugins"
 
 // RuleDescriptor describes a single active guardrail rule for hashing.
 type RuleDescriptor = plugins.RuleDescriptor

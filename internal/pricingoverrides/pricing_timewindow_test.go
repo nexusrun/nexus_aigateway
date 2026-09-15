@@ -3,7 +3,7 @@ package pricingoverrides
 import (
 	"testing"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 func windowedBasePricing() *core.ModelPricing {

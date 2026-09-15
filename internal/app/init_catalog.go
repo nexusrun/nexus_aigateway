@@ -8,15 +8,15 @@ import (
 
 	"github.com/goccy/go-json"
 
-	"github.com/enterpilot/gomodel/internal/llmclient"
-	"github.com/enterpilot/gomodel/internal/plugins"
-	"github.com/enterpilot/gomodel/internal/pricingoverrides"
-	"github.com/enterpilot/gomodel/internal/providers"
-	"github.com/enterpilot/gomodel/internal/tagging"
-	"github.com/enterpilot/gomodel/internal/usage"
-	"github.com/enterpilot/gomodel/internal/users"
-	"github.com/enterpilot/gomodel/internal/virtualmodels"
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/internal/llmclient"
+	"github.com/nexusrun/nexus_aigateway/internal/plugins"
+	"github.com/nexusrun/nexus_aigateway/internal/pricingoverrides"
+	"github.com/nexusrun/nexus_aigateway/internal/providers"
+	"github.com/nexusrun/nexus_aigateway/internal/tagging"
+	"github.com/nexusrun/nexus_aigateway/internal/usage"
+	"github.com/nexusrun/nexus_aigateway/internal/users"
+	"github.com/nexusrun/nexus_aigateway/internal/virtualmodels"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // initModelCatalog builds the services that decide which models exist and

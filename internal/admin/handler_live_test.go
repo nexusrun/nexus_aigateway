@@ -12,9 +12,9 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"github.com/enterpilot/gomodel/internal/auditlog"
-	"github.com/enterpilot/gomodel/internal/live"
-	"github.com/enterpilot/gomodel/internal/usage"
+	"github.com/nexusrun/nexus_aigateway/internal/auditlog"
+	"github.com/nexusrun/nexus_aigateway/internal/live"
+	"github.com/nexusrun/nexus_aigateway/internal/usage"
 )
 
 func TestLiveCursorRejectsInvalidValue(t *testing.T) {

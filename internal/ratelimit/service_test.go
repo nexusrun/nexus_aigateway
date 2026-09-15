@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/enterpilot/gomodel/config"
+	"github.com/nexusrun/nexus_aigateway/config"
 )
 
 // memStore is a minimal in-memory Store for service tests.

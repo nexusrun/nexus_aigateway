@@ -11,7 +11,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/enterpilot/gomodel/config"
+	"github.com/nexusrun/nexus_aigateway/config"
 )
 
 // applyProviderEnvVars overlays well-known provider env vars onto the raw YAML map.

@@ -4,9 +4,9 @@ import (
 	"context"
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/batchrewrite"
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/gateway"
+	"github.com/nexusrun/nexus_aigateway/internal/batchrewrite"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/gateway"
 )
 
 // BatchRequestPreparer rewrites a native batch request before provider

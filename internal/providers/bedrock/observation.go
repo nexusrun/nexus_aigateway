@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/llmclient"
+	"github.com/nexusrun/nexus_aigateway/internal/llmclient"
 )
 
 const converseEndpoint = "Converse"

@@ -11,7 +11,7 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"github.com/enterpilot/gomodel/internal/tagging"
+	"github.com/nexusrun/nexus_aigateway/internal/tagging"
 )
 
 type adminTaggingStore struct {

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/core"
-	"github.com/enterpilot/gomodel/internal/usage"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/usage"
 )
 
 // ExecuteChatCompletion executes a non-streaming chat request and records usage on success.

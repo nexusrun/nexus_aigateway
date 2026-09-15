@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/enterpilot/gomodel/pluginapi"
+	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
 // Name is the plugin's manifest name.

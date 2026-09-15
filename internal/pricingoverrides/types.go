@@ -3,7 +3,7 @@ package pricingoverrides
 import (
 	"time"
 
-	"github.com/enterpilot/gomodel/internal/modelselectors"
+	"github.com/nexusrun/nexus_aigateway/internal/modelselectors"
 )
 
 const CurrencyUSD = "USD"

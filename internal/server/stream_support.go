@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/enterpilot/gomodel/internal/streaming"
+	"github.com/nexusrun/nexus_aigateway/internal/streaming"
 )
 
 // streamCopyBufferPool reuses 32KB copy buffers across streaming responses so

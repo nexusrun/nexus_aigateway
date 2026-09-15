@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // RateLimitsConfig holds request, token, and concurrency limits scoped to

@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
 // ModelList represents the top-level structure of models.json.

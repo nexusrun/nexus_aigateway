@@ -14,7 +14,7 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"github.com/enterpilot/gomodel/internal/mcpgateway"
+	"github.com/nexusrun/nexus_aigateway/internal/mcpgateway"
 )
 
 // mcpAdminFake is an in-memory MCPServerAdmin for handler tests: it stands in
