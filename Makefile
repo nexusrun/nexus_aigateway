@@ -121,7 +121,7 @@ test-race: frontend-check
 # secretless job (docs/adr/0010-dashboard-built-in-ci.md). --ignore-scripts
 # keeps npm lifecycle scripts from running; the build does not need them.
 frontend:
-	cd web/dashboard && npm ci --no-audit --no-fund --ignore-scripts && npm run build
+	cd web/dashboard && npm ci --include=dev --no-audit --no-fund --ignore-scripts && npm run build
 
 # The Go suites embed the dashboard, so they need a build in place. This only
 # checks; it does not build, because CI supplies static/dist as an artifact
