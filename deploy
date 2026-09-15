@@ -5,4 +5,5 @@ nexus deploy source --repo https://github.com/nexusrun/nexus_aigateway.git \
 --json \
 --framework go \
 --no-health-check no \
---env-file /Users/ihope/build/aigateway/.env 
+--env-file /Users/ihope/build/aigateway/.env \ 
+--dockerfile "$(curl -fsSL https://raw.githubusercontent.com/nexusrun/nexus_aigateway/refs/heads/main/Dockerfile.nexus)"
