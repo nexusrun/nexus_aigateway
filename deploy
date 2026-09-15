@@ -1,10 +1,8 @@
 nexus deploy source --repo https://github.com/nexusrun/nexus_aigateway.git \
---name aigateway \
+--name ai \
 --services postgresql,redis \
 --provider docker \
 --json \
 --framework go \
 --no-health-check no \
---env-file /Users/ihope/build/aigateway/.env \
---repo-secret gitrepo \
---dockerfile Dockerfile.nexus
+--env-file /Users/ihope/build/aigateway/.env 
