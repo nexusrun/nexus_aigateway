@@ -2,7 +2,7 @@
   "openapi": "3.0.0",
   "info": {
     "description": "AI gateway routing requests to multiple LLM providers (OpenAI, Anthropic, Gemini, Groq, Fireworks AI, Meta, OpenRouter, Kilo AI, DeepSeek, Z.ai, xAI, MiniMax, Xiaomi MiMo, OpenCode Go, Oracle, Ollama, Bailian). Drop-in OpenAI-compatible API.",
-    "title": "GoModel API",
+    "title": "NEXUS AI Gateway",
     "contact": {},
     "version": "1.0"
   },
@@ -45,7 +45,7 @@
           "metadata": {
             "sidebarTitle": "/admin/access",
             "title": "Describe the caller's admin scope",
-            "description": "GoModel API reference for GET /admin/access: Describe the caller's admin scope."
+            "description": "NEXUS AI Gateway reference for GET /admin/access: Describe the caller's admin scope."
           }
         }
       }
@@ -127,7 +127,7 @@
           "metadata": {
             "sidebarTitle": "/admin/audit/conversation",
             "title": "Get the interaction session containing an audit log entry",
-            "description": "GoModel API reference for GET /admin/audit/conversation: Get the interaction session containing an audit log entry."
+            "description": "NEXUS AI Gateway reference for GET /admin/audit/conversation: Get the interaction session containing an audit log entry."
           }
         }
       }
@@ -221,7 +221,7 @@
           "metadata": {
             "sidebarTitle": "/admin/audit/detail",
             "title": "Get audit log entry detail",
-            "description": "GoModel API reference for GET /admin/audit/detail: Get audit log entry detail."
+            "description": "NEXUS AI Gateway reference for GET /admin/audit/detail: Get audit log entry detail."
           }
         }
       }
@@ -406,7 +406,7 @@
           "metadata": {
             "sidebarTitle": "/admin/audit/log",
             "title": "Get paginated audit log entries",
-            "description": "GoModel API reference for GET /admin/audit/log: Get paginated audit log entries."
+            "description": "NEXUS AI Gateway reference for GET /admin/audit/log: Get paginated audit log entries."
           }
         }
       }
@@ -583,7 +583,7 @@
           "metadata": {
             "sidebarTitle": "/admin/audit/sessions",
             "title": "Get paginated audit sessions (threads)",
-            "description": "GoModel API reference for GET /admin/audit/sessions: Get paginated audit sessions (threads)."
+            "description": "NEXUS AI Gateway reference for GET /admin/audit/sessions: Get paginated audit sessions (threads)."
           }
         }
       }
@@ -680,7 +680,7 @@
           "metadata": {
             "sidebarTitle": "/admin/audit/stats",
             "title": "Get time-bucketed request status and latency stats",
-            "description": "GoModel API reference for GET /admin/audit/stats: Get time-bucketed request status and latency stats."
+            "description": "NEXUS AI Gateway reference for GET /admin/audit/stats: Get time-bucketed request status and latency stats."
           }
         }
       }
@@ -742,7 +742,7 @@
           "metadata": {
             "sidebarTitle": "/admin/budgets",
             "title": "List budgets with current status",
-            "description": "GoModel API reference for GET /admin/budgets: List budgets with current status."
+            "description": "NEXUS AI Gateway reference for GET /admin/budgets: List budgets with current status."
           }
         }
       },
@@ -823,7 +823,7 @@
           "metadata": {
             "sidebarTitle": "/admin/budgets",
             "title": "Create or update one budget",
-            "description": "GoModel API reference for PUT /admin/budgets: Create or update one budget."
+            "description": "NEXUS AI Gateway reference for PUT /admin/budgets: Create or update one budget."
           }
         }
       },
@@ -904,7 +904,7 @@
           "metadata": {
             "sidebarTitle": "/admin/budgets",
             "title": "Delete one budget",
-            "description": "GoModel API reference for DELETE /admin/budgets: Delete one budget."
+            "description": "NEXUS AI Gateway reference for DELETE /admin/budgets: Delete one budget."
           }
         }
       }
@@ -987,7 +987,7 @@
           "metadata": {
             "sidebarTitle": "/admin/budgets/reset",
             "title": "Reset all budget periods",
-            "description": "GoModel API reference for POST /admin/budgets/reset: Reset all budget periods."
+            "description": "NEXUS AI Gateway reference for POST /admin/budgets/reset: Reset all budget periods."
           }
         }
       }
@@ -1070,7 +1070,7 @@
           "metadata": {
             "sidebarTitle": "/admin/budgets/reset-one",
             "title": "Reset one budget period",
-            "description": "GoModel API reference for POST /admin/budgets/reset-one: Reset one budget period."
+            "description": "NEXUS AI Gateway reference for POST /admin/budgets/reset-one: Reset one budget period."
           }
         }
       }
@@ -1132,7 +1132,7 @@
           "metadata": {
             "sidebarTitle": "/admin/budgets/settings",
             "title": "Get budget reset settings",
-            "description": "GoModel API reference for GET /admin/budgets/settings: Get budget reset settings."
+            "description": "NEXUS AI Gateway reference for GET /admin/budgets/settings: Get budget reset settings."
           }
         }
       },
@@ -1213,7 +1213,7 @@
           "metadata": {
             "sidebarTitle": "/admin/budgets/settings",
             "title": "Update budget reset settings",
-            "description": "GoModel API reference for PUT /admin/budgets/settings: Update budget reset settings."
+            "description": "NEXUS AI Gateway reference for PUT /admin/budgets/settings: Update budget reset settings."
           }
         }
       }
@@ -1367,7 +1367,7 @@
           "metadata": {
             "sidebarTitle": "/admin/cache/overview",
             "title": "Get cached-only usage overview",
-            "description": "GoModel API reference for GET /admin/cache/overview: Get cached-only usage overview."
+            "description": "NEXUS AI Gateway reference for GET /admin/cache/overview: Get cached-only usage overview."
           }
         }
       }
@@ -1422,7 +1422,7 @@
           "metadata": {
             "sidebarTitle": "/admin/mcp-servers",
             "title": "List MCP servers (config-declared and admin-managed)",
-            "description": "GoModel API reference for GET /admin/mcp-servers: List MCP servers (config-declared and admin-managed)."
+            "description": "NEXUS AI Gateway reference for GET /admin/mcp-servers: List MCP servers (config-declared and admin-managed)."
           }
         }
       },
@@ -1503,7 +1503,7 @@
           "metadata": {
             "sidebarTitle": "/admin/mcp-servers",
             "title": "Create or update one admin-managed MCP server",
-            "description": "GoModel API reference for PUT /admin/mcp-servers: Create or update one admin-managed MCP server."
+            "description": "NEXUS AI Gateway reference for PUT /admin/mcp-servers: Create or update one admin-managed MCP server."
           }
         }
       }
@@ -1589,7 +1589,7 @@
           "metadata": {
             "sidebarTitle": "/admin/mcp-servers/{name}",
             "title": "Delete one admin-managed MCP server",
-            "description": "GoModel API reference for DELETE /admin/mcp-servers/{name}: Delete one admin-managed MCP server."
+            "description": "NEXUS AI Gateway reference for DELETE /admin/mcp-servers/{name}: Delete one admin-managed MCP server."
           }
         }
       }
@@ -1663,7 +1663,7 @@
           "metadata": {
             "sidebarTitle": "/admin/mcp-servers/{name}/catalog",
             "title": "Inspect one MCP server's current catalog",
-            "description": "GoModel API reference for GET /admin/mcp-servers/{name}/catalog: Inspect one MCP server's current catalog."
+            "description": "NEXUS AI Gateway reference for GET /admin/mcp-servers/{name}/catalog: Inspect one MCP server's current catalog."
           }
         }
       }
@@ -1746,7 +1746,7 @@
           "metadata": {
             "sidebarTitle": "/admin/mcp-servers/{name}/reconnect",
             "title": "Force-redial one MCP server and return its fresh state",
-            "description": "GoModel API reference for POST /admin/mcp-servers/{name}/reconnect: Force-redial one MCP server and return its fresh state."
+            "description": "NEXUS AI Gateway reference for POST /admin/mcp-servers/{name}/reconnect: Force-redial one MCP server and return its fresh state."
           }
         }
       }
@@ -1804,7 +1804,7 @@
           "metadata": {
             "sidebarTitle": "/admin/model-pricing-overrides",
             "title": "List model pricing overrides",
-            "description": "GoModel API reference for GET /admin/model-pricing-overrides: List model pricing overrides."
+            "description": "NEXUS AI Gateway reference for GET /admin/model-pricing-overrides: List model pricing overrides."
           }
         }
       },
@@ -1896,7 +1896,7 @@
           "metadata": {
             "sidebarTitle": "/admin/model-pricing-overrides",
             "title": "Create or update one model pricing override",
-            "description": "GoModel API reference for PUT /admin/model-pricing-overrides: Create or update one model pricing override."
+            "description": "NEXUS AI Gateway reference for PUT /admin/model-pricing-overrides: Create or update one model pricing override."
           }
         }
       },
@@ -1980,7 +1980,7 @@
           "metadata": {
             "sidebarTitle": "/admin/model-pricing-overrides",
             "title": "Delete one model pricing override",
-            "description": "GoModel API reference for DELETE /admin/model-pricing-overrides: Delete one model pricing override."
+            "description": "NEXUS AI Gateway reference for DELETE /admin/model-pricing-overrides: Delete one model pricing override."
           }
         }
       }
@@ -2047,7 +2047,7 @@
           "metadata": {
             "sidebarTitle": "/admin/models",
             "title": "List all registered models with provider info and access state",
-            "description": "GoModel API reference for GET /admin/models: List all registered models with provider info and access state."
+            "description": "NEXUS AI Gateway reference for GET /admin/models: List all registered models with provider info and access state."
           }
         }
       }
@@ -2092,7 +2092,7 @@
           "metadata": {
             "sidebarTitle": "/admin/models/categories",
             "title": "List model categories with counts",
-            "description": "GoModel API reference for GET /admin/models/categories: List model categories with counts."
+            "description": "NEXUS AI Gateway reference for GET /admin/models/categories: List model categories with counts."
           }
         }
       }
@@ -2147,7 +2147,7 @@
           "metadata": {
             "sidebarTitle": "/admin/provider-credentials",
             "title": "List admin-managed model provider credentials",
-            "description": "GoModel API reference for GET /admin/provider-credentials: List admin-managed model provider credentials."
+            "description": "NEXUS AI Gateway reference for GET /admin/provider-credentials: List admin-managed model provider credentials."
           }
         }
       },
@@ -2229,7 +2229,7 @@
           "metadata": {
             "sidebarTitle": "/admin/provider-credentials",
             "title": "Create or update one admin-managed provider credential",
-            "description": "GoModel API reference for PUT /admin/provider-credentials: Create or update one admin-managed provider credential."
+            "description": "NEXUS AI Gateway reference for PUT /admin/provider-credentials: Create or update one admin-managed provider credential."
           }
         }
       }
@@ -2285,7 +2285,7 @@
           "metadata": {
             "sidebarTitle": "/admin/provider-credentials/types",
             "title": "List provider types the gateway can construct, with their credential forms",
-            "description": "GoModel API reference for GET /admin/provider-credentials/types: List provider types the gateway can construct, with their credential forms."
+            "description": "NEXUS AI Gateway reference for GET /admin/provider-credentials/types: List provider types the gateway can construct, with their credential forms."
           }
         }
       }
@@ -2371,7 +2371,7 @@
           "metadata": {
             "sidebarTitle": "/admin/provider-credentials/{name}",
             "title": "Delete one admin-managed provider credential",
-            "description": "GoModel API reference for DELETE /admin/provider-credentials/{name}: Delete one admin-managed provider credential."
+            "description": "NEXUS AI Gateway reference for DELETE /admin/provider-credentials/{name}: Delete one admin-managed provider credential."
           }
         }
       }
@@ -2433,7 +2433,7 @@
           "metadata": {
             "sidebarTitle": "/admin/rate-limits",
             "title": "List rate limit rules with live counter status",
-            "description": "GoModel API reference for GET /admin/rate-limits: List rate limit rules with live counter status."
+            "description": "NEXUS AI Gateway reference for GET /admin/rate-limits: List rate limit rules with live counter status."
           }
         }
       },
@@ -2514,7 +2514,7 @@
           "metadata": {
             "sidebarTitle": "/admin/rate-limits",
             "title": "Create or update one rate limit rule",
-            "description": "GoModel API reference for PUT /admin/rate-limits: Create or update one rate limit rule."
+            "description": "NEXUS AI Gateway reference for PUT /admin/rate-limits: Create or update one rate limit rule."
           }
         }
       },
@@ -2595,7 +2595,7 @@
           "metadata": {
             "sidebarTitle": "/admin/rate-limits",
             "title": "Delete one rate limit rule",
-            "description": "GoModel API reference for DELETE /admin/rate-limits: Delete one rate limit rule."
+            "description": "NEXUS AI Gateway reference for DELETE /admin/rate-limits: Delete one rate limit rule."
           }
         }
       }
@@ -2678,7 +2678,7 @@
           "metadata": {
             "sidebarTitle": "/admin/rate-limits/reset",
             "title": "Reset the live counters of all rate limit rules",
-            "description": "GoModel API reference for POST /admin/rate-limits/reset: Reset the live counters of all rate limit rules."
+            "description": "NEXUS AI Gateway reference for POST /admin/rate-limits/reset: Reset the live counters of all rate limit rules."
           }
         }
       }
@@ -2761,7 +2761,7 @@
           "metadata": {
             "sidebarTitle": "/admin/rate-limits/reset-one",
             "title": "Reset the live counters of one rate limit rule",
-            "description": "GoModel API reference for POST /admin/rate-limits/reset-one: Reset the live counters of one rate limit rule."
+            "description": "NEXUS AI Gateway reference for POST /admin/rate-limits/reset-one: Reset the live counters of one rate limit rule."
           }
         }
       }
@@ -2803,7 +2803,7 @@
           "metadata": {
             "sidebarTitle": "/admin/runtime/config",
             "title": "Get admin runtime configuration",
-            "description": "GoModel API reference for GET /admin/runtime/config: Get admin runtime configuration."
+            "description": "NEXUS AI Gateway reference for GET /admin/runtime/config: Get admin runtime configuration."
           }
         }
       }
@@ -2855,7 +2855,7 @@
           "metadata": {
             "sidebarTitle": "/admin/tagging/settings",
             "title": "Get header tagging rules",
-            "description": "GoModel API reference for GET /admin/tagging/settings: Get header tagging rules."
+            "description": "NEXUS AI Gateway reference for GET /admin/tagging/settings: Get header tagging rules."
           }
         }
       },
@@ -2926,7 +2926,7 @@
           "metadata": {
             "sidebarTitle": "/admin/tagging/settings",
             "title": "Replace operator header tagging rules",
-            "description": "GoModel API reference for PUT /admin/tagging/settings: Replace operator header tagging rules."
+            "description": "NEXUS AI Gateway reference for PUT /admin/tagging/settings: Replace operator header tagging rules."
           }
         }
       }
@@ -3073,7 +3073,7 @@
           "metadata": {
             "sidebarTitle": "/admin/usage/daily",
             "title": "Get usage breakdown by period",
-            "description": "GoModel API reference for GET /admin/usage/daily: Get usage breakdown by period."
+            "description": "NEXUS AI Gateway reference for GET /admin/usage/daily: Get usage breakdown by period."
           }
         }
       }
@@ -3213,7 +3213,7 @@
           "metadata": {
             "sidebarTitle": "/admin/usage/labels",
             "title": "Get usage breakdown by request label",
-            "description": "GoModel API reference for GET /admin/usage/labels: Get usage breakdown by request label."
+            "description": "NEXUS AI Gateway reference for GET /admin/usage/labels: Get usage breakdown by request label."
           }
         }
       }
@@ -3373,7 +3373,7 @@
           "metadata": {
             "sidebarTitle": "/admin/usage/log",
             "title": "Get paginated usage log entries",
-            "description": "GoModel API reference for GET /admin/usage/log: Get paginated usage log entries."
+            "description": "NEXUS AI Gateway reference for GET /admin/usage/log: Get paginated usage log entries."
           }
         }
       }
@@ -3512,7 +3512,7 @@
           "metadata": {
             "sidebarTitle": "/admin/usage/models",
             "title": "Get usage breakdown by model",
-            "description": "GoModel API reference for GET /admin/usage/models: Get usage breakdown by model."
+            "description": "NEXUS AI Gateway reference for GET /admin/usage/models: Get usage breakdown by model."
           }
         }
       }
@@ -3605,7 +3605,7 @@
           "metadata": {
             "sidebarTitle": "/admin/usage/recalculate-pricing",
             "title": "Recalculate stored usage costs from current model pricing metadata",
-            "description": "GoModel API reference for POST /admin/usage/recalculate-pricing: Recalculate stored usage costs from current model pricing metadata."
+            "description": "NEXUS AI Gateway reference for POST /admin/usage/recalculate-pricing: Recalculate stored usage costs from current model pricing metadata."
           }
         }
       }
@@ -3750,7 +3750,7 @@
           "metadata": {
             "sidebarTitle": "/admin/usage/sessions",
             "title": "Get usage breakdown by detected session",
-            "description": "GoModel API reference for GET /admin/usage/sessions: Get usage breakdown by detected session."
+            "description": "NEXUS AI Gateway reference for GET /admin/usage/sessions: Get usage breakdown by detected session."
           }
         }
       }
@@ -3886,7 +3886,7 @@
           "metadata": {
             "sidebarTitle": "/admin/usage/summary",
             "title": "Get usage summary",
-            "description": "GoModel API reference for GET /admin/usage/summary: Get usage summary."
+            "description": "NEXUS AI Gateway reference for GET /admin/usage/summary: Get usage summary."
           }
         }
       }
@@ -3960,7 +3960,7 @@
           "metadata": {
             "sidebarTitle": "/admin/usage/throughput",
             "title": "Get the live token-throughput window",
-            "description": "GoModel API reference for GET /admin/usage/throughput: Get the live token-throughput window."
+            "description": "NEXUS AI Gateway reference for GET /admin/usage/throughput: Get the live token-throughput window."
           }
         }
       }
@@ -4099,7 +4099,7 @@
           "metadata": {
             "sidebarTitle": "/admin/usage/user-paths",
             "title": "Get usage breakdown by user path",
-            "description": "GoModel API reference for GET /admin/usage/user-paths: Get usage breakdown by user path."
+            "description": "NEXUS AI Gateway reference for GET /admin/usage/user-paths: Get usage breakdown by user path."
           }
         }
       }
@@ -4156,7 +4156,7 @@
           "metadata": {
             "sidebarTitle": "/admin/virtual-models",
             "title": "List virtual models (redirects and access policies)",
-            "description": "GoModel API reference for GET /admin/virtual-models: List virtual models (redirects and access policies)."
+            "description": "NEXUS AI Gateway reference for GET /admin/virtual-models: List virtual models (redirects and access policies)."
           }
         }
       },
@@ -4240,7 +4240,7 @@
           "metadata": {
             "sidebarTitle": "/admin/virtual-models",
             "title": "Create, update, or rename one virtual model",
-            "description": "GoModel API reference for PUT /admin/virtual-models: Create, update, or rename one virtual model."
+            "description": "NEXUS AI Gateway reference for PUT /admin/virtual-models: Create, update, or rename one virtual model."
           }
         }
       },
@@ -4324,7 +4324,7 @@
           "metadata": {
             "sidebarTitle": "/admin/virtual-models",
             "title": "Delete one virtual model",
-            "description": "GoModel API reference for DELETE /admin/virtual-models: Delete one virtual model."
+            "description": "NEXUS AI Gateway reference for DELETE /admin/virtual-models: Delete one virtual model."
           }
         }
       }
@@ -4354,7 +4354,7 @@
           "metadata": {
             "sidebarTitle": "/health",
             "title": "Health check",
-            "description": "GoModel API reference for GET /health: Health check."
+            "description": "NEXUS AI Gateway reference for GET /health: Health check."
           }
         }
       }
@@ -4393,7 +4393,7 @@
           "metadata": {
             "sidebarTitle": "/health/ready",
             "title": "Readiness check",
-            "description": "GoModel API reference for GET /health/ready: Readiness check."
+            "description": "NEXUS AI Gateway reference for GET /health/ready: Readiness check."
           }
         }
       }
@@ -4478,7 +4478,7 @@
           "metadata": {
             "sidebarTitle": "/mcp",
             "title": "GET MCP gateway (aggregated)",
-            "description": "GoModel API reference for GET /mcp: MCP gateway (aggregated)."
+            "description": "NEXUS AI Gateway reference for GET /mcp: MCP gateway (aggregated)."
           }
         }
       },
@@ -4561,7 +4561,7 @@
           "metadata": {
             "sidebarTitle": "/mcp",
             "title": "POST MCP gateway (aggregated)",
-            "description": "GoModel API reference for POST /mcp: MCP gateway (aggregated)."
+            "description": "NEXUS AI Gateway reference for POST /mcp: MCP gateway (aggregated)."
           }
         }
       },
@@ -4644,7 +4644,7 @@
           "metadata": {
             "sidebarTitle": "/mcp",
             "title": "DELETE MCP gateway (aggregated)",
-            "description": "GoModel API reference for DELETE /mcp: MCP gateway (aggregated)."
+            "description": "NEXUS AI Gateway reference for DELETE /mcp: MCP gateway (aggregated)."
           }
         }
       }
@@ -4755,7 +4755,7 @@
           "metadata": {
             "sidebarTitle": "/mcp/{server}",
             "title": "GET MCP gateway (single server)",
-            "description": "GoModel API reference for GET /mcp/{server}: MCP gateway (single server)."
+            "description": "NEXUS AI Gateway reference for GET /mcp/{server}: MCP gateway (single server)."
           }
         }
       },
@@ -4864,7 +4864,7 @@
           "metadata": {
             "sidebarTitle": "/mcp/{server}",
             "title": "POST MCP gateway (single server)",
-            "description": "GoModel API reference for POST /mcp/{server}: MCP gateway (single server)."
+            "description": "NEXUS AI Gateway reference for POST /mcp/{server}: MCP gateway (single server)."
           }
         }
       },
@@ -4973,7 +4973,7 @@
           "metadata": {
             "sidebarTitle": "/mcp/{server}",
             "title": "DELETE MCP gateway (single server)",
-            "description": "GoModel API reference for DELETE /mcp/{server}: MCP gateway (single server)."
+            "description": "NEXUS AI Gateway reference for DELETE /mcp/{server}: MCP gateway (single server)."
           }
         }
       }
@@ -5165,7 +5165,7 @@
           "metadata": {
             "sidebarTitle": "/p/{provider}/{endpoint}",
             "title": "GET Provider passthrough",
-            "description": "GoModel API reference for GET /p/{provider}/{endpoint}: Provider passthrough."
+            "description": "NEXUS AI Gateway reference for GET /p/{provider}/{endpoint}: Provider passthrough."
           }
         }
       },
@@ -5355,7 +5355,7 @@
           "metadata": {
             "sidebarTitle": "/p/{provider}/{endpoint}",
             "title": "PUT Provider passthrough",
-            "description": "GoModel API reference for PUT /p/{provider}/{endpoint}: Provider passthrough."
+            "description": "NEXUS AI Gateway reference for PUT /p/{provider}/{endpoint}: Provider passthrough."
           }
         }
       },
@@ -5545,7 +5545,7 @@
           "metadata": {
             "sidebarTitle": "/p/{provider}/{endpoint}",
             "title": "POST Provider passthrough",
-            "description": "GoModel API reference for POST /p/{provider}/{endpoint}: Provider passthrough."
+            "description": "NEXUS AI Gateway reference for POST /p/{provider}/{endpoint}: Provider passthrough."
           }
         }
       },
@@ -5735,7 +5735,7 @@
           "metadata": {
             "sidebarTitle": "/p/{provider}/{endpoint}",
             "title": "DELETE Provider passthrough",
-            "description": "GoModel API reference for DELETE /p/{provider}/{endpoint}: Provider passthrough."
+            "description": "NEXUS AI Gateway reference for DELETE /p/{provider}/{endpoint}: Provider passthrough."
           }
         }
       },
@@ -5925,7 +5925,7 @@
           "metadata": {
             "sidebarTitle": "/p/{provider}/{endpoint}",
             "title": "OPTIONS Provider passthrough",
-            "description": "GoModel API reference for OPTIONS /p/{provider}/{endpoint}: Provider passthrough."
+            "description": "NEXUS AI Gateway reference for OPTIONS /p/{provider}/{endpoint}: Provider passthrough."
           }
         }
       },
@@ -6115,7 +6115,7 @@
           "metadata": {
             "sidebarTitle": "/p/{provider}/{endpoint}",
             "title": "HEAD Provider passthrough",
-            "description": "GoModel API reference for HEAD /p/{provider}/{endpoint}: Provider passthrough."
+            "description": "NEXUS AI Gateway reference for HEAD /p/{provider}/{endpoint}: Provider passthrough."
           }
         }
       },
@@ -6305,7 +6305,7 @@
           "metadata": {
             "sidebarTitle": "/p/{provider}/{endpoint}",
             "title": "PATCH Provider passthrough",
-            "description": "GoModel API reference for PATCH /p/{provider}/{endpoint}: Provider passthrough."
+            "description": "NEXUS AI Gateway reference for PATCH /p/{provider}/{endpoint}: Provider passthrough."
           }
         }
       }
@@ -6389,7 +6389,7 @@
           "metadata": {
             "sidebarTitle": "/v1/audio/speech",
             "title": "Create speech (text-to-speech)",
-            "description": "GoModel API reference for POST /v1/audio/speech: Create speech (text-to-speech)."
+            "description": "NEXUS AI Gateway reference for POST /v1/audio/speech: Create speech (text-to-speech)."
           }
         }
       }
@@ -6535,7 +6535,7 @@
           "metadata": {
             "sidebarTitle": "/v1/audio/transcriptions",
             "title": "Create transcription (speech-to-text)",
-            "description": "GoModel API reference for POST /v1/audio/transcriptions: Create transcription (speech-to-text)."
+            "description": "NEXUS AI Gateway reference for POST /v1/audio/transcriptions: Create transcription (speech-to-text)."
           }
         }
       }
@@ -6671,7 +6671,7 @@
           "metadata": {
             "sidebarTitle": "/v1/audio/translations",
             "title": "Translate audio into English",
-            "description": "GoModel API reference for POST /v1/audio/translations: Translate audio into English."
+            "description": "NEXUS AI Gateway reference for POST /v1/audio/translations: Translate audio into English."
           }
         }
       }
@@ -6714,7 +6714,7 @@
           "metadata": {
             "sidebarTitle": "/v1/auth/verify",
             "title": "Verify an API key",
-            "description": "GoModel API reference for GET /v1/auth/verify: Verify an API key."
+            "description": "NEXUS AI Gateway reference for GET /v1/auth/verify: Verify an API key."
           }
         }
       }
@@ -6804,7 +6804,7 @@
           "metadata": {
             "sidebarTitle": "/v1/batches",
             "title": "List batches",
-            "description": "GoModel API reference for GET /v1/batches: List batches."
+            "description": "NEXUS AI Gateway reference for GET /v1/batches: List batches."
           }
         }
       },
@@ -6875,7 +6875,7 @@
           "metadata": {
             "sidebarTitle": "/v1/batches",
             "title": "Create a native provider batch",
-            "description": "GoModel API reference for POST /v1/batches: Create a native provider batch."
+            "description": "NEXUS AI Gateway reference for POST /v1/batches: Create a native provider batch."
           }
         }
       }
@@ -6968,7 +6968,7 @@
           "metadata": {
             "sidebarTitle": "/v1/batches/{id}",
             "title": "Get a batch",
-            "description": "GoModel API reference for GET /v1/batches/{id}: Get a batch."
+            "description": "NEXUS AI Gateway reference for GET /v1/batches/{id}: Get a batch."
           }
         }
       }
@@ -7061,7 +7061,7 @@
           "metadata": {
             "sidebarTitle": "/v1/batches/{id}/cancel",
             "title": "Cancel a batch",
-            "description": "GoModel API reference for POST /v1/batches/{id}/cancel: Cancel a batch."
+            "description": "NEXUS AI Gateway reference for POST /v1/batches/{id}/cancel: Cancel a batch."
           }
         }
       }
@@ -7164,7 +7164,7 @@
           "metadata": {
             "sidebarTitle": "/v1/batches/{id}/results",
             "title": "Get batch results",
-            "description": "GoModel API reference for GET /v1/batches/{id}/results: Get batch results."
+            "description": "NEXUS AI Gateway reference for GET /v1/batches/{id}/results: Get batch results."
           }
         }
       }
@@ -7272,7 +7272,7 @@
           "metadata": {
             "sidebarTitle": "/v1/chat/completions",
             "title": "Create a chat completion",
-            "description": "GoModel API reference for POST /v1/chat/completions: Create a chat completion."
+            "description": "NEXUS AI Gateway reference for POST /v1/chat/completions: Create a chat completion."
           }
         }
       }
@@ -7344,7 +7344,7 @@
           "metadata": {
             "sidebarTitle": "/v1/conversations",
             "title": "Create a conversation",
-            "description": "GoModel API reference for POST /v1/conversations: Create a conversation."
+            "description": "NEXUS AI Gateway reference for POST /v1/conversations: Create a conversation."
           }
         }
       }
@@ -7417,7 +7417,7 @@
           "metadata": {
             "sidebarTitle": "/v1/conversations/{id}",
             "title": "Get a conversation",
-            "description": "GoModel API reference for GET /v1/conversations/{id}: Get a conversation."
+            "description": "NEXUS AI Gateway reference for GET /v1/conversations/{id}: Get a conversation."
           }
         }
       },
@@ -7500,7 +7500,7 @@
           "metadata": {
             "sidebarTitle": "/v1/conversations/{id}",
             "title": "Update a conversation",
-            "description": "GoModel API reference for POST /v1/conversations/{id}: Update a conversation."
+            "description": "NEXUS AI Gateway reference for POST /v1/conversations/{id}: Update a conversation."
           }
         }
       },
@@ -7571,7 +7571,7 @@
           "metadata": {
             "sidebarTitle": "/v1/conversations/{id}",
             "title": "Delete a conversation",
-            "description": "GoModel API reference for DELETE /v1/conversations/{id}: Delete a conversation."
+            "description": "NEXUS AI Gateway reference for DELETE /v1/conversations/{id}: Delete a conversation."
           }
         }
       }
@@ -7689,7 +7689,7 @@
           "metadata": {
             "sidebarTitle": "/v1/conversations/{id}/items",
             "title": "List conversation items",
-            "description": "GoModel API reference for GET /v1/conversations/{id}/items: List conversation items."
+            "description": "NEXUS AI Gateway reference for GET /v1/conversations/{id}/items: List conversation items."
           }
         }
       },
@@ -7784,7 +7784,7 @@
           "metadata": {
             "sidebarTitle": "/v1/conversations/{id}/items",
             "title": "Create conversation items",
-            "description": "GoModel API reference for POST /v1/conversations/{id}/items: Create conversation items."
+            "description": "NEXUS AI Gateway reference for POST /v1/conversations/{id}/items: Create conversation items."
           }
         }
       }
@@ -7879,7 +7879,7 @@
           "metadata": {
             "sidebarTitle": "/v1/conversations/{id}/items/{item_id}",
             "title": "Get a conversation item",
-            "description": "GoModel API reference for GET /v1/conversations/{id}/items/{item_id}: Get a conversation item."
+            "description": "NEXUS AI Gateway reference for GET /v1/conversations/{id}/items/{item_id}: Get a conversation item."
           }
         }
       },
@@ -7959,7 +7959,7 @@
           "metadata": {
             "sidebarTitle": "/v1/conversations/{id}/items/{item_id}",
             "title": "Delete a conversation item",
-            "description": "GoModel API reference for DELETE /v1/conversations/{id}/items/{item_id}: Delete a conversation item."
+            "description": "NEXUS AI Gateway reference for DELETE /v1/conversations/{id}/items/{item_id}: Delete a conversation item."
           }
         }
       }
@@ -8042,7 +8042,7 @@
           "metadata": {
             "sidebarTitle": "/v1/embeddings",
             "title": "Create embeddings",
-            "description": "GoModel API reference for POST /v1/embeddings: Create embeddings."
+            "description": "NEXUS AI Gateway reference for POST /v1/embeddings: Create embeddings."
           }
         }
       }
@@ -8148,7 +8148,7 @@
           "metadata": {
             "sidebarTitle": "/v1/files",
             "title": "List files",
-            "description": "GoModel API reference for GET /v1/files: List files."
+            "description": "NEXUS AI Gateway reference for GET /v1/files: List files."
           }
         }
       },
@@ -8243,7 +8243,7 @@
           "metadata": {
             "sidebarTitle": "/v1/files",
             "title": "Upload a file",
-            "description": "GoModel API reference for POST /v1/files: Upload a file."
+            "description": "NEXUS AI Gateway reference for POST /v1/files: Upload a file."
           }
         }
       }
@@ -8334,7 +8334,7 @@
           "metadata": {
             "sidebarTitle": "/v1/files/{id}",
             "title": "Get file metadata",
-            "description": "GoModel API reference for GET /v1/files/{id}: Get file metadata."
+            "description": "NEXUS AI Gateway reference for GET /v1/files/{id}: Get file metadata."
           }
         }
       },
@@ -8423,7 +8423,7 @@
           "metadata": {
             "sidebarTitle": "/v1/files/{id}",
             "title": "Delete a file",
-            "description": "GoModel API reference for DELETE /v1/files/{id}: Delete a file."
+            "description": "NEXUS AI Gateway reference for DELETE /v1/files/{id}: Delete a file."
           }
         }
       }
@@ -8515,7 +8515,7 @@
           "metadata": {
             "sidebarTitle": "/v1/files/{id}/content",
             "title": "Download file content",
-            "description": "GoModel API reference for GET /v1/files/{id}/content: Download file content."
+            "description": "NEXUS AI Gateway reference for GET /v1/files/{id}/content: Download file content."
           }
         }
       }
@@ -8672,7 +8672,7 @@
           "metadata": {
             "sidebarTitle": "/v1/images/edits",
             "title": "Create image edit (inpainting / image-to-image)",
-            "description": "GoModel API reference for POST /v1/images/edits: Create image edit (inpainting / image-to-image)."
+            "description": "NEXUS AI Gateway reference for POST /v1/images/edits: Create image edit (inpainting / image-to-image)."
           }
         }
       }
@@ -8765,7 +8765,7 @@
           "metadata": {
             "sidebarTitle": "/v1/images/generations",
             "title": "Create image (image generation)",
-            "description": "GoModel API reference for POST /v1/images/generations: Create image (image generation)."
+            "description": "NEXUS AI Gateway reference for POST /v1/images/generations: Create image (image generation)."
           }
         }
       }
@@ -8865,7 +8865,7 @@
           "metadata": {
             "sidebarTitle": "/v1/messages",
             "title": "Create a message (Anthropic Messages API)",
-            "description": "GoModel API reference for POST /v1/messages: Create a message (Anthropic Messages API)."
+            "description": "NEXUS AI Gateway reference for POST /v1/messages: Create a message (Anthropic Messages API)."
           }
         }
       }
@@ -8925,7 +8925,7 @@
           "metadata": {
             "sidebarTitle": "/v1/messages/batches",
             "title": "List message batches",
-            "description": "GoModel API reference for GET /v1/messages/batches: List message batches."
+            "description": "NEXUS AI Gateway reference for GET /v1/messages/batches: List message batches."
           }
         }
       },
@@ -9006,7 +9006,7 @@
           "metadata": {
             "sidebarTitle": "/v1/messages/batches",
             "title": "Create a message batch (Anthropic Message Batches API)",
-            "description": "GoModel API reference for POST /v1/messages/batches: Create a message batch (Anthropic Message Batches API)."
+            "description": "NEXUS AI Gateway reference for POST /v1/messages/batches: Create a message batch (Anthropic Message Batches API)."
           }
         }
       }
@@ -9069,7 +9069,7 @@
           "metadata": {
             "sidebarTitle": "/v1/messages/batches/{id}",
             "title": "Get a message batch",
-            "description": "GoModel API reference for GET /v1/messages/batches/{id}: Get a message batch."
+            "description": "NEXUS AI Gateway reference for GET /v1/messages/batches/{id}: Get a message batch."
           }
         }
       },
@@ -9140,7 +9140,7 @@
           "metadata": {
             "sidebarTitle": "/v1/messages/batches/{id}",
             "title": "Delete an ended message batch",
-            "description": "GoModel API reference for DELETE /v1/messages/batches/{id}: Delete an ended message batch."
+            "description": "NEXUS AI Gateway reference for DELETE /v1/messages/batches/{id}: Delete an ended message batch."
           }
         }
       }
@@ -9203,7 +9203,7 @@
           "metadata": {
             "sidebarTitle": "/v1/messages/batches/{id}/cancel",
             "title": "Cancel a message batch",
-            "description": "GoModel API reference for POST /v1/messages/batches/{id}/cancel: Cancel a message batch."
+            "description": "NEXUS AI Gateway reference for POST /v1/messages/batches/{id}/cancel: Cancel a message batch."
           }
         }
       }
@@ -9276,7 +9276,7 @@
           "metadata": {
             "sidebarTitle": "/v1/messages/batches/{id}/results",
             "title": "Get message batch results (JSONL)",
-            "description": "GoModel API reference for GET /v1/messages/batches/{id}/results: Get message batch results (JSONL)."
+            "description": "NEXUS AI Gateway reference for GET /v1/messages/batches/{id}/results: Get message batch results (JSONL)."
           }
         }
       }
@@ -9332,7 +9332,7 @@
           "metadata": {
             "sidebarTitle": "/v1/messages/count_tokens",
             "title": "Count message tokens (Anthropic Messages API)",
-            "description": "GoModel API reference for POST /v1/messages/count_tokens: Count message tokens (Anthropic Messages API)."
+            "description": "NEXUS AI Gateway reference for POST /v1/messages/count_tokens: Count message tokens (Anthropic Messages API)."
           }
         }
       }
@@ -9384,7 +9384,7 @@
           "metadata": {
             "sidebarTitle": "/v1/models",
             "title": "List available models",
-            "description": "GoModel API reference for GET /v1/models: List available models."
+            "description": "NEXUS AI Gateway reference for GET /v1/models: List available models."
           }
         }
       }
@@ -9489,7 +9489,7 @@
           "metadata": {
             "sidebarTitle": "/v1/models/{model}",
             "title": "Retrieve a model",
-            "description": "GoModel API reference for GET /v1/models/{model}: Retrieve a model."
+            "description": "NEXUS AI Gateway reference for GET /v1/models/{model}: Retrieve a model."
           }
         }
       }
@@ -9608,7 +9608,7 @@
           "metadata": {
             "sidebarTitle": "/v1/realtime",
             "title": "Open a realtime session",
-            "description": "GoModel API reference for GET /v1/realtime: Open a realtime session."
+            "description": "NEXUS AI Gateway reference for GET /v1/realtime: Open a realtime session."
           }
         }
       }
@@ -9742,7 +9742,7 @@
           "metadata": {
             "sidebarTitle": "/v1/realtime/calls",
             "title": "Create a realtime WebRTC call",
-            "description": "GoModel API reference for POST /v1/realtime/calls: Create a realtime WebRTC call."
+            "description": "NEXUS AI Gateway reference for POST /v1/realtime/calls: Create a realtime WebRTC call."
           }
         }
       }
@@ -9855,7 +9855,7 @@
           "metadata": {
             "sidebarTitle": "/v1/realtime/client_secrets",
             "title": "Mint an ephemeral realtime client secret",
-            "description": "GoModel API reference for POST /v1/realtime/client_secrets: Mint an ephemeral realtime client secret."
+            "description": "NEXUS AI Gateway reference for POST /v1/realtime/client_secrets: Mint an ephemeral realtime client secret."
           }
         }
       }
@@ -9967,7 +9967,7 @@
           "metadata": {
             "sidebarTitle": "/v1/realtime/translations",
             "title": "Open a realtime translation session",
-            "description": "GoModel API reference for GET /v1/realtime/translations: Open a realtime translation session."
+            "description": "NEXUS AI Gateway reference for GET /v1/realtime/translations: Open a realtime translation session."
           }
         }
       }
@@ -10116,7 +10116,7 @@
           "metadata": {
             "sidebarTitle": "/v1/realtime/translations/calls",
             "title": "Create a realtime translation call (WebRTC)",
-            "description": "GoModel API reference for POST /v1/realtime/translations/calls: Create a realtime translation call (WebRTC)."
+            "description": "NEXUS AI Gateway reference for POST /v1/realtime/translations/calls: Create a realtime translation call (WebRTC)."
           }
         }
       }
@@ -10231,7 +10231,7 @@
           "metadata": {
             "sidebarTitle": "/v1/realtime/translations/client_secrets",
             "title": "Mint an ephemeral realtime translation client secret",
-            "description": "GoModel API reference for POST /v1/realtime/translations/client_secrets: Mint an ephemeral realtime translation client secret."
+            "description": "NEXUS AI Gateway reference for POST /v1/realtime/translations/client_secrets: Mint an ephemeral realtime translation client secret."
           }
         }
       }
@@ -10339,7 +10339,7 @@
           "metadata": {
             "sidebarTitle": "/v1/responses",
             "title": "Create a model response (Responses API)",
-            "description": "GoModel API reference for POST /v1/responses: Create a model response (Responses API)."
+            "description": "NEXUS AI Gateway reference for POST /v1/responses: Create a model response (Responses API)."
           }
         }
       }
@@ -10422,7 +10422,7 @@
           "metadata": {
             "sidebarTitle": "/v1/responses/compact",
             "title": "Compact response input",
-            "description": "GoModel API reference for POST /v1/responses/compact: Compact response input."
+            "description": "NEXUS AI Gateway reference for POST /v1/responses/compact: Compact response input."
           }
         }
       }
@@ -10505,7 +10505,7 @@
           "metadata": {
             "sidebarTitle": "/v1/responses/input_tokens",
             "title": "Count response input tokens",
-            "description": "GoModel API reference for POST /v1/responses/input_tokens: Count response input tokens."
+            "description": "NEXUS AI Gateway reference for POST /v1/responses/input_tokens: Count response input tokens."
           }
         }
       }
@@ -10646,7 +10646,7 @@
           "metadata": {
             "sidebarTitle": "/v1/responses/{id}",
             "title": "Get a response",
-            "description": "GoModel API reference for GET /v1/responses/{id}: Get a response."
+            "description": "NEXUS AI Gateway reference for GET /v1/responses/{id}: Get a response."
           }
         }
       },
@@ -10745,7 +10745,7 @@
           "metadata": {
             "sidebarTitle": "/v1/responses/{id}",
             "title": "Delete a response",
-            "description": "GoModel API reference for DELETE /v1/responses/{id}: Delete a response."
+            "description": "NEXUS AI Gateway reference for DELETE /v1/responses/{id}: Delete a response."
           }
         }
       }
@@ -10846,7 +10846,7 @@
           "metadata": {
             "sidebarTitle": "/v1/responses/{id}/cancel",
             "title": "Cancel a response",
-            "description": "GoModel API reference for POST /v1/responses/{id}/cancel: Cancel a response."
+            "description": "NEXUS AI Gateway reference for POST /v1/responses/{id}/cancel: Cancel a response."
           }
         }
       }
@@ -10999,7 +10999,7 @@
           "metadata": {
             "sidebarTitle": "/v1/responses/{id}/input_items",
             "title": "List response input items",
-            "description": "GoModel API reference for GET /v1/responses/{id}/input_items: List response input items."
+            "description": "NEXUS AI Gateway reference for GET /v1/responses/{id}/input_items: List response input items."
           }
         }
       }
@@ -11096,7 +11096,7 @@
           "metadata": {
             "sidebarTitle": "/v1/usage",
             "title": "Self-service usage, budget, and rate limit status",
-            "description": "GoModel API reference for GET /v1/usage: Self-service usage, budget, and rate limit status."
+            "description": "NEXUS AI Gateway reference for GET /v1/usage: Self-service usage, budget, and rate limit status."
           }
         }
       }
@@ -11123,7 +11123,7 @@
           "metadata": {
             "sidebarTitle": "/version",
             "title": "Report the running version and whether an update exists",
-            "description": "GoModel API reference for GET /version: Report the running version and whether an update exists."
+            "description": "NEXUS AI Gateway reference for GET /version: Report the running version and whether an update exists."
           }
         }
       }
