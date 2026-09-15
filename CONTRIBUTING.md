@@ -1,4 +1,4 @@
-# Contributing to GoModel
+# Contributing to NEXUS AI Gateway
 
 Thank you for contributing!
 
@@ -57,9 +57,8 @@ the gateway).
 
 For questions, ideas, or general discussion, please use GitHub Discussions:
 
-https://github.com/saifelyzal/nexusruntime/discussions
+https://github.com/saifelyzal/aigateway/discussions
 
-You can also reach out on Discord. If something is urgent, feel free to ping me: `SantiagoDePL`.
 
 ## License
 
