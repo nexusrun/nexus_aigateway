@@ -1,0 +1,325 @@
+// Package xai provides xAI (Grok) API integration for the LLM gateway.
+package xai
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"io"
+	"log/slog"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/goccy/go-json"
+
+	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/enterpilot/gomodel/internal/llmclient"
+	"github.com/enterpilot/gomodel/internal/providers"
+	"github.com/enterpilot/gomodel/internal/providers/openai"
+)
+
+// Registration provides factory registration for the xAI provider.
+var Registration = providers.Registration{
+	Type: "xai",
+	New:  New,
+	Discovery: providers.DiscoveryConfig{
+		DefaultBaseURL: defaultBaseURL,
+	},
+}
+
+const (
+	defaultBaseURL   = "https://api.x.ai/v1"
+	grokConvIDHeader = "X-Grok-Conv-Id"
+)
+
+// Provider implements the core.Provider interface for xAI. The API is
+// OpenAI-compatible, so transport goes through the shared compatible
+// provider; xAI's only chat quirk is the conversation affinity header
+// (X-Grok-Conv-Id), injected via the ChatRequestHeaders hook. Methods are
+// delegated explicitly (and batch/files via facet surfaces) rather than
+// embedding the full compatible provider, because xAI's upstream lacks
+// parts of the full OpenAI surface (audio, passthrough, response
+// lifecycle management) and embedding cannot subtract methods.
+type Provider struct {
+	*openai.BatchSurface
+	*openai.FileSurface
+	compat *openai.CompatibleProvider
+	keys   *providers.Keyring // retained to inject auth on the realtime websocket target
+}
+
+// New creates a new xAI provider.
+func New(providerCfg providers.ProviderConfig, opts providers.ProviderOptions) core.Provider {
+	compat := openai.NewCompatibleProvider(providerCfg.APIKey, opts, compatibleConfig(providers.ResolveBaseURL(providerCfg.BaseURL, defaultBaseURL)))
+	return newProvider(compat, opts.Keyring(providerCfg.APIKey))
+}
+
+// NewWithHTTPClient creates a new xAI provider with a custom HTTP client.
+// If httpClient is nil, http.DefaultClient is used.
+func NewWithHTTPClient(apiKey string, httpClient *http.Client, hooks llmclient.Hooks) *Provider {
+	compat := openai.NewCompatibleProviderWithHTTPClient(apiKey, httpClient, hooks, compatibleConfig(defaultBaseURL))
+	return newProvider(compat, providers.NewKeyring(apiKey))
+}
+
+func newProvider(compat *openai.CompatibleProvider, keys *providers.Keyring) *Provider {
+	return &Provider{
+		BatchSurface: openai.NewBatchSurface(compat),
+		FileSurface:  openai.NewFileSurface(compat),
+		compat:       compat,
+		keys:         keys,
+	}
+}
+
+func compatibleConfig(baseURL string) openai.CompatibleProviderConfig {
+	return openai.CompatibleProviderConfig{
+		ProviderName:       "xai",
+		BaseURL:            baseURL,
+		SetHeaders:         setHeaders,
+		AdaptChatRequest:   adaptChatRequest,
+		ChatRequestHeaders: xGrokConversationHeaders,
+	}
+}
+
+// adaptChatRequest rewrites GoModel's common reasoning shape into xAI's
+// OpenAI-compatible chat extension. The xAI Chat Completions API accepts
+// reasoning_effort as a top-level string (e.g. grok-4.5: low/medium/high,
+// default high), not "reasoning": {"effort": "..."}; the nested shape is
+// native only to xAI's Responses API, which passes through untouched.
+// Models that do not take a configurable effort reject the parameter
+// outright, so it is dropped for them instead of forwarded.
+func adaptChatRequest(req *core.ChatRequest) (*core.ChatRequest, error) {
+	if req == nil || req.Reasoning == nil {
+		return req, nil
+	}
+	effort := strings.TrimSpace(req.Reasoning.Effort)
+	if effort == "" || rejectsReasoningEffort(req.Model) {
+		return providers.DropReasoning(req), nil
+	}
+	return providers.AdaptReasoningEffortRequest(req, normalizeReasoningEffort(req.Model, effort))
+}
+
+// rejectsReasoningEffort reports whether an xAI chat model answers 400
+// "Model ... does not support parameter reasoningEffort": the explicit
+// "-non-reasoning" Grok variants, the grok-build coding family (it thinks,
+// but the effort is fixed), grok-2, and grok-3 (only grok-3-mini takes an
+// effort). Unknown ids are not included, so a new reasoning model keeps the
+// parameter before this list learns about it.
+func rejectsReasoningEffort(model string) bool {
+	m := strings.ToLower(strings.TrimSpace(model))
+	if i := strings.LastIndex(m, "/"); i >= 0 {
+		m = m[i+1:]
+	}
+	switch {
+	case strings.Contains(m, "non-reasoning"):
+		return true
+	case strings.HasPrefix(m, "grok-build"):
+		return true
+	case strings.HasPrefix(m, "grok-2"):
+		return true
+	case strings.HasPrefix(m, "grok-3"):
+		return !strings.Contains(m, "mini")
+	default:
+		return false
+	}
+}
+
+// normalizeReasoningEffort downgrades GoModel effort levels xAI does not
+// accept to their nearest equivalent. The multi-agent Grok family accepts
+// "xhigh" (it selects the agent count), and grok-4.6 and later frontier
+// models document it as a regular top effort level; older models top out
+// at "high". Unknown values pass through for the upstream to judge. See
+// docs/providers/xai.mdx for the user-facing table.
+func normalizeReasoningEffort(model, effort string) string {
+	normalized := strings.ToLower(strings.TrimSpace(effort))
+	switch normalized {
+	case "xhigh", "max":
+		if supportsXHighEffort(model) {
+			return "xhigh"
+		}
+		return "high"
+	default:
+		return normalized
+	}
+}
+
+// supportsXHighEffort reports whether the model documents the "xhigh"
+// reasoning effort level: the multi-agent family and grok-4.6+.
+// Non-multi-agent grok-4.20 models are excluded: the 4.20 family
+// predates 4.6 as an experimental release, not a successor.
+func supportsXHighEffort(model string) bool {
+	model = strings.ToLower(model)
+	if strings.Contains(model, "multi-agent") {
+		return true
+	}
+	rest, ok := strings.CutPrefix(model, "grok-4.")
+	if !ok {
+		return false
+	}
+	digits := rest
+	if i := strings.IndexFunc(rest, func(r rune) bool { return r < '0' || r > '9' }); i >= 0 {
+		digits = rest[:i]
+	}
+	minor, err := strconv.Atoi(digits)
+	if err != nil {
+		return false
+	}
+	return minor >= 6 && minor != 20
+}
+
+// SetBaseURL allows configuring a custom base URL for the provider
+func (p *Provider) SetBaseURL(url string) {
+	p.compat.SetBaseURL(url)
+}
+
+// setHeaders sets the required headers for xAI API requests
+func setHeaders(req *http.Request, apiKey string) {
+	providers.SetAuthHeaders(req, apiKey, providers.AuthHeaderConfig{
+		AuthScheme:      "Bearer ",
+		RequestIDHeader: "X-Request-ID",
+	})
+}
+
+type grokConversationAnchor struct {
+	Model             string           `json:"model,omitempty"`
+	Messages          []core.Message   `json:"messages,omitempty"`
+	Tools             []map[string]any `json:"tools,omitempty"`
+	ToolChoice        any              `json:"tool_choice,omitempty"`
+	ParallelToolCalls *bool            `json:"parallel_tool_calls,omitempty"`
+	Reasoning         *core.Reasoning  `json:"reasoning,omitempty"`
+	RequestID         string           `json:"request_id,omitempty"`
+}
+
+func xGrokConversationHeaders(ctx context.Context, req *core.ChatRequest) http.Header {
+	convID := xGrokConversationID(ctx, req)
+	if convID == "" {
+		return nil
+	}
+	headers := make(http.Header, 1)
+	headers.Set(grokConvIDHeader, convID)
+	return headers
+}
+
+func xGrokConversationID(ctx context.Context, req *core.ChatRequest) string {
+	if convID := xGrokConversationIDFromSnapshot(ctx); convID != "" {
+		return convID
+	}
+	return generatedXGrokConversationID(ctx, req)
+}
+
+func xGrokConversationIDFromSnapshot(ctx context.Context) string {
+	snapshot := core.GetRequestSnapshot(ctx)
+	if snapshot == nil {
+		return ""
+	}
+	for key, values := range snapshot.HeadersView() {
+		if !strings.EqualFold(key, grokConvIDHeader) {
+			continue
+		}
+		for _, value := range values {
+			if convID := cleanXGrokConversationID(value); convID != "" {
+				return convID
+			}
+		}
+	}
+	return ""
+}
+
+func generatedXGrokConversationID(ctx context.Context, req *core.ChatRequest) string {
+	anchor := grokConversationAnchor{
+		RequestID: strings.TrimSpace(core.GetRequestID(ctx)),
+	}
+	if req != nil {
+		anchor.Model = req.Model
+		anchor.Messages = xGrokAnchorMessages(req.Messages)
+		anchor.Tools = req.Tools
+		anchor.ToolChoice = req.ToolChoice
+		anchor.ParallelToolCalls = req.ParallelToolCalls
+		anchor.Reasoning = req.Reasoning
+		anchor.RequestID = ""
+	}
+	if anchor.Model == "" && len(anchor.Messages) == 0 && anchor.RequestID == "" {
+		return ""
+	}
+	body, err := json.Marshal(anchor)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(body)
+	return "gomodel-" + hex.EncodeToString(sum[:16])
+}
+
+func xGrokAnchorMessages(messages []core.Message) []core.Message {
+	if len(messages) == 0 {
+		return nil
+	}
+	limit := min(len(messages), 2)
+	anchor := make([]core.Message, limit)
+	copy(anchor, messages[:limit])
+	return anchor
+}
+
+func cleanXGrokConversationID(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || strings.ContainsAny(value, "\r\n") {
+		return ""
+	}
+	return value
+}
+
+// ChatCompletion sends a chat completion request to xAI
+func (p *Provider) ChatCompletion(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
+	return p.compat.ChatCompletion(ctx, req)
+}
+
+// StreamChatCompletion returns a raw response body for streaming (caller must close)
+func (p *Provider) StreamChatCompletion(ctx context.Context, req *core.ChatRequest) (io.ReadCloser, error) {
+	return p.compat.StreamChatCompletion(ctx, req)
+}
+
+// ListModels retrieves the list of available models from xAI
+func (p *Provider) ListModels(ctx context.Context) (*core.ModelsResponse, error) {
+	return p.compat.ListModels(ctx)
+}
+
+// adaptResponsesRequest drops Responses members xAI's native /responses
+// endpoint refuses. xAI answers a request carrying "metadata" with
+// 400 "Argument not supported: metadata", even though it is a standard
+// OpenAI Responses member; it is a caller-side label that does not affect
+// generation, so dropping it is preferable to relaying an error the client
+// cannot act on. The caller's request is left untouched so the gateway can
+// still echo the member back to the client.
+func adaptResponsesRequest(req *core.ResponsesRequest) *core.ResponsesRequest {
+	if req == nil || len(req.Metadata) == 0 {
+		return req
+	}
+	slog.Warn("dropping metadata; xai rejects the member on /responses",
+		"model", req.Model, "keys", len(req.Metadata))
+	adapted := *req
+	adapted.Metadata = nil
+	return &adapted
+}
+
+// Responses sends a Responses API request to xAI's native /responses endpoint.
+func (p *Provider) Responses(ctx context.Context, req *core.ResponsesRequest) (*core.ResponsesResponse, error) {
+	return p.compat.Responses(ctx, adaptResponsesRequest(req))
+}
+
+// StreamResponses returns a normalized streaming Responses API body.
+// The returned io.ReadCloser is wrapped by providers.EnsureResponsesDone, so
+// callers must not assume it contains verbatim upstream bytes; the wrapper may
+// synthesize a terminal `data: [DONE]` marker on completed streams. Callers
+// remain responsible for closing the returned stream.
+func (p *Provider) StreamResponses(ctx context.Context, req *core.ResponsesRequest) (io.ReadCloser, error) {
+	return p.compat.StreamResponses(ctx, adaptResponsesRequest(req))
+}
+
+// Embeddings sends an embeddings request to xAI
+func (p *Provider) Embeddings(ctx context.Context, req *core.EmbeddingRequest) (*core.EmbeddingResponse, error) {
+	return p.compat.Embeddings(ctx, req)
+}
+
+// CreateImage sends an image generation request to xAI's OpenAI-compatible
+// /images/generations endpoint (grok-2-image and successors).
+func (p *Provider) CreateImage(ctx context.Context, req *core.ImageGenerationRequest) (*core.ImageGenerationResponse, error) {
+	return p.compat.CreateImage(ctx, req)
+}

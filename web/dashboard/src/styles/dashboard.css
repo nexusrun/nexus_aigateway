@@ -1,0 +1,91 @@
+/* GoModel Dashboard Styles — entry point.
+ *
+ * The shared design system is split into the modules below, bundled by Vite
+ * into one stylesheet. IMPORT ORDER IS THE CASCADE ORDER of the original
+ * monolithic sheet: equal-specificity rules rely on it, so append new rules
+ * to the module that owns them and never reorder these imports.
+ *
+ * No CSS preprocessor on purpose: Svelte scoped styles, custom properties,
+ * and native nesting cover what Sass/Less would add, with zero extra
+ * dependencies or build steps.
+ */
+@import "./themes.css";
+@import "./base.css";
+@import "./auth-dialog.css";
+@import "./layout.css";
+@import "./cards-charts.css";
+@import "./alerts.css";
+@import "./tables.css";
+@import "./forms.css";
+@import "./usage-audit.css";
+@import "./buttons.css";
+@import "./settings.css";
+@import "./budgets.css";
+@import "./responsive.css";
+@import "./page-globals.css";
+
+/* Futuristic surface treatment. Keep the palette in the theme tokens and use
+   translucent layers here so the dashboard still adapts cleanly to light mode. */
+body {
+  background:
+    radial-gradient(circle at 92% -8%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 34rem),
+    radial-gradient(circle at 12% 110%, color-mix(in srgb, var(--info) 9%, transparent), transparent 30rem),
+    var(--bg);
+}
+
+.app {
+  background: linear-gradient(115deg, color-mix(in srgb, var(--accent) 3%, transparent), transparent 42%);
+}
+
+.content {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 18%, transparent), transparent 18rem);
+}
+
+:is(.card, .cache-meter, .chart-container, .table-wrapper, .model-editor) {
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--bg-surface) 96%, #fff 4%), color-mix(in srgb, var(--bg-surface) 91%, var(--accent) 9%));
+  border-color: color-mix(in srgb, var(--border) 72%, var(--accent) 28%);
+  box-shadow:
+    0 18px 42px color-mix(in srgb, #000 18%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #fff 13%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+:is(.card, .cache-meter, .chart-container, .table-wrapper, .model-editor)::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(125deg, color-mix(in srgb, #fff 8%, transparent), transparent 28%);
+  opacity: 0.6;
+}
+
+:is(.card, .cache-meter, .chart-container, .model-editor) {
+  position: relative;
+  overflow: hidden;
+}
+
+.table-wrapper {
+  position: relative;
+}
+
+.table-wrapper::before {
+  z-index: 1;
+}
+
+:is(.btn, input:is([type="text"], [type="date"], [type="number"]), textarea, select, .form-input) {
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 9%, transparent);
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s, transform 0.15s;
+}
+
+.btn-primary,
+.btn-danger {
+  box-shadow:
+    0 10px 26px color-mix(in srgb, var(--accent) 24%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #fff 28%, transparent);
+}
+
+.btn-primary:hover:not(:disabled),
+.btn-danger:hover:not(:disabled) {
+  transform: translateY(-1px);
+}

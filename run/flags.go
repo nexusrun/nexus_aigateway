@@ -1,0 +1,55 @@
+package run
+
+import (
+	"flag"
+	"fmt"
+	"io"
+	"time"
+)
+
+const (
+	defaultHealthTimeout = 2 * time.Second
+	// defaultReadyTimeout is larger than the server's per-probe readinessProbeTimeout
+	// so a slow dependency yields a clean not_ready/degraded response instead of
+	// the client cutting the connection first.
+	defaultReadyTimeout = 4 * time.Second
+)
+
+type cliOptions struct {
+	Version       bool
+	Health        bool
+	HealthTimeout time.Duration
+	Ready         bool
+	ReadyTimeout  time.Duration
+	Reload        bool
+	// PluginArgs is non-nil when the first argument is the "plugin"
+	// subcommand; it holds the arguments after it.
+	PluginArgs []string
+}
+
+func parseCLI(productName string, args []string, output io.Writer) (cliOptions, error) {
+	var opts cliOptions
+	if len(args) > 0 && args[0] == pluginCommand {
+		opts.PluginArgs = append([]string{}, args[1:]...)
+		return opts, nil
+	}
+	flags := flag.NewFlagSet(productName, flag.ContinueOnError)
+	flags.SetOutput(output)
+	flags.Usage = func() {
+		fmt.Fprintf(output, "Usage:\n  %[1]s [flags]\n  %[1]s plugin build|inspect ... (see \"%[1]s plugin help\")\n\nFlags:\n", productName)
+		flags.PrintDefaults()
+	}
+	flags.BoolVar(&opts.Version, "version", false, "Print version information")
+	flags.BoolVar(&opts.Health, "health", false, "Check the local GoModel health (liveness) endpoint and exit")
+	flags.DurationVar(&opts.HealthTimeout, "health-timeout", defaultHealthTimeout, "Timeout for --health")
+	flags.BoolVar(&opts.Ready, "ready", false, "Check the local GoModel readiness endpoint and exit")
+	flags.DurationVar(&opts.ReadyTimeout, "ready-timeout", defaultReadyTimeout, "Timeout for --ready")
+	flags.BoolVar(&opts.Reload, "reload", false, "Tell the running GoModel to reload its configuration and exit")
+	if err := flags.Parse(args); err != nil {
+		return opts, err
+	}
+	if flags.NArg() > 0 {
+		return opts, fmt.Errorf("unexpected arguments: %v", flags.Args())
+	}
+	return opts, nil
+}

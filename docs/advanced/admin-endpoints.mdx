@@ -1,0 +1,588 @@
+---
+title: "Admin Endpoints"
+description: "Built-in REST API and dashboard for monitoring usage, budgets, models, and gateway health."
+icon: "server-cog"
+keywords: ["admin API", "dashboard", "REST API", "monitoring", "gateway health"]
+---
+
+## Philosophy
+
+GoModel ships with admin endpoints **enabled by default**. The goal is simple: you should be able to deploy GoModel and immediately have visibility into what's happening — no extra services, no separate monitoring stack, no configuration.
+
+The admin layer is split into two independently controllable pieces:
+
+1. **Admin REST API** (`/admin/*`) — machine-readable JSON endpoints for usage data, budgets, and model inventory. Protected by `GOMODEL_MASTER_KEY` like all other API routes.
+2. **Admin Dashboard UI** (`/admin/dashboard`) — a lightweight, embedded HTML dashboard that visualizes the same data. No external dependencies, no JavaScript frameworks to install — it's compiled into the binary.
+
+Both are on by default because observability shouldn't be opt-in. If you don't need them, turn them off with a single environment variable.
+
+## Configuration
+
+Admin and dashboard behavior is controlled by environment variables (or the
+equivalent `admin:` YAML block). See
+[Admin configuration](/advanced/configuration#admin) for the full table of
+variables, defaults, and the equivalent `admin:` YAML block.
+
+<Note>
+  The dashboard UI requires the REST API to be enabled. If you set
+  `ADMIN_ENDPOINTS_ENABLED=false` but leave `ADMIN_UI_ENABLED=true`, the UI
+  will be automatically disabled with a warning in the logs.
+</Note>
+
+## Authentication
+
+The admin REST API endpoints (`/admin/*`) accept two credentials as a Bearer token:
+
+- **`GOMODEL_MASTER_KEY`** — always has admin access.
+- **A managed API key with dashboard access** — managed keys are created *without* dashboard access by default, so a key handed out for model traffic cannot read the audit log, issue new keys, or change gateway settings. Requests made with a managed key that lacks access return `403` with error code `dashboard_access_denied`.
+
+<CodeGroup>
+
+```bash curl
+curl -H "Authorization: Bearer $GOMODEL_MASTER_KEY" \
+  http://localhost:8080/admin/usage/summary
+```
+
+```python Python
+import os
+
+import httpx
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8080",
+    api_key=os.environ["GOMODEL_MASTER_KEY"],
+)
+summary = client.get("/admin/usage/summary", cast_to=httpx.Response)
+
+print(summary.json())
+```
+
+```javascript JavaScript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  baseURL: "http://localhost:8080",
+  apiKey: process.env.GOMODEL_MASTER_KEY,
+});
+
+const summary = await client.get("/admin/usage/summary");
+console.log(summary);
+```
+
+</CodeGroup>
+
+Grant or revoke dashboard access per key on the dashboard's API Keys page, at creation time (`"dashboard_access": true` on `POST /admin/auth-keys`), or later:
+
+<CodeGroup>
+
+```bash curl
+curl -X PUT http://localhost:8080/admin/auth-keys/<key-id>/dashboard-access \
+  -H "Authorization: Bearer $GOMODEL_MASTER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"dashboard_access": true}'
+```
+
+```python Python
+import os
+
+import httpx
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8080",
+    api_key=os.environ["GOMODEL_MASTER_KEY"],
+)
+auth_key = client.put(
+    "/admin/auth-keys/<key-id>/dashboard-access",
+    cast_to=httpx.Response,
+    body={"dashboard_access": True},
+)
+
+print(auth_key.json())
+```
+
+```javascript JavaScript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  baseURL: "http://localhost:8080",
+  apiKey: process.env.GOMODEL_MASTER_KEY,
+});
+
+const authKey = await client.put(
+  "/admin/auth-keys/<key-id>/dashboard-access",
+  { body: { dashboard_access: true } },
+);
+
+console.log(authKey);
+```
+
+</CodeGroup>
+
+`GET /admin/auth-keys` rows carry `restricted` and `effective_models` — the
+catalog models a request with that key can actually call, with its user path
+policies, its own allowlist, and model-side policies applied.
+
+Restrict a key to specific models with the optional `allowed_models` on
+`POST /admin/auth-keys` (omitted means no key-level restriction, like every
+other optional creation field) or later with
+`PUT /admin/auth-keys/<key-id>/allowed-models` (`{"allowed_models": ["anthropic/*", "openai/gpt-4o"]}`;
+an explicit empty list lifts the key-level restriction; omitting the field is rejected). Group- and user-level
+allowlists are managed through the [user endpoints](#user-endpoints).
+
+Dashboard access only gates `/admin/*`. Model endpoints and the self-service [`GET /v1/usage`](/advanced/usage-api) endpoint stay available to every managed key.
+
+### Scoped admin access
+
+A managed key's `user_path` also bounds what it can administer. A key with
+dashboard access and no `user_path` (or `/`) is a **global admin** and sees
+everything, like the master key. A key bound to `/team/alpha` is a **scoped
+admin**: it reads and manages only `/team/alpha` and its descendants
+(`/team/alpha/service`, `/team/alpha/service/worker`, ...). The
+`X-GoModel-User-Path` header never widens a key's scope.
+
+Extension identities such as SSO sessions follow the same rule: the session's
+user path is the subtree it administers, so an extension binds gateway admins
+to `/` and team admins to the team root.
+
+Use `GET /admin/access` to find out which one a credential is:
+
+```json
+{"scope": "global"}
+{"scope": "user_path", "user_path": "/team/alpha"}
+```
+
+For a scoped admin:
+
+- Usage, audit, API key, user, budget, and rate-limit endpoints are filtered
+  to the scope. An omitted `user_path` filter means the scope root; a
+  `user_path` outside the scope returns `403` with code
+  `user_path_out_of_scope`.
+- Objects addressed by ID that belong to another subtree (an audit entry, an
+  API key) return `404`, exactly as if they did not exist.
+- New API keys and user policies default to the scope root and cannot be
+  created outside it. Keys with dashboard access created this way are scoped
+  admins of that subtree in turn.
+- Only user-path budgets and rate limits are visible and editable; label,
+  provider, and model rules are gateway-wide.
+- Gateway-wide endpoints return `403` with code `admin_scope_denied`: provider
+  status and credentials, runtime settings and refresh, tagging settings,
+  virtual models, workflows, guardrails, MCP servers, pricing overrides, cache
+  overview, live logs, token throughput, pricing recalculation, budget and
+  rate-limit reset-all, and budget settings updates. The dashboard hides the
+  matching pages and actions.
+
+Rows recorded without a user path (for example traffic sent with the master
+key and no header) are visible to global admins only.
+
+The same scope applies to `/v1` lifecycle objects; see
+[User Path → Object ownership](/features/user-path#object-ownership).
+
+The dashboard UI pages (`/admin/dashboard`) and static assets (`/admin/static/*`) **skip authentication** so the dashboard shell is accessible without configuring API keys in the browser — the data it loads still requires a key with dashboard access.
+
+<Warning>
+  If your GoModel instance is publicly accessible, be aware that the dashboard
+  UI is unauthenticated. Disable it with `ADMIN_UI_ENABLED=false` or restrict
+  access at the network level.
+</Warning>
+
+## REST API Endpoints
+
+All admin API endpoints are mounted under `/admin`.
+
+<Note>
+  **Legacy path alias** — until **2026-08-09**, the same endpoints are also
+  reachable under `/admin/api/v1/*`. Responses on the legacy path carry
+  `Deprecation: true`, `Sunset: Sun, 09 Aug 2026 00:00:00 GMT`, and a `Link`
+  header pointing to the new path. To migrate, replace `/admin/api/v1/` with
+  `/admin/` in your scripts. One endpoint also moved within `/admin`:
+  `/admin/api/v1/dashboard/config` → `/admin/runtime/config`.
+</Note>
+
+### GET /admin/access
+
+Returns the caller's admin scope so scripts and the dashboard can adapt. See
+[Scoped admin access](#scoped-admin-access).
+
+**Response:**
+
+```json
+{"scope": "user_path", "user_path": "/team/alpha"}
+```
+
+`scope` is `global` (master key, or a key without a `user_path`) or
+`user_path`; `user_path` is present only for scoped credentials.
+
+### GET /admin/usage/summary
+
+Returns aggregate token usage statistics over a configurable time window.
+
+**Query parameters:**
+
+| Parameter    | Type   | Description                                              | Default              |
+| ------------ | ------ | -------------------------------------------------------- | -------------------- |
+| `start_date` | string | Range start in `YYYY-MM-DD` format                       | 29 days before end   |
+| `end_date`   | string | Range end in `YYYY-MM-DD` format                         | Today                |
+| `days`       | int    | Shorthand for look-back window (ignored if dates are set) | `30`                |
+| `cache_mode` | string | Which requests to count: `uncached`, `cached`, `all` (see [Cache mode](#cache-mode)) | `uncached` |
+
+Use `start_date`/`end_date` for explicit ranges or `days` as a shorthand. When both are provided, `start_date`/`end_date` take priority.
+
+**Response:**
+
+```json
+{
+  "total_requests": 1542,
+  "total_input_tokens": 2450000,
+  "total_output_tokens": 890000,
+  "total_tokens": 3340000
+}
+```
+
+If usage tracking is disabled, returns zeroed values.
+
+### GET /admin/usage/daily
+
+Returns per-period token usage breakdown over a configurable time window, grouped by the specified interval.
+
+**Query parameters:**
+
+| Parameter    | Type   | Description                                              | Default              |
+| ------------ | ------ | -------------------------------------------------------- | -------------------- |
+| `start_date` | string | Range start in `YYYY-MM-DD` format                       | 29 days before end   |
+| `end_date`   | string | Range end in `YYYY-MM-DD` format                         | Today                |
+| `days`       | int    | Shorthand for look-back window (ignored if dates are set) | `30`                |
+| `interval`   | string | Grouping: `daily`, `weekly`, `monthly`, `yearly`         | `daily`              |
+| `cache_mode` | string | Which requests to count: `uncached`, `cached`, `all` (see [Cache mode](#cache-mode)) | `uncached` |
+
+The `date` field in the response changes format based on the interval: `YYYY-MM-DD` (daily), `YYYY-Www` (weekly), `YYYY-MM` (monthly), or `YYYY` (yearly).
+
+**Response:**
+
+```json
+[
+  {
+    "date": "2026-02-17",
+    "requests": 84,
+    "input_tokens": 120000,
+    "output_tokens": 45000,
+    "total_tokens": 165000
+  },
+  {
+    "date": "2026-02-16",
+    "requests": 102,
+    "input_tokens": 155000,
+    "output_tokens": 58000,
+    "total_tokens": 213000
+  }
+]
+```
+
+Returns an empty array if usage tracking is disabled or no data exists for the period.
+
+### GET /admin/usage/sessions
+
+Returns a bounded page of usage grouped by detected, user-path-scoped session,
+ordered by latest session activity. Rows without a detected session are
+omitted.
+
+Request and token totals include local response-cache hits. Cost totals include
+provider-bound requests only, so avoided cache cost is not reported as spend.
+
+**Query parameters:**
+
+| Parameter    | Type   | Description                                      | Default |
+| ------------ | ------ | ------------------------------------------------ | ------- |
+| `days`       | int    | Number of days                                   | `30`    |
+| `start_date` | string | Start date (`YYYY-MM-DD`)                        | —       |
+| `end_date`   | string | End date (`YYYY-MM-DD`)                          | —       |
+| `session_id` | string | Exact detected session id                        | —       |
+| `user_path`  | string | Tracked user-path subtree                        | —       |
+| `model`      | string | Exact model name                                 | —       |
+| `provider`   | string | Provider name or type                            | —       |
+| `label`      | string | Exact request label                              | —       |
+| `limit`      | int    | Page size, capped at 200                          | `50`    |
+| `offset`     | int    | Pagination offset                                | `0`     |
+
+```json
+{
+  "entries": [
+    {
+      "session_id": "scoped-0123456789abcdef0123456789abcdef",
+      "user_path": "/team/alpha",
+      "requests": 8,
+      "input_tokens": 24000,
+      "output_tokens": 4100,
+      "total_tokens": 28100,
+      "input_cost": 0.42,
+      "output_cost": 0.16,
+      "total_cost": 0.58
+    }
+  ],
+  "total": 1,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+### Cache mode
+
+Every [response-cache](/features/cache) hit is recorded as a usage entry, with
+the caller's `user_path` and a `cache_type` of `exact` or `semantic`. The usage
+endpoints leave those entries out by default, so requests, tokens, and cost all
+describe provider spend. Pass `cache_mode` to change that:
+
+| Value      | Counts                                                    |
+| ---------- | --------------------------------------------------------- |
+| `uncached` | Provider-bound requests only — the default                 |
+| `cached`   | Local cache hits only — what the cache served for free     |
+| `all`      | Both, the gateway's total request volume                   |
+
+```bash
+curl "http://localhost:8080/admin/usage/summary?user_path=/team/alpha&cache_mode=all" \
+  -H "Authorization: Bearer $GOMODEL_MASTER_KEY"
+```
+
+Accepted by `/admin/usage/summary`, `/admin/usage/daily`, `/admin/usage/log`,
+`/admin/usage/models`, `/admin/usage/labels`, `/admin/usage/user-paths`, and
+`/v1/usage` (see the [usage API](/advanced/usage-api#cache-mode)). Unrecognized
+values fall back to `uncached`. `/admin/usage/sessions` ignores it: session
+request and token totals always include cache hits, while its cost fields stay
+provider-only.
+
+Two endpoints ignore it by design: `/admin/cache/overview` always reports cache
+hits only, and `/admin/usage/sessions` always includes them (its cost fields
+stay provider-only).
+
+### GET /admin/audit/stats
+
+Returns time-bucketed request counts grouped into `2xx`/`4xx`/`5xx` status
+classes, an overall success-rate summary, and average request duration per
+provider. This powers the "Requests by Status" and "Provider Latency" charts on
+the dashboard's Overview page. Data comes from the audit log (audit logging is enabled by default;
+`LOGGING_ENABLED`).
+
+**Query parameters:**
+
+| Parameter    | Type   | Description                                              | Default              |
+| ------------ | ------ | -------------------------------------------------------- | -------------------- |
+| `start_date` | string | Range start in `YYYY-MM-DD` format                       | 29 days before end   |
+| `end_date`   | string | Range end in `YYYY-MM-DD` format                         | Today                |
+| `days`       | int    | Shorthand for look-back window (ignored if dates are set) | `30`                |
+
+Ranges up to 3 days use hourly buckets (`"interval": "hour"`); longer ranges use
+daily buckets (`"interval": "day"`). Buckets are zero-filled from the range
+start up to the current time.
+
+**Response:**
+
+```json
+{
+  "interval": "day",
+  "buckets": [
+    {
+      "start": "2026-02-17T00:00:00Z",
+      "requests": 84,
+      "status_2xx": 80,
+      "status_4xx": 3,
+      "status_5xx": 1,
+      "status_other": 0
+    }
+  ],
+  "summary": {
+    "requests": 84,
+    "status_2xx": 80,
+    "status_4xx": 3,
+    "status_5xx": 1,
+    "status_other": 0,
+    "success_rate": 0.952,
+    "avg_duration_ms": 812.4
+  },
+  "provider_latency": [
+    {
+      "provider": "openai",
+      "requests": [78],
+      "avg_duration_ms": [795.1]
+    }
+  ]
+}
+```
+
+Each `provider_latency` series aligns index-by-index with `buckets`. Entries are
+`null` for buckets where the provider served no successful request, and the
+averages cover only successful (2xx) requests that reached the provider — local
+response-cache hits and failed requests are excluded. If audit logging is
+disabled, returns empty buckets.
+
+### Budget endpoints
+
+Budgets are managed under `/admin/budgets`. These endpoints are
+available when budget management is enabled.
+
+| Method   | Path                                  | Description                          |
+| -------- | ------------------------------------- | ------------------------------------ |
+| `GET`    | `/admin/budgets`               | List budgets with current status     |
+| `PUT`    | `/admin/budgets/{user_path}/{period}` | Create or update one budget          |
+| `DELETE` | `/admin/budgets/{user_path}/{period}` | Delete one budget                    |
+| `GET`    | `/admin/budgets/settings`      | Read budget reset settings           |
+| `PUT`    | `/admin/budgets/settings`      | Update budget reset settings         |
+| `POST`   | `/admin/budgets/reset-one`     | Reset one budget period              |
+| `POST`   | `/admin/budgets/reset`         | Reset all budget periods             |
+
+`PUT`, `DELETE`, and `reset-one` identify one budget by the composite
+`(user_path, period)` key, or `(user_path, period_seconds)` for custom periods.
+These operations are not global per period. For the path-scoped `PUT` and
+`DELETE` routes, URL-encode `user_path`; see [Budgets](/features/budgets) for
+the request shape.
+
+See [Budgets](/features/budgets) for request examples and enforcement behavior.
+
+### User endpoints
+
+| Method   | Endpoint                             | Description                                   |
+| -------- | ------------------------------------ | --------------------------------------------- |
+| `GET`    | `/admin/users`                       | The user-path tree with model allowlists      |
+| `PUT`    | `/admin/users`                       | Create or replace one node's policy           |
+| `DELETE` | `/admin/users?user_path=<path>`      | Remove one node's policy                      |
+
+`GET /admin/users` returns every node the gateway knows about — stored
+policies, the user paths of managed API keys, and their ancestors — sorted by
+path:
+
+```json
+{
+  "users": [
+    {
+      "user_path": "/acme",
+      "allowed_models": ["openai/", "anthropic/"],
+      "configured": true,
+      "key_count": 0,
+      "inherited_from": [],
+      "restricted": true,
+      "effective_models": ["openai/gpt-4o", "anthropic/claude-sonnet-4-6"],
+      "created_at": "2026-08-30T10:00:00Z",
+      "updated_at": "2026-08-30T10:00:00Z"
+    },
+    {
+      "user_path": "/acme/eng/alice",
+      "allowed_models": [],
+      "configured": false,
+      "key_count": 2,
+      "inherited_from": ["/acme"],
+      "restricted": true,
+      "effective_models": ["openai/gpt-4o", "anthropic/claude-sonnet-4-6"]
+    }
+  ]
+}
+```
+
+`allowed_models` is the node's own list in canonical form (`anthropic/` for a
+provider wildcard, `/` for everything); `inherited_from` lists the ancestors
+whose lists also apply. `effective_models` is the path-level result — the node's list, its ancestors'
+lists, and the model-side virtual-model policies — evaluated through the same
+authorizer inference uses; a managed API key's own `allowed_models` may narrow
+a request further. An empty list with `restricted: true` means the node's
+lists intersect to nothing. `configured` is `false` for nodes implied only by keys
+or descendants; `managed: true` marks policies declared in configuration,
+which are read-only here (`409`, code `user_managed`).
+
+`PUT /admin/users` takes `{"user_path": "/acme/eng", "allowed_models": ["anthropic/*"], "description": "..."}`
+and returns the updated tree. Selectors are validated against the configured
+providers. See [Users](/features/users) for the matching rules.
+
+### GET /admin/models
+
+Returns all registered models with both provider type and configured provider name.
+
+**Response:**
+
+```json
+[
+  {
+    "model": {
+      "id": "gpt-4o",
+      "object": "model",
+      "created": 1715367049,
+      "owned_by": "system"
+    },
+    "provider_type": "openai",
+    "provider_name": "openai_primary",
+    "selector": "openai_primary/gpt-4o"
+  },
+  {
+    "model": {
+      "id": "claude-sonnet-4-5-20250929",
+      "object": "model",
+      "created": 1727568000,
+      "owned_by": "system"
+    },
+    "provider_type": "anthropic",
+    "provider_name": "anthropic_main",
+    "selector": "anthropic_main/claude-sonnet-4-5-20250929"
+  }
+]
+```
+
+This differs from the standard `/v1/models` endpoint: the admin version includes both `provider_type` and `provider_name` for each model, making it useful for understanding both the provider family and the concrete configured provider instance that serves the model.
+
+### Plugin, guardrail, and workflow endpoints
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `GET` | `/admin/plugins` | Every loaded plugin type: `name` and its title `label`, manifest, hook kinds, config schema, source, health, and whether it is a `guardrail` |
+| `GET` | `/admin/guardrails/types` | Guardrail types with their editor schema, `phases`, `source`, `mutates`, and `guardrail` |
+| `GET` | `/admin/guardrails` | Guardrail instances with `fail_mode`, `timeout_ms`, `phases`, `summary`, and `guardrail` |
+| `PUT` | `/admin/guardrails` | Create or update one instance (accepts `fail_mode` and `timeout_ms`; refused when the new type lacks a phase an active workflow uses the instance in) |
+| `DELETE` | `/admin/guardrails` | Delete one instance (refused while an active workflow references it) |
+| `GET` | `/admin/workflows/guardrails` | Instances available to workflow steps, with the `phases` each supports |
+| `GET` | `/admin/workflows` | Active workflows; views carry per-phase `chain_hashes` |
+| `POST` | `/admin/workflows` | Create a workflow version (`schema_version: 2` with `steps[].phase`; version 1 still accepted) |
+
+Response shapes are documented in [Plugins](/advanced/plugins#admin-endpoints)
+and [Workflows](/advanced/workflows#guardrail-steps). The plugin and guardrail
+endpoints answer `503` with code `feature_unavailable` while the plugin system
+is off (`PLUGINS_ENABLED=false` and `GUARDRAILS_ENABLED=false`).
+
+## Admin Dashboard
+
+The dashboard is a server-rendered HTML page embedded in the GoModel binary. Access it at:
+
+```
+http://localhost:8080/admin/dashboard
+```
+
+It provides a visual overview of usage statistics and registered models using the same data as the REST API endpoints above.
+
+When `DASHBOARD_LIVE_LOGS_ENABLED=true`, the dashboard opens
+`GET /admin/live/logs` and streams compact audit/usage lifecycle previews. This
+lets the Audit Logs and Usage pages show a request as it moves through the
+workflow before the async database flush finishes. The stream uses sequence
+cursors, bounded replay, and heartbeat events so reconnecting browsers can catch
+up after short network drops.
+
+The persisted audit and usage tables remain the source of truth. If the
+browser's cursor falls outside the replay buffer, the stream sends a reset event
+and the dashboard reloads from the normal REST endpoints.
+
+## Disabling Admin Features
+
+To disable all admin features:
+
+```bash
+export ADMIN_ENDPOINTS_ENABLED=false
+```
+
+This disables both the REST API and the dashboard UI. To keep the API but hide the dashboard:
+
+```bash
+export ADMIN_ENDPOINTS_ENABLED=true
+export ADMIN_UI_ENABLED=false
+```
+
+<Tip>
+  The admin layer is designed to degrade gracefully. If usage tracking is off,
+  the usage endpoints return empty results instead of errors. If the model
+  registry isn't ready, the models endpoint returns an empty array. The gateway
+  keeps running regardless.
+</Tip>

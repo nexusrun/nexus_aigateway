@@ -1,0 +1,181 @@
+---
+title: "API Endpoints"
+description: "Reference for GoModel's OpenAI-compatible and Anthropic-compatible endpoints, provider passthrough, and operations routes."
+icon: "list-tree"
+keywords: ["API endpoints", "OpenAI-compatible API", "routes", "passthrough", "reference"]
+---
+
+GoModel exposes OpenAI-compatible and Anthropic-compatible APIs, provider-native
+passthrough, and a set of operations endpoints. Admin and dashboard routes are
+documented separately in [Admin Endpoints](/advanced/admin-endpoints).
+
+For request and response details, see the dedicated guides:
+[Responses API](/advanced/responses-api), [Conversations API](/advanced/conversations-api),
+[Anthropic Messages API](/advanced/anthropic-messages-api),
+[Audio API](/advanced/audio-api), [Images API](/advanced/images-api), and
+[Usage API](/advanced/usage-api).
+
+## OpenAI-Compatible API
+
+| Endpoint                          | Method | Description                                                                                                  |
+| --------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------ |
+| `/v1/chat/completions`            | POST   | Chat completions (streaming supported)                                                                       |
+| `/v1/responses`                   | POST   | Create an OpenAI Responses API response                                                                      |
+| `/v1/responses/{id}`              | GET    | Retrieve a stored response                                                                                   |
+| `/v1/responses/{id}`              | DELETE | Delete a stored response (forwards native deletion where supported)                                          |
+| `/v1/responses/{id}/cancel`       | POST   | Cancel an in-progress response (provider-native where supported)                                             |
+| `/v1/responses/{id}/input_items`  | GET    | List the input items of a stored response                                                                    |
+| `/v1/responses/input_tokens`      | POST   | Count input tokens for a Responses request                                                                   |
+| `/v1/responses/compact`           | POST   | Compact a Responses conversation (provider-native where supported)                                           |
+| `/v1/conversations`               | POST   | Create a conversation (gateway-managed)                                                                      |
+| `/v1/conversations/{id}`          | GET    | Retrieve a conversation                                                                                      |
+| `/v1/conversations/{id}`          | POST   | Merge conversation metadata                                                                                  |
+| `/v1/conversations/{id}`          | DELETE | Delete a conversation                                                                                        |
+| `/v1/conversations/{id}/items`    | POST   | Add items to a conversation                                                                                  |
+| `/v1/conversations/{id}/items`    | GET    | List conversation items with cursor pagination                                                              |
+| `/v1/conversations/{id}/items/{item_id}` | GET | Retrieve a conversation item                                                                         |
+| `/v1/conversations/{id}/items/{item_id}` | DELETE | Delete a conversation item and return the conversation                                                |
+| `/v1/embeddings`                  | POST   | Text embeddings                                                                                              |
+| `/v1/models`                      | GET    | List available models                                                                                        |
+| `/v1/models/{model}`              | GET    | Retrieve one model by ID (`openai/gpt-4.1-mini`; slashes may be sent raw or percent-encoded)                  |
+| `/v1/audio/speech`                | POST   | Text-to-speech, returning binary audio                                                                       |
+| `/v1/audio/transcriptions`        | POST   | Speech-to-text from a multipart upload                                                                       |
+| `/v1/images/generations`          | POST   | Image generation from a text prompt (DALL·E, gpt-image-1, grok-2-image, Imagen, Gemini image models)                                     |
+| `/v1/images/edits`                | POST   | Image editing / inpainting from a multipart upload (image, optional mask, prompt)                             |
+| `/v1/realtime`                    | GET    | Realtime speech-to-speech websocket upgrade; `?call_id=` attaches to an existing WebRTC/SIP call as a sideband channel (when `REALTIME_ENABLED`) |
+| `/v1/realtime/calls`              | POST   | Realtime WebRTC SDP exchange: `application/sdp` offer with `?model=`, or multipart `sdp` + `session` fields (when `REALTIME_ENABLED`)            |
+| `/v1/realtime/client_secrets`     | POST   | Mint an ephemeral realtime client secret for browser clients, routed by `session.model` (when `REALTIME_ENABLED`)                                |
+| `/v1/realtime/translations`       | GET    | Realtime speech translation websocket upgrade (e.g. `gpt-realtime-translate`); same as `/v1/realtime?intent=translation` (when `REALTIME_ENABLED`) |
+| `/v1/realtime/translations/calls` | POST   | WebRTC SDP exchange for a translation session (when `REALTIME_ENABLED`)                                                                          |
+| `/v1/realtime/translations/client_secrets` | POST | Mint an ephemeral client secret for a translation session (when `REALTIME_ENABLED`)                                                     |
+| `/v1/files`                       | POST   | Upload a file (OpenAI-compatible multipart)                                                                  |
+| `/v1/files`                       | GET    | List files                                                                                                   |
+| `/v1/files/{id}`                  | GET    | Retrieve file metadata                                                                                       |
+| `/v1/files/{id}`                  | DELETE | Delete a file                                                                                                |
+| `/v1/files/{id}/content`          | GET    | Retrieve raw file content                                                                                    |
+| `/v1/batches`                     | POST   | Create a native provider batch (OpenAI-compatible schema; inline `requests` supported where provider-native) |
+| `/v1/batches`                     | GET    | List stored batches                                                                                          |
+| `/v1/batches/{id}`                | GET    | Retrieve one stored batch                                                                                    |
+| `/v1/batches/{id}/cancel`         | POST   | Cancel a pending batch                                                                                       |
+| `/v1/batches/{id}/results`        | GET    | Retrieve native batch results when available                                                                 |
+
+### Realtime translation sessions
+
+Speech translation models (OpenAI `gpt-realtime-translate`) run on their own
+session surface, so the gateway mirrors it. Connect to `/v1/realtime/translations`
+— or `/v1/realtime?intent=translation`, which is the same session — and set the
+target language after the socket opens:
+
+```bash
+wscat -H "Authorization: Bearer $GOMODEL_API_KEY" \
+  -c "ws://localhost:8080/v1/realtime/translations?model=gpt-realtime-translate"
+```
+
+```json
+{"type": "session.update", "session": {"audio": {"output": {"language": "pl"}}}}
+```
+
+Translation sessions use their own event names (`session.input_audio_buffer.append`
+in, `session.output_audio.delta` and `session.output_transcript.delta` out) and
+accept 24 kHz PCM16 audio. Frames relay verbatim, so any client written against
+the provider's translation API works unchanged.
+
+Translation is an OpenAI surface today. Routing a translation session to a
+provider that does not serve one fails with a 400 rather than quietly opening an
+ordinary conversation session in its place.
+
+These sessions report no usage events, so the gateway prices them from the input
+audio it relays, at the model's per-second input rate. WebRTC translation calls
+are the exception: their media never transits the gateway, so they are not
+metered.
+
+### Realtime transcription sessions
+
+Transcription sessions (`/v1/realtime?intent=transcription`) pick their model in
+`session.update` rather than in the URL; the `model` query parameter routes the
+request and the gateway pins the in-session selection to it.
+
+Most transcription models report usage in their
+`conversation.item.input_audio_transcription.completed` event — tokens, or
+seconds for whisper-style models — and that report prices the session. A model
+that omits usage there reports nothing, so the gateway falls back to the input
+audio it relayed, at the per-second input rate. The fallback applies only when a
+session reported no usage of its own, so a session is never billed twice. As with
+translation, WebRTC calls carry their media outside the gateway and are not
+metered.
+
+## Anthropic-Compatible API
+
+| Endpoint                    | Method | Description                                                                   |
+| --------------------------- | ------ | ----------------------------------------------------------------------------- |
+| `/v1/messages`              | POST   | Anthropic Messages API through translated model routing (streaming supported) |
+| `/v1/messages/count_tokens` | POST   | Heuristic Anthropic Messages input token estimate                             |
+
+## Gateway Extensions
+
+| Endpoint    | Method | Description                                                                                                                              |
+| ----------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `/v1/usage` | GET    | Self-service usage, budget, and rate limit status for the caller's effective user path — see [Usage API](/advanced/usage-api) |
+| `/v1/auth/verify` | GET | Report whether the API key the request carries is valid (when `AUTH_VERIFY_ENABLED`) |
+
+### Key verification
+
+`GET /v1/auth/verify` lets a service in front of the gateway check an API key
+without holding a copy of the key list. It is **disabled by default**; enable it
+with `AUTH_VERIFY_ENABLED=true` (`server.auth_verify_enabled`). It is not an
+`/admin` route, so it keeps working when the admin API is disabled.
+
+```bash
+curl http://localhost:8080/v1/auth/verify \
+  -H "Authorization: Bearer sk_gom_..."
+```
+
+```json
+{ "valid": true, "method": "api_key", "key_id": "key_01H...", "user_path": "/acme/eng" }
+```
+
+An unknown, disabled, or expired key is rejected by the gateway's normal
+authentication with `401`, so a `200` means the key authenticates. `method`
+says which mechanism accepted it: `api_key` is a managed key stored in the
+database, `master_key` the bootstrap key from `GOMODEL_MASTER_KEY`. `key_id`
+and `user_path` are present only for managed keys bound to them.
+
+<Note>
+  Where the gateway admits unauthenticated callers — no authentication
+  configured at all, or a route an extension excluded from it — there is no key
+  to confirm, and the endpoint answers `200` with
+  `{"valid": false, "method": "none"}` rather than claiming the key is valid.
+  A status-code consumer such as Caddy's `forward_auth` treats that as allowed,
+  matching what the gateway itself does with those requests.
+</Note>
+
+## Provider Passthrough
+
+| Endpoint            | Method                                       | Description                                                |
+| ------------------- | -------------------------------------------- | ---------------------------------------------------------- |
+| `/p/{provider}/...` | GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS | Provider-native passthrough with opaque upstream responses |
+
+## MCP Gateway
+
+Streamable-HTTP MCP (Model Context Protocol) endpoints aggregating the
+configured upstream MCP servers (when `MCP_ENABLED`, default on). See
+[MCP Gateway](/features/mcp-gateway).
+
+| Endpoint        | Method            | Description                                                                     |
+| --------------- | ----------------- | ------------------------------------------------------------------------------- |
+| `/mcp`          | POST, GET, DELETE | Aggregated MCP endpoint; tools/prompts namespaced as `{server}_{name}`          |
+| `/mcp/{server}` | POST, GET, DELETE | Single configured MCP server with original tool names                           |
+
+## Admin Endpoints
+
+Admin REST and dashboard routes (`/admin/*`) are covered in
+[Admin Endpoints](/advanced/admin-endpoints).
+
+## Operations Endpoints
+
+| Endpoint              | Method | Description                                                                        |
+| --------------------- | ------ | ---------------------------------------------------------------------------------- |
+| `/health`             | GET    | Liveness check (always 200 while the process serves)                               |
+| `/health/ready`       | GET    | Readiness check: pings storage (503 if down) and Redis cache (degraded, still 200) |
+| `/metrics`            | GET    | Prometheus metrics (experimental, when enabled)                                    |
+| `/swagger/index.html` | GET    | [Swagger UI](/advanced/swagger-ui) (when built with `-tags=swagger` and enabled)    |

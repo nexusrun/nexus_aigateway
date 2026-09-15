@@ -1,0 +1,210 @@
+---
+title: "Failover"
+description: "Fail over between the targets of a virtual model, and make a target list a strict priority order with the failover strategy."
+icon: "shuffle"
+keywords: ["failover", "fallback", "provider outage", "automatic retry", "high availability", "priority routing"]
+---
+
+## Overview
+
+Failover is part of [virtual models](/features/virtual-models). Every
+redirect with two or more targets fails over between them: when the target a
+request was sent to returns a failover-eligible error, GoModel retries the
+request against the redirect's remaining available targets, in declared order,
+and stops at the first success.
+
+The redirect's **load-balancing strategy** decides only which target is tried
+first:
+
+| Strategy | First target | Then |
+| --- | --- | --- |
+| Round-robin | rotates across targets (weighted) | the other targets, in declared order |
+| Lowest cost | the cheapest available target | the other targets, in declared order |
+| **Failover** | the first available target, always | the next targets, in declared order |
+
+Pick **Failover** when the target list is a priority order — always use the
+best model unless it is down, and only then cascade to the backups.
+
+For the other strategies the editor shows a **Failover** checkbox, on by
+default. Untick it (or set `failover: false` as code) when a redirect should
+only balance and a failed request should return its error, for example when
+the targets are not interchangeable and a client handles retries itself. The
+Failover strategy always fails over, so the checkbox is not offered there.
+
+## Configure a failover chain
+
+In the dashboard, open **Models** and edit the model you want to protect:
+the model is already pinned as the first target, so add the fallbacks below
+it in priority order and save — the strategy defaults to **Failover**. To
+fail over under a new name instead, create a virtual model, list the targets
+in priority order, and pick **Failover** in the **Load-balancing strategy**
+dropdown. Weights and session keeping do not apply to this strategy, so the
+editor hides them. Removing the pinned row turns the entry into a plain
+redirect: requests for the model go to the remaining targets instead.
+
+As code (`config.yaml` or the `VIRTUAL_MODELS` environment variable):
+
+```yaml
+virtual_models:
+  # A new name that always prefers the first target.
+  - source: resilient-chat
+    strategy: failover
+    targets:
+      - { model: kimicode/kimi-k2 }
+      - { model: openai/gpt-4o }
+      - { model: ollama/qwen3:8b }
+
+  # Failover for a real model: the redirect shadows `gpt-4o`, tries it first,
+  # then the fallbacks in order. Listing the source itself as the first target
+  # stands for the concrete model it shadows.
+  - source: gpt-4o
+    strategy: failover
+    targets:
+      - { model: gpt-4o }
+      - { model: azure/gpt-4o }
+      - { model: gemini/gemini-2.5-pro }
+```
+
+A target may also name another virtual model
+([chaining](/features/virtual-models#chain-virtual-models)); the sweep then
+tries every concrete model behind it. One exception keeps mutual protection
+possible: when a chain that shadows a real model lists another model that is
+shadowed the same way, that fallback reaches the model only — its fallbacks
+are not swept in turn — which is what lets `gpt-4o` fall back to
+`claude-sonnet-4-6` while `claude-sonnet-4-6` falls back to `gpt-4o`. Any
+other redirect (an alias, a virtual model under a new name) that lists a
+protected model does sweep that model's fallbacks.
+
+Provider retries run before failover for non-streaming requests. To retry
+Cloudflare `522`/`524` responses and then switch models on the same provider,
+use [resilience settings with per-model breakers](/advanced/resilience#retry-cloudflare-timeouts-then-switch-models).
+
+## When it runs
+
+Failover is attempted only after an attempt returns:
+
+- `5xx`
+- `429`, including a rate limit GoModel itself enforces on the target — a
+  saturated target is skipped while another target has capacity
+- model unavailable, unsupported, or not found style errors
+- upstream failure messages relayed with a `4xx` status (aggregator providers
+  such as OpenCode Zen can report a transient failure of their own upstream as
+  `400 "Upstream request failed"`)
+
+It applies to translated `/v1/chat/completions`, `/v1/responses`, and
+`/v1/messages` requests. The request log shows every attempt, so a served
+failover is visible in the audit trail and priced at the model that answered.
+
+A request that names its provider in the `provider` field bypasses virtual
+models and reaches the concrete model directly. It still gets the chain of a
+virtual model that shadows exactly that model and lists it as a target (the
+shape the Models page creates for a real model), since that virtual model adds
+failover to the model rather than replacing it.
+
+<Note>
+  A response produced by a failover target is not written to the
+  [response cache](/features/cache#responses-served-through-failover-are-not-cached):
+  the cache key is hashed from the pre-failover resolution, so the backup's
+  answer would otherwise be replayed under the primary's key. While a first
+  target is down, the chain therefore stops adding cache entries; entries
+  written before the outage still serve until their TTL expires.
+</Note>
+
+Set `FAILOVER_ENABLED=false` (or `failover.enabled: false`) to switch the
+sweep off globally; a [workflow](/advanced/workflows) can also turn it off for
+its scope. The chosen target is still served, without retries.
+
+## Tune the failover policy
+
+The defaults above fit most deployments. Three settings under `failover`
+(or the matching environment variables) adjust them:
+
+| Setting | Env | Default | Meaning |
+| --- | --- | --- | --- |
+| `max_attempts` | `FAILOVER_MAX_ATTEMPTS` | `0` (all remaining targets) | How many failover targets one request may try after its first attempt fails. Targets skipped without a call (a saturated rate limit) do not count. |
+| `retry_on_statuses` | `FAILOVER_RETRY_ON_STATUSES` | `[429, 5xx]` | Upstream HTTP statuses that trigger failover: exact codes (`408`) or a whole class (`5xx`). |
+| `retry_on_errors` | `FAILOVER_RETRY_ON_ERRORS` | see below | Error phrases that trigger failover whatever the status. |
+
+A non-empty list **replaces** its default, so repeat the defaults you want
+to keep; an empty or omitted list keeps the default (use `enabled: false` to
+switch failover off). In the environment, separate entries with commas.
+
+A `retry_on_errors` phrase matches when every one of its words appears in the
+error code or message (case-insensitive, substring): `model not found`
+matches `The model 'gpt-9' was not found`. A numeric word — `404` or `4xx` —
+constrains the HTTP status instead of the text, so `404 deprecated` matches a
+404 whose message mentions "deprecated" and nothing else. The default list is:
+
+```yaml
+retry_on_errors:
+  - model not found
+  - model does not exist
+  - model unsupported
+  - model unavailable
+  - model not available
+  - model deprecated
+  - model retired
+  - model disabled
+  - upstream failed
+  - upstream error
+  - upstream unavailable
+  - upstream timed out
+  - upstream timeout
+  - 404 unsupported
+  - 404 unavailable
+  - 404 not available
+  - 404 deprecated
+  - 404 retired
+  - 404 disabled
+```
+
+A non-streaming chat completion that returns `200` with an empty `choices`
+array is treated as a `502` (`provider returned no choices`), so it fails over
+under the default `5xx` status rule. Each such attempt is also logged and
+counted in `gomodel_empty_responses_total`.
+
+Example: try at most one backup, treat timeouts as failover-eligible but
+keep serving `429` responses to the client, and add a provider-specific
+overload message:
+
+```yaml
+failover:
+  max_attempts: 1
+  retry_on_statuses: [408, 5xx]
+  retry_on_errors:
+    - model not found
+    - model does not exist
+    - upstream failed
+    - overloaded
+```
+
+The client receives the error of the last target tried, so with
+`max_attempts: 1` a request that exhausts its cap reports the backup's
+failure, not the primary's.
+
+## Migrating from failover rules
+
+Earlier releases managed failover as separate per-model mappings (the shuffle
+icon on the Models page and the `failover.rules` configuration). Both are
+converted automatically:
+
+- Dashboard-managed mappings become virtual models with the failover strategy
+  that shadow their primary model. The conversion runs once at startup and
+  then removes the old `failover_rules` store (any of its historical shapes).
+  When the primary model already has a plain per-model setting (a slowdown or
+  description set from the Models page), the mapping is merged into it and
+  the setting is kept. A primary that already has a redirect, a path-scoped
+  setting, or is disabled is logged and skipped, and the store is kept until
+  it is resolved — add its fallbacks as targets of that virtual model with
+  the failover strategy, then delete the row. A mapping whose fallback names
+  a virtual model that routes back to its primary is kept the same way, since
+  converting it would form a chain cycle — adjust or remove that virtual
+  model, then restart. A primary listed in
+  `disabled_models` converts as a disabled virtual model: its fallbacks are
+  kept but inactive until you enable it from the Models page.
+- `failover.rules`, `manual_rules_path`, `FAILOVER_RULES_JSON`, and
+  `disabled_models` still load and are translated into configuration-managed
+  virtual models on every start, with a deprecation warning. A rule whose
+  primary model has a virtual model in the dashboard is skipped with a
+  warning, so it never replaces that virtual model's routing. Move the rules
+  under `virtual_models` at your convenience.

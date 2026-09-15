@@ -1,0 +1,7198 @@
+package anthropic
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"slices"
+	"strconv"
+	"strings"
+	"testing"
+
+	"github.com/enterpilot/gomodel/internal/anthropicapi"
+	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/enterpilot/gomodel/internal/llmclient"
+	"github.com/enterpilot/gomodel/internal/providers"
+)
+
+func TestNew(t *testing.T) {
+	apiKey := "test-api-key"
+	// Use NewWithHTTPClient to get concrete type for internal testing
+	provider := NewWithHTTPClient(apiKey, nil, llmclient.Hooks{})
+
+	if got := provider.keys.Primary(); got != apiKey {
+		t.Errorf("primary key = %q, want %q", got, apiKey)
+	}
+	if provider.client == nil {
+		t.Error("client should not be nil")
+	}
+}
+
+func TestNew_ReturnsProvider(t *testing.T) {
+	apiKey := "test-api-key"
+	provider := New(providers.ProviderConfig{APIKey: apiKey}, providers.ProviderOptions{})
+
+	if provider == nil {
+		t.Error("provider should not be nil")
+	}
+}
+
+func TestStreamConverter_DrainsBufferedDoneMessage(t *testing.T) {
+	stream := newStreamConverter(io.NopCloser(strings.NewReader("")), "claude-sonnet-4-5-20250929")
+	defer func() { _ = stream.Close() }()
+
+	buf := make([]byte, 4)
+	var out strings.Builder
+
+	for {
+		n, err := stream.Read(buf)
+		if n > 0 {
+			out.Write(buf[:n])
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Read() error = %v", err)
+		}
+	}
+
+	if out.String() != "data: [DONE]\n\n" {
+		t.Fatalf("stream output = %q, want %q", out.String(), "data: [DONE]\\n\\n")
+	}
+}
+
+func TestSetBatchResultEndpoints_PreservesOlderBatches(t *testing.T) {
+	provider := &Provider{
+		batchResultEndpoints: make(map[string]map[string]string),
+	}
+
+	for i := 0; i <= 1024; i++ {
+		batchID := "batch-" + strconv.Itoa(i)
+		provider.setBatchResultEndpoints(batchID, map[string]string{
+			"req-1": "/v1/chat/completions",
+		})
+	}
+
+	if got := provider.getBatchResultEndpoints("batch-0"); got == nil {
+		t.Fatal("batch-0 should still be present")
+	}
+	if got := provider.getBatchResultEndpoints("batch-1"); got == nil {
+		t.Fatal("batch-1 should still be present")
+	}
+	if got := provider.getBatchResultEndpoints("batch-1024"); got == nil {
+		t.Fatal("newest batch should still be present")
+	}
+	if got := len(provider.batchResultEndpoints); got != 1025 {
+		t.Fatalf("len(batchResultEndpoints) = %d, want 1025", got)
+	}
+}
+
+func TestSetBatchResultEndpoints_OverwritesExistingBatch(t *testing.T) {
+	provider := &Provider{
+		batchResultEndpoints: make(map[string]map[string]string),
+	}
+
+	provider.setBatchResultEndpoints("batch-0", map[string]string{
+		"req-1": "/v1/chat/completions",
+	})
+	provider.setBatchResultEndpoints("batch-0", map[string]string{
+		"req-1": "/v1/responses",
+	})
+
+	refreshed := provider.getBatchResultEndpoints("batch-0")
+	if refreshed == nil {
+		t.Fatal("batch-0 should still be present after refresh")
+	}
+	if refreshed["req-1"] != "/v1/responses" {
+		t.Fatalf("batch-0 endpoint = %q, want /v1/responses", refreshed["req-1"])
+	}
+	if got := len(provider.batchResultEndpoints); got != 1 {
+		t.Fatalf("len(batchResultEndpoints) = %d, want 1", got)
+	}
+}
+
+func TestGetBatchResults(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/messages/batches/batch_1/results" {
+			http.NotFound(w, r)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(
+			`{"custom_id":"ok-1","result":{"type":"succeeded","message":{"id":"msg_123","type":"message","role":"assistant","model":"claude-sonnet-4-5-20250929","content":[{"type":"text","text":"hi"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}}}` + "\n" +
+				`{"custom_id":"err-1","result":{"type":"errored","error":{"type":"invalid_request_error","message":"bad request"}}}`,
+		))
+	}))
+	defer server.Close()
+
+	provider := NewWithHTTPClient("test-api-key", nil, llmclient.Hooks{})
+	provider.SetBaseURL(server.URL)
+	provider.setBatchResultEndpoints("batch_1", map[string]string{
+		"ok-1":  "/v1/responses",
+		"err-1": "/v1/chat/completions",
+	})
+
+	resp, err := provider.GetBatchResults(context.Background(), "batch_1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.BatchID != "batch_1" {
+		t.Fatalf("BatchID = %q, want %q", resp.BatchID, "batch_1")
+	}
+	if len(resp.Data) != 2 {
+		t.Fatalf("len(Data) = %d, want 2", len(resp.Data))
+	}
+	if resp.Data[0].URL != "/v1/responses" || resp.Data[0].StatusCode != http.StatusOK {
+		t.Fatalf("unexpected first row: %+v", resp.Data[0])
+	}
+	if resp.Data[1].Error == nil || resp.Data[1].Error.Message != "bad request" {
+		t.Fatalf("unexpected error row: %+v", resp.Data[1])
+	}
+}
+
+func TestGetBatchResultsWithHints(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/messages/batches/batch_1/results" {
+			http.NotFound(w, r)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(
+			`{"custom_id":"ok-1","result":{"type":"succeeded","message":{"id":"msg_123","type":"message","role":"assistant","model":"claude-sonnet-4-5-20250929","content":[{"type":"text","text":"hi"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}}}`,
+		))
+	}))
+	defer server.Close()
+
+	provider := NewWithHTTPClient("test-api-key", nil, llmclient.Hooks{})
+	provider.SetBaseURL(server.URL)
+
+	resp, err := provider.GetBatchResultsWithHints(context.Background(), "batch_1", map[string]string{
+		"ok-1": "/v1/responses",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("len(Data) = %d, want 1", len(resp.Data))
+	}
+	if resp.Data[0].URL != "/v1/responses" {
+		t.Fatalf("URL = %q, want /v1/responses", resp.Data[0].URL)
+	}
+}
+
+func TestGetBatchResultsWithHints_ExplicitEmptyHintsDoNotUseTransientHints(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/messages/batches/batch_1/results" {
+			http.NotFound(w, r)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(
+			`{"custom_id":"ok-1","result":{"type":"succeeded","message":{"id":"msg_123","type":"message","role":"assistant","model":"claude-sonnet-4-5-20250929","content":[{"type":"text","text":"hi"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}}}`,
+		))
+	}))
+	defer server.Close()
+
+	provider := NewWithHTTPClient("test-api-key", nil, llmclient.Hooks{})
+	provider.SetBaseURL(server.URL)
+	provider.setBatchResultEndpoints("batch_1", map[string]string{
+		"ok-1": "/v1/responses",
+	})
+
+	resp, err := provider.GetBatchResultsWithHints(context.Background(), "batch_1", map[string]string{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("len(Data) = %d, want 1", len(resp.Data))
+	}
+	if resp.Data[0].URL != "/v1/chat/completions" {
+		t.Fatalf("URL = %q, want /v1/chat/completions", resp.Data[0].URL)
+	}
+}
+
+func TestClearBatchResultHints(t *testing.T) {
+	provider := &Provider{
+		batchResultEndpoints: map[string]map[string]string{
+			"batch_1": {
+				"resp-1": "/v1/responses",
+			},
+		},
+	}
+
+	provider.ClearBatchResultHints("batch_1")
+	if got := provider.getBatchResultEndpoints("batch_1"); got != nil {
+		t.Fatalf("batch_1 hints should be cleared, got %#v", got)
+	}
+}
+
+func TestChatCompletion(t *testing.T) {
+	tests := []struct {
+		name          string
+		statusCode    int
+		responseBody  string
+		expectedError bool
+		checkResponse func(*testing.T, *core.ChatResponse)
+	}{
+		{
+			name:       "successful request",
+			statusCode: http.StatusOK,
+			responseBody: `{
+				"id": "msg_123",
+				"type": "message",
+				"role": "assistant",
+				"model": "claude-sonnet-4-5-20250929",
+				"content": [{
+					"type": "text",
+					"text": "Hello! How can I help you today?"
+				}],
+				"stop_reason": "end_turn",
+				"usage": {
+					"input_tokens": 10,
+					"output_tokens": 20
+				}
+			}`,
+			expectedError: false,
+			checkResponse: func(t *testing.T, resp *core.ChatResponse) {
+				if resp.ID != "msg_123" {
+					t.Errorf("ID = %q, want %q", resp.ID, "msg_123")
+				}
+				if resp.Model != "claude-sonnet-4-5-20250929" {
+					t.Errorf("Model = %q, want %q", resp.Model, "claude-sonnet-4-5-20250929")
+				}
+				if len(resp.Choices) != 1 {
+					t.Fatalf("len(Choices) = %d, want 1", len(resp.Choices))
+				}
+				if resp.Choices[0].Message.Content != "Hello! How can I help you today?" {
+					t.Errorf("Message content = %q, want %q", resp.Choices[0].Message.Content, "Hello! How can I help you today?")
+				}
+				if resp.Usage.PromptTokens != 10 {
+					t.Errorf("PromptTokens = %d, want 10", resp.Usage.PromptTokens)
+				}
+				if resp.Usage.CompletionTokens != 20 {
+					t.Errorf("CompletionTokens = %d, want 20", resp.Usage.CompletionTokens)
+				}
+				if resp.Usage.TotalTokens != 30 {
+					t.Errorf("TotalTokens = %d, want 30", resp.Usage.TotalTokens)
+				}
+			},
+		},
+		{
+			name:       "stop sequence hit carries the matched sequence",
+			statusCode: http.StatusOK,
+			responseBody: `{
+				"id": "msg_stop",
+				"type": "message",
+				"role": "assistant",
+				"model": "claude-sonnet-4-5-20250929",
+				"content": [{"type": "text", "text": "1 2 3 "}],
+				"stop_reason": "stop_sequence",
+				"stop_sequence": "7",
+				"usage": {"input_tokens": 6, "output_tokens": 4}
+			}`,
+			expectedError: false,
+			checkResponse: func(t *testing.T, resp *core.ChatResponse) {
+				choice := resp.Choices[0]
+				if choice.FinishReason != "stop" {
+					t.Errorf("FinishReason = %q, want stop", choice.FinishReason)
+				}
+				if choice.StopSequence != "7" {
+					t.Errorf("StopSequence = %q, want 7", choice.StopSequence)
+				}
+			},
+		},
+		{
+			name:          "API error - unauthorized",
+			statusCode:    http.StatusUnauthorized,
+			responseBody:  `{"type": "error", "error": {"type": "authentication_error", "message": "Invalid API key"}}`,
+			expectedError: true,
+		},
+		{
+			name:          "rate limit error",
+			statusCode:    http.StatusTooManyRequests,
+			responseBody:  `{"type": "error", "error": {"type": "rate_limit_error", "message": "Rate limit exceeded"}}`,
+			expectedError: true,
+		},
+		{
+			name:          "server error",
+			statusCode:    http.StatusInternalServerError,
+			responseBody:  `{"type": "error", "error": {"type": "api_error", "message": "Internal server error"}}`,
+			expectedError: true,
+		},
+		{
+			name:          "bad request error",
+			statusCode:    http.StatusBadRequest,
+			responseBody:  `{"type": "error", "error": {"type": "invalid_request_error", "message": "Invalid request"}}`,
+			expectedError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Verify request headers
+				if r.Header.Get("Content-Type") != "application/json" {
+					t.Errorf("Content-Type = %q, want %q", r.Header.Get("Content-Type"), "application/json")
+				}
+				apiKey := r.Header.Get("x-api-key")
+				if apiKey == "" {
+					t.Error("x-api-key header should not be empty")
+				}
+				if r.Header.Get("anthropic-version") != anthropicAPIVersion {
+					t.Errorf("anthropic-version = %q, want %q", r.Header.Get("anthropic-version"), anthropicAPIVersion)
+				}
+
+				// Verify request path
+				if r.URL.Path != "/messages" {
+					t.Errorf("Path = %q, want %q", r.URL.Path, "/messages")
+				}
+
+				// Verify request body
+				body, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Fatalf("failed to read request body: %v", err)
+				}
+				var req anthropicRequest
+				if err := json.Unmarshal(body, &req); err != nil {
+					t.Fatalf("failed to unmarshal request: %v", err)
+				}
+
+				w.WriteHeader(tt.statusCode)
+				_, _ = w.Write([]byte(tt.responseBody))
+			}))
+			defer server.Close()
+
+			provider := NewWithHTTPClient("test-api-key", nil, llmclient.Hooks{})
+			provider.SetBaseURL(server.URL)
+
+			req := &core.ChatRequest{
+				Model: "claude-sonnet-4-5-20250929",
+				Messages: []core.Message{
+					{Role: "user", Content: "Hello"},
+				},
+			}
+
+			resp, err := provider.ChatCompletion(context.Background(), req)
+
+			if tt.expectedError {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if tt.checkResponse != nil {
+					tt.checkResponse(t, resp)
+				}
+			}
+		})
+	}
+}
+
+func TestStreamChatCompletion(t *testing.T) {
+	tests := []struct {
+		name          string
+		statusCode    int
+		responseBody  string
+		expectedError bool
+		checkStream   func(*testing.T, io.ReadCloser)
+	}{
+		{
+			name:       "successful streaming request",
+			statusCode: http.StatusOK,
+			responseBody: `event: message_start
+data: {"type":"message_start","message":{"id":"msg_123","type":"message","role":"assistant","model":"claude-sonnet-4-5-20250929","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"!"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2}}
+
+event: message_stop
+data: {"type":"message_stop"}
+`,
+			expectedError: false,
+			checkStream: func(t *testing.T, body io.ReadCloser) {
+				if body == nil {
+					t.Fatal("body should not be nil")
+				}
+				defer func() { _ = body.Close() }()
+
+				// Read and verify the streaming response
+				respBody, err := io.ReadAll(body)
+				if err != nil {
+					t.Fatalf("failed to read response body: %v", err)
+				}
+
+				// The response should be converted to OpenAI format
+				responseStr := string(respBody)
+				if !strings.Contains(responseStr, "data:") {
+					t.Error("response should contain SSE data")
+				}
+				if !strings.Contains(responseStr, `"role":"assistant"`) {
+					t.Error("response should include assistant role delta")
+				}
+				if !strings.Contains(responseStr, "[DONE]") {
+					t.Error("response should end with [DONE]")
+				}
+			},
+		},
+		{
+			name:       "stop sequence hit rides the chunk delta",
+			statusCode: http.StatusOK,
+			responseBody: `event: message_start
+data: {"type":"message_start","message":{"id":"msg_stop","type":"message","role":"assistant","model":"claude-sonnet-4-5-20250929","content":[],"stop_reason":null,"usage":{"input_tokens":6,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"1 2 3 "}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"stop_sequence","stop_sequence":"7"},"usage":{"output_tokens":4}}
+
+event: message_stop
+data: {"type":"message_stop"}
+`,
+			expectedError: false,
+			checkStream: func(t *testing.T, body io.ReadCloser) {
+				defer func() { _ = body.Close() }()
+				respBody, err := io.ReadAll(body)
+				if err != nil {
+					t.Fatalf("failed to read response body: %v", err)
+				}
+				responseStr := string(respBody)
+				if !strings.Contains(responseStr, `"stop_sequence":"7"`) {
+					t.Errorf("chunk stream should carry the matched stop sequence, got: %s", responseStr)
+				}
+				if !strings.Contains(responseStr, `"finish_reason":"stop"`) {
+					t.Errorf("finish_reason should stay OpenAI-conservative \"stop\", got: %s", responseStr)
+				}
+			},
+		},
+		{
+			name:          "API error - unauthorized",
+			statusCode:    http.StatusUnauthorized,
+			responseBody:  `{"type": "error", "error": {"type": "authentication_error", "message": "Invalid API key"}}`,
+			expectedError: true,
+		},
+		{
+			name:          "rate limit error",
+			statusCode:    http.StatusTooManyRequests,
+			responseBody:  `{"type": "error", "error": {"type": "rate_limit_error", "message": "Rate limit exceeded"}}`,
+			expectedError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Verify request headers
+				if r.Header.Get("Content-Type") != "application/json" {
+					t.Errorf("Content-Type = %q, want %q", r.Header.Get("Content-Type"), "application/json")
+				}
+				apiKey := r.Header.Get("x-api-key")
+				if apiKey == "" {
+					t.Error("x-api-key header should not be empty")
+				}
+
+				// Verify stream is set in request body
+				body, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Fatalf("failed to read request body: %v", err)
+				}
+				var req anthropicRequest
+				if err := json.Unmarshal(body, &req); err != nil {
+					t.Fatalf("failed to unmarshal request: %v", err)
+				}
+				if !req.Stream {
+					t.Error("Stream should be true in request")
+				}
+
+				w.WriteHeader(tt.statusCode)
+				_, _ = w.Write([]byte(tt.responseBody))
+			}))
+			defer server.Close()
+
+			provider := NewWithHTTPClient("test-api-key", nil, llmclient.Hooks{})
+			provider.SetBaseURL(server.URL)
+
+			req := &core.ChatRequest{
+				Model: "claude-sonnet-4-5-20250929",
+				Messages: []core.Message{
+					{Role: "user", Content: "Hello"},
+				},
+			}
+
+			body, err := provider.StreamChatCompletion(context.Background(), req)
+
+			if tt.expectedError {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if tt.checkStream != nil {
+					tt.checkStream(t, body)
+				}
+			}
+		})
+	}
+}
+
+func TestStreamChatCompletion_MergesUsageFromMessageStart(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`event: message_start
+data: {"type":"message_start","message":{"id":"msg_123","type":"message","role":"assistant","model":"claude-sonnet-4-5-20250929","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0,"cache_read_input_tokens":6}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2}}
+
+event: message_stop
+data: {"type":"message_stop"}
+`))
+	}))
+	defer server.Close()
+
+	provider := NewWithHTTPClient("test-api-key", nil, llmclient.Hooks{})
+	provider.SetBaseURL(server.URL)
+
+	body, err := provider.StreamChatCompletion(context.Background(), &core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() { _ = body.Close() }()
+
+	raw, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %v", err)
+	}
+
+	responseStr := string(raw)
+	if !strings.Contains(responseStr, `"prompt_tokens":10`) {
+		t.Fatalf("expected prompt_tokens in streamed usage, got %q", responseStr)
+	}
+	if !strings.Contains(responseStr, `"completion_tokens":2`) {
+		t.Fatalf("expected completion_tokens in streamed usage, got %q", responseStr)
+	}
+	if !strings.Contains(responseStr, `"total_tokens":12`) {
+		t.Fatalf("expected total_tokens in streamed usage, got %q", responseStr)
+	}
+	if !strings.Contains(responseStr, `"cache_read_input_tokens":6`) {
+		t.Fatalf("expected cache_read_input_tokens in streamed usage, got %q", responseStr)
+	}
+}
+
+func TestStreamChatCompletion_WithToolCalls(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`event: message_start
+data: {"type":"message_start","message":{"id":"msg_123","type":"message","role":"assistant","model":"claude-sonnet-4-5-20250929","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_123","name":"lookup_weather","input":{}}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"city\":\"War"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"saw\"}"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"input_tokens":10,"output_tokens":4}}
+
+event: message_stop
+data: {"type":"message_stop"}
+`))
+	}))
+	defer server.Close()
+
+	provider := NewWithHTTPClient("test-api-key", nil, llmclient.Hooks{})
+	provider.SetBaseURL(server.URL)
+
+	body, err := provider.StreamChatCompletion(context.Background(), &core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{Role: "user", Content: "What's the weather?"},
+		},
+		Tools: []map[string]any{
+			{
+				"type": "function",
+				"function": map[string]any{
+					"name": "lookup_weather",
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() { _ = body.Close() }()
+
+	raw, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %v", err)
+	}
+
+	events := parseTestSSEEvents(t, string(raw))
+	foundToolStart := false
+	foundFinish := false
+	var argumentDeltas strings.Builder
+
+	for _, event := range events {
+		if event.Done {
+			continue
+		}
+
+		choices, ok := event.Payload["choices"].([]any)
+		if !ok || len(choices) == 0 {
+			continue
+		}
+		choice, ok := choices[0].(map[string]any)
+		if !ok {
+			continue
+		}
+
+		if finishReason, _ := choice["finish_reason"].(string); finishReason == "tool_calls" {
+			foundFinish = true
+		}
+
+		delta, ok := choice["delta"].(map[string]any)
+		if !ok {
+			continue
+		}
+		toolCalls, ok := delta["tool_calls"].([]any)
+		if !ok || len(toolCalls) == 0 {
+			continue
+		}
+		toolCall, ok := toolCalls[0].(map[string]any)
+		if !ok {
+			continue
+		}
+		function, _ := toolCall["function"].(map[string]any)
+
+		if toolCall["id"] == "toolu_123" && function["name"] == "lookup_weather" {
+			foundToolStart = true
+		}
+		if arguments, _ := function["arguments"].(string); arguments != "" {
+			argumentDeltas.WriteString(arguments)
+		}
+	}
+
+	if !foundToolStart {
+		t.Fatal("expected a streaming tool call header chunk")
+	}
+	if argumentDeltas.String() != `{"city":"Warsaw"}` {
+		t.Fatalf("streamed tool call arguments = %q, want %q", argumentDeltas.String(), `{"city":"Warsaw"}`)
+	}
+	if !foundFinish {
+		t.Fatal("expected a final tool_calls finish_reason chunk")
+	}
+}
+
+func TestStreamChatCompletion_WithEmptyToolArguments(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`event: message_start
+data: {"type":"message_start","message":{"id":"msg_123","type":"message","role":"assistant","model":"claude-sonnet-4-5-20250929","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_123","name":"lookup_weather","input":{}}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"input_tokens":10,"output_tokens":4}}
+
+event: message_stop
+data: {"type":"message_stop"}
+`))
+	}))
+	defer server.Close()
+
+	provider := NewWithHTTPClient("test-api-key", nil, llmclient.Hooks{})
+	provider.SetBaseURL(server.URL)
+
+	body, err := provider.StreamChatCompletion(context.Background(), &core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{Role: "user", Content: "What's the weather?"},
+		},
+		Tools: []map[string]any{
+			{
+				"type": "function",
+				"function": map[string]any{
+					"name": "lookup_weather",
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() { _ = body.Close() }()
+
+	raw, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %v", err)
+	}
+
+	events := parseTestSSEEvents(t, string(raw))
+	foundToolCall := false
+	foundFinish := false
+
+	for _, event := range events {
+		if event.Done {
+			continue
+		}
+		choices, ok := event.Payload["choices"].([]any)
+		if !ok || len(choices) == 0 {
+			continue
+		}
+		choice, ok := choices[0].(map[string]any)
+		if !ok {
+			continue
+		}
+		if finishReason, _ := choice["finish_reason"].(string); finishReason == "tool_calls" {
+			foundFinish = true
+		}
+		delta, _ := choice["delta"].(map[string]any)
+		toolCalls, _ := delta["tool_calls"].([]any)
+		if len(toolCalls) == 0 {
+			continue
+		}
+		toolCall, _ := toolCalls[0].(map[string]any)
+		function, _ := toolCall["function"].(map[string]any)
+		if toolCall["id"] == "toolu_123" && function["name"] == "lookup_weather" && function["arguments"] == "{}" {
+			foundToolCall = true
+		}
+	}
+
+	if !foundToolCall {
+		t.Fatal("expected streamed tool call with {} arguments for zero-arg tool")
+	}
+	if !foundFinish {
+		t.Fatal("expected a final tool_calls finish_reason chunk")
+	}
+}
+
+func TestStreamChatCompletion_ToolUseWithoutToolChunksKeepsRawFinishReason(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`event: message_start
+data: {"type":"message_start","message":{"id":"msg_123","type":"message","role":"assistant","model":"claude-sonnet-4-5-20250929","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":1}}
+
+event: message_stop
+data: {"type":"message_stop"}
+`))
+	}))
+	defer server.Close()
+
+	provider := NewWithHTTPClient("test-api-key", nil, llmclient.Hooks{})
+	provider.SetBaseURL(server.URL)
+
+	body, err := provider.StreamChatCompletion(context.Background(), &core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{Role: "user", Content: "call tool"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() { _ = body.Close() }()
+
+	raw, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %v", err)
+	}
+
+	events := parseTestSSEEvents(t, string(raw))
+	if len(events) == 0 {
+		t.Fatal("expected at least one SSE event")
+	}
+
+	foundTerminalChunk := false
+	for _, event := range events {
+		if event.Done {
+			continue
+		}
+
+		choices, ok := event.Payload["choices"].([]any)
+		if !ok || len(choices) == 0 {
+			continue
+		}
+		choice, ok := choices[0].(map[string]any)
+		if !ok {
+			continue
+		}
+
+		delta, _ := choice["delta"].(map[string]any)
+		if _, ok := delta["tool_calls"]; ok {
+			t.Fatalf("did not expect tool_calls in malformed stream fallback, got %#v", delta["tool_calls"])
+		}
+		if choice["finish_reason"] == nil {
+			continue
+		}
+		foundTerminalChunk = true
+		if choice["finish_reason"] != "tool_use" {
+			t.Fatalf("finish_reason = %#v, want %q", choice["finish_reason"], "tool_use")
+		}
+	}
+
+	if !foundTerminalChunk {
+		t.Fatal("expected a terminal chat completion chunk")
+	}
+}
+
+func TestStreamChatCompletion_MalformedEventReturnsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`event: message_start
+data: {"type":"message_start","message":{"id":"msg_123","type":"message","role":"assistant","model":"claude-sonnet-4-5-20250929","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"broken"}
+`))
+	}))
+	defer server.Close()
+
+	provider := NewWithHTTPClient("test-api-key", nil, llmclient.Hooks{})
+	provider.SetBaseURL(server.URL)
+
+	body, err := provider.StreamChatCompletion(context.Background(), &core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() { _ = body.Close() }()
+
+	raw, err := io.ReadAll(body)
+	if err == nil {
+		t.Fatal("expected malformed stream error")
+	}
+
+	var gatewayErr *core.GatewayError
+	if !errors.As(err, &gatewayErr) {
+		t.Fatalf("expected GatewayError, got %T", err)
+	}
+	if gatewayErr.StatusCode != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d", gatewayErr.StatusCode, http.StatusBadGateway)
+	}
+	if !strings.Contains(gatewayErr.Message, "failed to decode anthropic stream event") {
+		t.Fatalf("message = %q, want decode failure", gatewayErr.Message)
+	}
+	if !strings.Contains(string(raw), `"content":"Hello"`) {
+		t.Fatalf("expected stream to include prior converted chunk, got %q", string(raw))
+	}
+	if strings.Contains(string(raw), "[DONE]") {
+		t.Fatalf("did not expect [DONE] after malformed event, got %q", string(raw))
+	}
+}
+
+type testSSEEvent struct {
+	Name    string
+	Payload map[string]any
+	Done    bool
+}
+
+func parseTestSSEEvents(t *testing.T, raw string) []testSSEEvent {
+	t.Helper()
+
+	lines := strings.Split(raw, "\n")
+	events := make([]testSSEEvent, 0)
+	currentEventName := ""
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if after, ok := strings.CutPrefix(line, "event:"); ok {
+			currentEventName = strings.TrimSpace(after)
+			continue
+		}
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+
+		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if data == "[DONE]" {
+			events = append(events, testSSEEvent{Name: currentEventName, Done: true})
+			currentEventName = ""
+			continue
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal([]byte(data), &payload); err != nil {
+			t.Fatalf("failed to unmarshal SSE payload %q: %v", data, err)
+		}
+
+		events = append(events, testSSEEvent{
+			Name:    currentEventName,
+			Payload: payload,
+		})
+		currentEventName = ""
+	}
+
+	return events
+}
+
+func TestListModels(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify request path and method
+		if r.URL.Path != "/models" {
+			t.Errorf("Path = %q, want %q", r.URL.Path, "/models")
+		}
+		if r.Method != http.MethodGet {
+			t.Errorf("Method = %q, want %q", r.Method, http.MethodGet)
+		}
+
+		// Verify required headers
+		apiKey := r.Header.Get("x-api-key")
+		if apiKey == "" {
+			t.Error("x-api-key header should not be empty")
+		}
+		if r.Header.Get("anthropic-version") != anthropicAPIVersion {
+			t.Errorf("anthropic-version = %q, want %q", r.Header.Get("anthropic-version"), anthropicAPIVersion)
+		}
+
+		// Verify limit query param (passed in URL)
+		if limit := r.URL.Query().Get("limit"); limit != "1000" {
+			t.Errorf("limit query param = %q, want %q", limit, "1000")
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{
+			"data": [
+				{"id": "claude-sonnet-4-5-20250929", "type": "model", "created_at": "2025-09-29T00:00:00Z", "display_name": "Claude Sonnet 4.5"},
+				{"id": "claude-opus-4-5-20251101", "type": "model", "created_at": "2025-11-01T00:00:00Z", "display_name": "Claude Opus 4.5"},
+				{"id": "claude-3-haiku-20240307", "type": "model", "created_at": "2024-03-07T00:00:00Z", "display_name": "Claude 3 Haiku"}
+			],
+			"has_more": false
+		}`))
+	}))
+	defer server.Close()
+
+	provider := NewWithHTTPClient("test-api-key", nil, llmclient.Hooks{})
+	provider.SetBaseURL(server.URL)
+
+	resp, err := provider.ListModels(context.Background())
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if resp.Object != "list" {
+		t.Errorf("Object = %q, want %q", resp.Object, "list")
+	}
+
+	if len(resp.Data) != 3 {
+		t.Errorf("len(Data) = %d, want 3", len(resp.Data))
+	}
+
+	// Verify that all models have the correct fields
+	for _, model := range resp.Data {
+		if model.ID == "" {
+			t.Error("Model ID should not be empty")
+		}
+		if !strings.HasPrefix(model.ID, "claude-") {
+			t.Errorf("Model ID %q should start with 'claude-'", model.ID)
+		}
+		if model.Object != "model" {
+			t.Errorf("Model.Object = %q, want %q", model.Object, "model")
+		}
+		if model.OwnedBy != "anthropic" {
+			t.Errorf("Model.OwnedBy = %q, want %q", model.OwnedBy, "anthropic")
+		}
+		if model.Created == 0 {
+			t.Error("Model.Created should not be zero")
+		}
+	}
+
+	// Verify expected models are present
+	expectedModels := map[string]bool{
+		"claude-sonnet-4-5-20250929": false,
+		"claude-opus-4-5-20251101":   false,
+		"claude-3-haiku-20240307":    false,
+	}
+
+	for _, model := range resp.Data {
+		if _, ok := expectedModels[model.ID]; ok {
+			expectedModels[model.ID] = true
+		}
+	}
+
+	for model, found := range expectedModels {
+		if !found {
+			t.Errorf("Expected model %q not found in response", model)
+		}
+	}
+
+	// Verify created timestamps are parsed correctly
+	for _, model := range resp.Data {
+		if model.ID == "claude-sonnet-4-5-20250929" {
+			// 2025-09-29T00:00:00Z in Unix
+			expected := int64(1759104000)
+			if model.Created != expected {
+				t.Errorf("Created for claude-sonnet-4-5-20250929 = %d, want %d", model.Created, expected)
+			}
+		}
+	}
+}
+
+func TestListModels_APIError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"type": "error", "error": {"type": "authentication_error", "message": "Invalid API key"}}`))
+	}))
+	defer server.Close()
+
+	provider := NewWithHTTPClient("invalid-api-key", nil, llmclient.Hooks{})
+	provider.SetBaseURL(server.URL)
+
+	_, err := provider.ListModels(context.Background())
+	if err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestParseCreatedAt(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		wantTime int64
+	}{
+		{
+			name:     "valid RFC3339 timestamp",
+			input:    "2025-09-29T00:00:00Z",
+			wantTime: 1759104000,
+		},
+		{
+			name:     "valid RFC3339 timestamp with different time",
+			input:    "2024-03-07T12:30:00Z",
+			wantTime: 1709814600,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseCreatedAt(tt.input)
+			if got != tt.wantTime {
+				t.Errorf("parseCreatedAt(%q) = %d, want %d", tt.input, got, tt.wantTime)
+			}
+		})
+	}
+}
+
+func TestParseCreatedAt_InvalidFormat(t *testing.T) {
+	// For invalid format, it should return current time (non-zero)
+	got := parseCreatedAt("invalid-date")
+	if got == 0 {
+		t.Error("parseCreatedAt with invalid format should return non-zero (current time)")
+	}
+}
+
+func TestChatCompletionWithContext(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Simulate a slow response
+		<-r.Context().Done()
+		w.WriteHeader(http.StatusRequestTimeout)
+	}))
+	defer server.Close()
+
+	provider := NewWithHTTPClient("test-api-key", nil, llmclient.Hooks{})
+	provider.SetBaseURL(server.URL)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	req := &core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+
+	_, err := provider.ChatCompletion(ctx, req)
+	if err == nil {
+		t.Error("expected error when context is cancelled, got nil")
+	}
+}
+
+func TestConvertToAnthropicRequest(t *testing.T) {
+	t.Setenv(defaultMaxTokensEnvVar, "")
+
+	temp := 0.7
+	maxTokens := 1024
+
+	tests := []struct {
+		name    string
+		input   *core.ChatRequest
+		checkFn func(*testing.T, *anthropicRequest)
+	}{
+		{
+			name: "basic request",
+			input: &core.ChatRequest{
+				Model: "claude-sonnet-4-5-20250929",
+				Messages: []core.Message{
+					{Role: "user", Content: "Hello"},
+				},
+			},
+			checkFn: func(t *testing.T, req *anthropicRequest) {
+				if req.Model != "claude-sonnet-4-5-20250929" {
+					t.Errorf("Model = %q, want %q", req.Model, "claude-sonnet-4-5-20250929")
+				}
+				if len(req.Messages) != 1 {
+					t.Errorf("len(Messages) = %d, want 1", len(req.Messages))
+				}
+				if req.Messages[0].Content != "Hello" {
+					t.Errorf("Message content = %q, want %q", req.Messages[0].Content, "Hello")
+				}
+				if req.MaxTokens != 4096 {
+					t.Errorf("MaxTokens = %d, want 4096", req.MaxTokens)
+				}
+			},
+		},
+		{
+			name: "request with system message",
+			input: &core.ChatRequest{
+				Model: "claude-opus-4-5-20251101",
+				Messages: []core.Message{
+					{Role: "system", Content: "You are a helpful assistant"},
+					{Role: "user", Content: "Hello"},
+				},
+			},
+			checkFn: func(t *testing.T, req *anthropicRequest) {
+				if req.System != "You are a helpful assistant" {
+					t.Errorf("System = %q, want %q", req.System, "You are a helpful assistant")
+				}
+				if len(req.Messages) != 1 {
+					t.Errorf("len(Messages) = %d, want 1 (system should be extracted)", len(req.Messages))
+				}
+			},
+		},
+		{
+			name: "request with parameters",
+			input: &core.ChatRequest{
+				Model:       "claude-sonnet-4-5-20250929",
+				Temperature: &temp,
+				MaxTokens:   &maxTokens,
+				Messages: []core.Message{
+					{Role: "user", Content: "Hello"},
+				},
+			},
+			checkFn: func(t *testing.T, req *anthropicRequest) {
+				if req.Temperature == nil || *req.Temperature != 0.7 {
+					t.Errorf("Temperature = %v, want 0.7", req.Temperature)
+				}
+				if req.MaxTokens != 1024 {
+					t.Errorf("MaxTokens = %d, want 1024", req.MaxTokens)
+				}
+			},
+		},
+		{
+			name: "request with function tools",
+			input: &core.ChatRequest{
+				Model: "claude-sonnet-4-5-20250929",
+				Tools: []map[string]any{
+					{
+						"type": "function",
+						"function": map[string]any{
+							"name":        "lookup_weather",
+							"description": "Get the weather for a city.",
+							"parameters": map[string]any{
+								"type": "object",
+							},
+						},
+					},
+				},
+				ToolChoice: map[string]any{
+					"type": "function",
+					"function": map[string]any{
+						"name": "lookup_weather",
+					},
+				},
+				Messages: []core.Message{
+					{Role: "user", Content: "What's the weather?"},
+				},
+			},
+			checkFn: func(t *testing.T, req *anthropicRequest) {
+				if len(req.Tools) != 1 {
+					t.Fatalf("len(Tools) = %d, want 1", len(req.Tools))
+				}
+				if req.Tools[0].Name != "lookup_weather" {
+					t.Fatalf("tool name = %q, want lookup_weather", req.Tools[0].Name)
+				}
+				if req.ToolChoice == nil || req.ToolChoice.Type != "tool" || req.ToolChoice.Name != "lookup_weather" {
+					t.Fatalf("tool choice = %+v, want named tool choice", req.ToolChoice)
+				}
+			},
+		},
+		{
+			name: "request disables parallel tool use",
+			input: func() *core.ChatRequest {
+				parallelToolCalls := false
+				return &core.ChatRequest{
+					Model: "claude-sonnet-4-5-20250929",
+					Tools: []map[string]any{
+						{
+							"type": "function",
+							"function": map[string]any{
+								"name": "lookup_weather",
+							},
+						},
+					},
+					ParallelToolCalls: &parallelToolCalls,
+					Messages: []core.Message{
+						{Role: "user", Content: "What's the weather?"},
+					},
+				}
+			}(),
+			checkFn: func(t *testing.T, req *anthropicRequest) {
+				if req.ToolChoice == nil {
+					t.Fatal("ToolChoice should not be nil when parallel_tool_calls=false")
+				}
+				if req.ToolChoice.Type != "auto" {
+					t.Fatalf("tool choice type = %q, want auto", req.ToolChoice.Type)
+				}
+				if req.ToolChoice.DisableParallelToolUse == nil || !*req.ToolChoice.DisableParallelToolUse {
+					t.Fatalf("disable_parallel_tool_use = %#v, want true", req.ToolChoice.DisableParallelToolUse)
+				}
+			},
+		},
+		{
+			name: "request with tool result messages",
+			input: &core.ChatRequest{
+				Model: "claude-sonnet-4-5-20250929",
+				Messages: []core.Message{
+					{
+						Role: "assistant",
+						ToolCalls: []core.ToolCall{
+							{
+								ID:   "call_123",
+								Type: "function",
+								Function: core.FunctionCall{
+									Name:      "lookup_weather",
+									Arguments: `{"city":"Warsaw"}`,
+								},
+							},
+						},
+					},
+					{Role: "tool", ToolCallID: "call_123", Content: `{"temperature_c":21}`},
+				},
+			},
+			checkFn: func(t *testing.T, req *anthropicRequest) {
+				if len(req.Messages) != 2 {
+					t.Fatalf("len(Messages) = %d, want 2", len(req.Messages))
+				}
+
+				assistantBlocks, ok := req.Messages[0].Content.([]anthropicContentBlock)
+				if !ok || len(assistantBlocks) != 1 {
+					t.Fatalf("assistant content = %#v, want one tool_use block", req.Messages[0].Content)
+				}
+				if assistantBlocks[0].Type != "tool_use" || assistantBlocks[0].Name != "lookup_weather" || assistantBlocks[0].ID != "call_123" {
+					t.Fatalf("assistant tool block = %+v, want lookup_weather/call_123", assistantBlocks[0])
+				}
+
+				toolBlocks, ok := req.Messages[1].Content.([]anthropicContentBlock)
+				if !ok || len(toolBlocks) != 1 {
+					t.Fatalf("tool content = %#v, want one tool_result block", req.Messages[1].Content)
+				}
+				if req.Messages[1].Role != "user" {
+					t.Fatalf("tool role = %q, want user", req.Messages[1].Role)
+				}
+				if toolBlocks[0].Type != "tool_result" || toolBlocks[0].ToolUseID != "call_123" || toolBlocks[0].Content != `{"temperature_c":21}` {
+					t.Fatalf("tool result block = %+v, want call_123 payload", toolBlocks[0])
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := convertToAnthropicRequest(tt.input)
+			if err != nil {
+				t.Fatalf("convertToAnthropicRequest() error = %v", err)
+			}
+			tt.checkFn(t, result)
+		})
+	}
+}
+
+func TestConvertToAnthropicRequest_MapsStopSequences(t *testing.T) {
+	tests := []struct {
+		name string
+		stop string
+		want []string
+	}{
+		{name: "array", stop: `["FOO","BAR"]`, want: []string{"FOO", "BAR"}},
+		{name: "single string", stop: `"END"`, want: []string{"END"}},
+		{name: "empty entries dropped", stop: `["",""]`, want: nil},
+		{name: "null", stop: `null`, want: nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &core.ChatRequest{
+				Model:    "claude-sonnet-4-5-20250929",
+				Messages: []core.Message{{Role: "user", Content: "hi"}},
+				ExtraFields: core.UnknownJSONFieldsFromMap(map[string]json.RawMessage{
+					"stop": json.RawMessage(tt.stop),
+				}),
+			}
+			result, err := convertToAnthropicRequest(req)
+			if err != nil {
+				t.Fatalf("convertToAnthropicRequest() error = %v", err)
+			}
+			if !slices.Equal(result.StopSequences, tt.want) {
+				t.Errorf("StopSequences = %v, want %v", result.StopSequences, tt.want)
+			}
+		})
+	}
+}
+
+func TestConvertToAnthropicRequest_RejectsUnsupportedChatExtras(t *testing.T) {
+	tests := []struct {
+		name  string
+		field string
+		value json.RawMessage
+	}{
+		{
+			name:  "response format",
+			field: "response_format",
+			value: json.RawMessage(`{"type":"json_schema","json_schema":{"name":"answer"}}`),
+		},
+		{
+			name:  "verbosity",
+			field: "verbosity",
+			value: json.RawMessage(`"low"`),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := convertToAnthropicRequest(&core.ChatRequest{
+				Model:    "claude-sonnet-4-5-20250929",
+				Messages: []core.Message{{Role: "user", Content: "hi"}},
+				ExtraFields: core.UnknownJSONFieldsFromMap(map[string]json.RawMessage{
+					tt.field: tt.value,
+				}),
+			})
+			if err == nil {
+				t.Fatal("expected invalid request error, got nil")
+			}
+			var gatewayErr *core.GatewayError
+			if !errors.As(err, &gatewayErr) {
+				t.Fatalf("error = %T, want *core.GatewayError", err)
+			}
+			if gatewayErr.Type != core.ErrorTypeInvalidRequest {
+				t.Fatalf("error type = %q, want %q", gatewayErr.Type, core.ErrorTypeInvalidRequest)
+			}
+			if gatewayErr.HTTPStatusCode() != http.StatusBadRequest {
+				t.Fatalf("HTTPStatusCode() = %d, want %d", gatewayErr.HTTPStatusCode(), http.StatusBadRequest)
+			}
+			if !strings.Contains(gatewayErr.Message, tt.field) {
+				t.Fatalf("error message = %q, want mention %q", gatewayErr.Message, tt.field)
+			}
+		})
+	}
+}
+
+func TestConvertToAnthropicRequest_IgnoresNoopChatExtras(t *testing.T) {
+	tests := []struct {
+		name  string
+		field string
+		value json.RawMessage
+	}{
+		{
+			name:  "null response format",
+			field: "response_format",
+			value: json.RawMessage(`null`),
+		},
+		{
+			name:  "text response format",
+			field: "response_format",
+			value: json.RawMessage(`{"type":"text"}`),
+		},
+		{
+			name:  "null verbosity",
+			field: "verbosity",
+			value: json.RawMessage(`null`),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := convertToAnthropicRequest(&core.ChatRequest{
+				Model:    "claude-sonnet-4-5-20250929",
+				Messages: []core.Message{{Role: "user", Content: "hi"}},
+				ExtraFields: core.UnknownJSONFieldsFromMap(map[string]json.RawMessage{
+					tt.field: tt.value,
+				}),
+			})
+			if err != nil {
+				t.Fatalf("convertToAnthropicRequest() error = %v, want nil", err)
+			}
+		})
+	}
+}
+
+func TestConvertToAnthropicRequest_PreservesTopP(t *testing.T) {
+	topP := 0.2
+	result, err := convertToAnthropicRequest(&core.ChatRequest{
+		Model:    "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{{Role: "user", Content: "hi"}},
+		TopP:     &topP,
+	})
+	if err != nil {
+		t.Fatalf("convertToAnthropicRequest() error = %v", err)
+	}
+	if result.TopP == nil || *result.TopP != 0.2 {
+		t.Fatalf("TopP = %#v, want 0.2", result.TopP)
+	}
+}
+
+func TestConvertToAnthropicRequest_TopPFromExtraFields(t *testing.T) {
+	result, err := convertToAnthropicRequest(&core.ChatRequest{
+		Model:    "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{{Role: "user", Content: "hi"}},
+		ExtraFields: core.UnknownJSONFieldsFromMap(map[string]json.RawMessage{
+			"top_p": json.RawMessage("0.3"),
+		}),
+	})
+	if err != nil {
+		t.Fatalf("convertToAnthropicRequest() error = %v", err)
+	}
+	if result.TopP == nil || *result.TopP != 0.3 {
+		t.Fatalf("TopP = %#v, want 0.3", result.TopP)
+	}
+}
+
+func TestConvertToAnthropicRequest_TypedTopPWinsOverExtraFields(t *testing.T) {
+	topP := 0.2
+	result, err := convertToAnthropicRequest(&core.ChatRequest{
+		Model:    "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{{Role: "user", Content: "hi"}},
+		TopP:     &topP,
+		ExtraFields: core.UnknownJSONFieldsFromMap(map[string]json.RawMessage{
+			"top_p": json.RawMessage("0.9"),
+		}),
+	})
+	if err != nil {
+		t.Fatalf("convertToAnthropicRequest() error = %v", err)
+	}
+	if result.TopP == nil || *result.TopP != 0.2 {
+		t.Fatalf("TopP = %#v, want typed value 0.2", result.TopP)
+	}
+}
+
+func TestConvertToAnthropicRequest_ReasoningEffortFromExtraFields(t *testing.T) {
+	result, err := convertToAnthropicRequest(&core.ChatRequest{
+		Model:    "claude-fable-5",
+		Messages: []core.Message{{Role: "user", Content: "hi"}},
+		ExtraFields: core.UnknownJSONFieldsFromMap(map[string]json.RawMessage{
+			"reasoning_effort": json.RawMessage(`"high"`),
+		}),
+	})
+	if err != nil {
+		t.Fatalf("convertToAnthropicRequest() error = %v", err)
+	}
+	if result.Thinking == nil || result.Thinking.Type != "adaptive" {
+		t.Fatalf("Thinking = %#v, want adaptive", result.Thinking)
+	}
+	if result.OutputConfig == nil || result.OutputConfig.Effort != "high" {
+		t.Fatalf("OutputConfig = %#v, want effort high", result.OutputConfig)
+	}
+}
+
+func TestConvertToAnthropicRequest_ReasoningObjectWinsOverReasoningEffort(t *testing.T) {
+	result, err := convertToAnthropicRequest(&core.ChatRequest{
+		Model:     "claude-fable-5",
+		Messages:  []core.Message{{Role: "user", Content: "hi"}},
+		Reasoning: &core.Reasoning{Effort: "low"},
+		ExtraFields: core.UnknownJSONFieldsFromMap(map[string]json.RawMessage{
+			"reasoning_effort": json.RawMessage(`"max"`),
+		}),
+	})
+	if err != nil {
+		t.Fatalf("convertToAnthropicRequest() error = %v", err)
+	}
+	if result.OutputConfig == nil || result.OutputConfig.Effort != "low" {
+		t.Fatalf("OutputConfig = %#v, want object-form effort low", result.OutputConfig)
+	}
+}
+
+func TestConvertToAnthropicRequest_EmptyReasoningObjectFallsBackToReasoningEffort(t *testing.T) {
+	result, err := convertToAnthropicRequest(&core.ChatRequest{
+		Model:     "claude-fable-5",
+		Messages:  []core.Message{{Role: "user", Content: "hi"}},
+		Reasoning: &core.Reasoning{},
+		ExtraFields: core.UnknownJSONFieldsFromMap(map[string]json.RawMessage{
+			"reasoning_effort": json.RawMessage(`"high"`),
+		}),
+	})
+	if err != nil {
+		t.Fatalf("convertToAnthropicRequest() error = %v", err)
+	}
+	if result.OutputConfig == nil || result.OutputConfig.Effort != "high" {
+		t.Fatalf("OutputConfig = %#v, want string-form effort high", result.OutputConfig)
+	}
+}
+
+func TestResolveAnthropicReasoningEffort_NormalizesSpelling(t *testing.T) {
+	tests := []struct {
+		name string
+		req  *core.ChatRequest
+		want string
+	}{
+		{
+			name: "object form uppercase with whitespace",
+			req:  &core.ChatRequest{Reasoning: &core.Reasoning{Effort: " HIGH "}},
+			want: "high",
+		},
+		{
+			name: "string form mixed case",
+			req: &core.ChatRequest{ExtraFields: core.UnknownJSONFieldsFromMap(map[string]json.RawMessage{
+				"reasoning_effort": json.RawMessage(`" Max "`),
+			})},
+			want: "max",
+		},
+		{
+			name: "whitespace-only object effort falls back to string form",
+			req: &core.ChatRequest{
+				Reasoning: &core.Reasoning{Effort: "  "},
+				ExtraFields: core.UnknownJSONFieldsFromMap(map[string]json.RawMessage{
+					"reasoning_effort": json.RawMessage(`"medium"`),
+				}),
+			},
+			want: "medium",
+		},
+		{
+			name: "whitespace-only string form resolves to empty",
+			req: &core.ChatRequest{ExtraFields: core.UnknownJSONFieldsFromMap(map[string]json.RawMessage{
+				"reasoning_effort": json.RawMessage(`"  "`),
+			})},
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := resolveAnthropicReasoningEffort(tt.req); got != tt.want {
+				t.Fatalf("resolveAnthropicReasoningEffort() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestConvertToAnthropicRequest_InvalidToolArguments(t *testing.T) {
+	_, err := convertToAnthropicRequest(&core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{
+				Role: "assistant",
+				ToolCalls: []core.ToolCall{
+					{
+						ID:   "call_123",
+						Type: "function",
+						Function: core.FunctionCall{
+							Name:      "lookup_weather",
+							Arguments: `{"city":"Warsaw"`,
+						},
+					},
+				},
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected invalid request error, got nil")
+	}
+	var gatewayErr *core.GatewayError
+	if !errors.As(err, &gatewayErr) {
+		t.Fatalf("error = %T, want *core.GatewayError", err)
+	}
+	if gatewayErr.Type != core.ErrorTypeInvalidRequest {
+		t.Fatalf("error type = %q, want invalid_request_error", gatewayErr.Type)
+	}
+	if gatewayErr.HTTPStatusCode() != http.StatusBadRequest {
+		t.Fatalf("HTTPStatusCode() = %d, want %d", gatewayErr.HTTPStatusCode(), http.StatusBadRequest)
+	}
+}
+
+func TestConvertToAnthropicRequest_RejectsTrailingToolArgumentContent(t *testing.T) {
+	_, err := convertToAnthropicRequest(&core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{
+				Role: "assistant",
+				ToolCalls: []core.ToolCall{
+					{
+						ID:   "call_123",
+						Type: "function",
+						Function: core.FunctionCall{
+							Name:      "lookup_weather",
+							Arguments: `{"city":"Warsaw"} garbage`,
+						},
+					},
+				},
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected invalid request error, got nil")
+	}
+	var gatewayErr *core.GatewayError
+	if !errors.As(err, &gatewayErr) {
+		t.Fatalf("error = %T, want *core.GatewayError", err)
+	}
+	if gatewayErr.Type != core.ErrorTypeInvalidRequest {
+		t.Fatalf("error type = %q, want invalid_request_error", gatewayErr.Type)
+	}
+	if gatewayErr.HTTPStatusCode() != http.StatusBadRequest {
+		t.Fatalf("HTTPStatusCode() = %d, want %d", gatewayErr.HTTPStatusCode(), http.StatusBadRequest)
+	}
+	if !strings.Contains(gatewayErr.Message, "invalid character") && !strings.Contains(gatewayErr.Message, "exactly one JSON object") {
+		t.Fatalf("error message = %q, want trailing content validation", gatewayErr.Message)
+	}
+}
+
+func TestConvertToAnthropicRequest_InvalidToolDefinition(t *testing.T) {
+	_, err := convertToAnthropicRequest(&core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{Role: "user", Content: "Hello"},
+		},
+		Tools: []map[string]any{
+			{
+				"type": "function",
+				"function": map[string]any{
+					"name":       "lookup_weather",
+					"parameters": []any{"invalid"},
+				},
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected invalid request error, got nil")
+	}
+	var gatewayErr *core.GatewayError
+	if !errors.As(err, &gatewayErr) {
+		t.Fatalf("error = %T, want *core.GatewayError", err)
+	}
+	if gatewayErr.Type != core.ErrorTypeInvalidRequest {
+		t.Fatalf("error type = %q, want invalid_request_error", gatewayErr.Type)
+	}
+	if gatewayErr.HTTPStatusCode() != http.StatusBadRequest {
+		t.Fatalf("HTTPStatusCode() = %d, want %d", gatewayErr.HTTPStatusCode(), http.StatusBadRequest)
+	}
+}
+
+func TestConvertOpenAIToolsToAnthropic(t *testing.T) {
+	tests := []struct {
+		name      string
+		tools     []map[string]any
+		wantNil   bool
+		wantLen   int
+		checkFn   func(t *testing.T, tools []anthropicTool)
+		wantError bool
+	}{
+		{
+			name:    "nil tools returns nil",
+			tools:   nil,
+			wantNil: true,
+		},
+		{
+			name:    "empty tools returns nil",
+			tools:   []map[string]any{},
+			wantNil: true,
+		},
+		{
+			name: "valid function tool",
+			tools: []map[string]any{
+				{
+					"type": "function",
+					"function": map[string]any{
+						"name":        "lookup_weather",
+						"description": "Get weather for a city",
+						"parameters": map[string]any{
+							"type": "object",
+							"properties": map[string]any{
+								"city": map[string]any{"type": "string"},
+							},
+						},
+					},
+				},
+			},
+			wantLen: 1,
+			checkFn: func(t *testing.T, tools []anthropicTool) {
+				if tools[0].Name != "lookup_weather" {
+					t.Fatalf("Name = %q, want lookup_weather", tools[0].Name)
+				}
+				if tools[0].Description != "Get weather for a city" {
+					t.Fatalf("Description = %q, want tool description", tools[0].Description)
+				}
+				if schemaType, _ := tools[0].InputSchema["type"].(string); schemaType != "object" {
+					t.Fatalf("InputSchema.type = %q, want object", schemaType)
+				}
+			},
+		},
+		{
+			name: "missing parameters uses default object schema",
+			tools: []map[string]any{
+				{
+					"type": "function",
+					"function": map[string]any{
+						"name": "lookup_weather",
+					},
+				},
+			},
+			wantLen: 1,
+			checkFn: func(t *testing.T, tools []anthropicTool) {
+				if schemaType, _ := tools[0].InputSchema["type"].(string); schemaType != "object" {
+					t.Fatalf("InputSchema.type = %q, want object", schemaType)
+				}
+				if _, ok := tools[0].InputSchema["properties"].(map[string]any); !ok {
+					t.Fatalf("InputSchema.properties = %#v, want object map", tools[0].InputSchema["properties"])
+				}
+			},
+		},
+		{
+			name: "unsupported tool type returns error",
+			tools: []map[string]any{
+				{
+					"type": "web_search",
+				},
+			},
+			wantError: true,
+		},
+		{
+			name: "missing function object returns error",
+			tools: []map[string]any{
+				{
+					"type": "function",
+				},
+			},
+			wantError: true,
+		},
+		{
+			name: "empty function name returns error",
+			tools: []map[string]any{
+				{
+					"type": "function",
+					"function": map[string]any{
+						"name": "   ",
+					},
+				},
+			},
+			wantError: true,
+		},
+		{
+			name: "non object parameters returns error",
+			tools: []map[string]any{
+				{
+					"type": "function",
+					"function": map[string]any{
+						"name":       "lookup_weather",
+						"parameters": []any{"invalid"},
+					},
+				},
+			},
+			wantError: true,
+		},
+		{
+			name: "non object schema type returns error",
+			tools: []map[string]any{
+				{
+					"type": "function",
+					"function": map[string]any{
+						"name": "lookup_weather",
+						"parameters": map[string]any{
+							"type": "array",
+						},
+					},
+				},
+			},
+			wantError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := convertOpenAIToolsToAnthropic(tt.tools)
+			if tt.wantError {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				var gatewayErr *core.GatewayError
+				if !errors.As(err, &gatewayErr) {
+					t.Fatalf("error = %T, want *core.GatewayError", err)
+				}
+				if gatewayErr.Type != core.ErrorTypeInvalidRequest {
+					t.Fatalf("error type = %q, want invalid_request_error", gatewayErr.Type)
+				}
+				if gatewayErr.HTTPStatusCode() != http.StatusBadRequest {
+					t.Fatalf("HTTPStatusCode() = %d, want %d", gatewayErr.HTTPStatusCode(), http.StatusBadRequest)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("convertOpenAIToolsToAnthropic() error = %v, want nil", err)
+			}
+			if tt.wantNil {
+				if result != nil {
+					t.Fatalf("result = %#v, want nil", result)
+				}
+				return
+			}
+			if len(result) != tt.wantLen {
+				t.Fatalf("len(result) = %d, want %d", len(result), tt.wantLen)
+			}
+			if tt.checkFn != nil {
+				tt.checkFn(t, result)
+			}
+		})
+	}
+}
+
+func TestConvertToAnthropicRequest_InvalidToolChoice(t *testing.T) {
+	_, err := convertToAnthropicRequest(&core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{Role: "user", Content: "Hello"},
+		},
+		Tools: []map[string]any{
+			{
+				"type": "function",
+				"function": map[string]any{
+					"name": "lookup_weather",
+				},
+			},
+		},
+		ToolChoice: map[string]any{
+			"type":     "function",
+			"function": map[string]any{},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected invalid request error, got nil")
+	}
+	var gatewayErr *core.GatewayError
+	if !errors.As(err, &gatewayErr) {
+		t.Fatalf("error = %T, want *core.GatewayError", err)
+	}
+	if gatewayErr.Type != core.ErrorTypeInvalidRequest {
+		t.Fatalf("error type = %q, want invalid_request_error", gatewayErr.Type)
+	}
+	if gatewayErr.HTTPStatusCode() != http.StatusBadRequest {
+		t.Fatalf("HTTPStatusCode() = %d, want %d", gatewayErr.HTTPStatusCode(), http.StatusBadRequest)
+	}
+}
+
+func TestConvertToAnthropicRequest_ToolMessageRequiresToolCallID(t *testing.T) {
+	_, err := convertToAnthropicRequest(&core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{Role: "tool", Content: `{"temperature_c":21}`},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected invalid request error, got nil")
+	}
+	var gatewayErr *core.GatewayError
+	if !errors.As(err, &gatewayErr) {
+		t.Fatalf("error = %T, want *core.GatewayError", err)
+	}
+	if gatewayErr.Type != core.ErrorTypeInvalidRequest {
+		t.Fatalf("error type = %q, want invalid_request_error", gatewayErr.Type)
+	}
+	if gatewayErr.HTTPStatusCode() != http.StatusBadRequest {
+		t.Fatalf("HTTPStatusCode() = %d, want %d", gatewayErr.HTTPStatusCode(), http.StatusBadRequest)
+	}
+}
+
+func TestConvertToAnthropicRequest_ToolMessageWithImage(t *testing.T) {
+	req, err := convertToAnthropicRequest(&core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{Role: "tool", ToolCallID: "call_123", Content: []core.ContentPart{
+				{Type: "text", Text: "captured"},
+				{Type: "image_url", ImageURL: &core.ImageURLContent{URL: "data:image/png;base64,aGVsbG8="}},
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("convertToAnthropicRequest: %v", err)
+	}
+	if len(req.Messages) != 1 || req.Messages[0].Role != "user" {
+		t.Fatalf("messages = %+v, want one user message", req.Messages)
+	}
+	toolBlocks, ok := req.Messages[0].Content.([]anthropicContentBlock)
+	if !ok || len(toolBlocks) != 1 || toolBlocks[0].Type != "tool_result" || toolBlocks[0].ToolUseID != "call_123" {
+		t.Fatalf("content = %#v, want one tool_result block", req.Messages[0].Content)
+	}
+	inner, ok := toolBlocks[0].Content.([]anthropicContentBlock)
+	if !ok || len(inner) != 2 {
+		t.Fatalf("tool_result content = %#v, want text and image blocks", toolBlocks[0].Content)
+	}
+	if inner[0].Type != "text" || inner[0].Text != "captured" {
+		t.Errorf("inner[0] = %+v, want text block", inner[0])
+	}
+	if inner[1].Type != "image" || inner[1].Source == nil || inner[1].Source.Type != "base64" || inner[1].Source.MediaType != "image/png" || inner[1].Source.Data != "aGVsbG8=" {
+		t.Errorf("inner[1] = %+v, want base64 image block", inner[1])
+	}
+}
+
+func TestConvertToAnthropicRequest_FilePartsBecomeDocuments(t *testing.T) {
+	tests := []struct {
+		name string
+		file core.FileContent
+		want anthropicContentSource
+	}{
+		{name: "pdf", file: core.FileContent{FileData: "data:application/pdf;base64,JVBERi0=", Filename: "a.pdf"}, want: anthropicContentSource{Type: "base64", MediaType: "application/pdf", Data: "JVBERi0="}},
+		{name: "text", file: core.FileContent{FileData: "data:text/plain;base64,aGVsbG8="}, want: anthropicContentSource{Type: "text", MediaType: "text/plain", Data: "hello"}},
+		{name: "url", file: core.FileContent{FileURL: "https://example.com/a.pdf"}, want: anthropicContentSource{Type: "url", URL: "https://example.com/a.pdf"}},
+		{name: "url in file_data", file: core.FileContent{FileData: "https://example.com/a.pdf"}, want: anthropicContentSource{Type: "url", URL: "https://example.com/a.pdf"}},
+		{name: "file id", file: core.FileContent{FileID: "file_123"}, want: anthropicContentSource{Type: "file", FileID: "file_123"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			file := tc.file
+			req, err := convertToAnthropicRequest(&core.ChatRequest{
+				Model: "claude-sonnet-4-5-20250929",
+				Messages: []core.Message{{Role: "user", Content: []core.ContentPart{
+					{Type: "text", Text: "read"},
+					{Type: "file", File: &file},
+				}}},
+			})
+			if err != nil {
+				t.Fatalf("convertToAnthropicRequest: %v", err)
+			}
+			blocks, ok := req.Messages[0].Content.([]anthropicContentBlock)
+			if !ok || len(blocks) != 2 || blocks[1].Type != "document" || blocks[1].Source == nil {
+				t.Fatalf("content = %#v, want text + document blocks", req.Messages[0].Content)
+			}
+			if *blocks[1].Source != tc.want {
+				t.Errorf("source = %+v, want %+v", *blocks[1].Source, tc.want)
+			}
+			if blocks[1].Title != tc.file.Filename {
+				t.Errorf("title = %q, want %q", blocks[1].Title, tc.file.Filename)
+			}
+		})
+	}
+
+	_, err := convertToAnthropicRequest(&core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{{Role: "user", Content: []core.ContentPart{
+			{Type: "file", File: &core.FileContent{FileData: "data:image/png;base64,aGVsbG8="}},
+		}}},
+	})
+	if err == nil {
+		t.Error("expected error for unsupported document media type")
+	}
+
+	for _, file := range []core.FileContent{
+		{FileURL: "ftp://example.com/a.pdf"},
+		{FileURL: "not a url"},
+		{FileData: "ftp://example.com/a.pdf"},
+		{FileData: "/relative/a.pdf"},
+	} {
+		_, err := convertToAnthropicRequest(&core.ChatRequest{
+			Model:    "claude-sonnet-4-5-20250929",
+			Messages: []core.Message{{Role: "user", Content: []core.ContentPart{{Type: "file", File: &file}}}},
+		})
+		if gatewayErr, ok := err.(*core.GatewayError); !ok || gatewayErr.Type != core.ErrorTypeInvalidRequest {
+			t.Errorf("file %+v: error = %v, want invalid_request_error", file, err)
+		}
+	}
+}
+
+func TestConvertToAnthropicRequest_ToolMessageIsError(t *testing.T) {
+	req, err := convertToAnthropicRequest(&core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{Role: "tool", ToolCallID: "call_1", Content: "boom", ExtraFields: core.UnknownJSONFieldsFromMap(map[string]json.RawMessage{
+				core.ExtraContentField: json.RawMessage(`{"anthropic":{"is_error":true}}`),
+			})},
+			{Role: "tool", ToolCallID: "call_2", Content: "fine", ExtraFields: core.UnknownJSONFieldsFromMap(map[string]json.RawMessage{
+				core.ExtraContentField: json.RawMessage(`{"google":{"is_error":true}}`),
+			})},
+		},
+	})
+	if err != nil {
+		t.Fatalf("convertToAnthropicRequest: %v", err)
+	}
+	first := req.Messages[0].Content.([]anthropicContentBlock)[0]
+	second := req.Messages[1].Content.([]anthropicContentBlock)[0]
+	if !first.IsError || first.Content != "boom" {
+		t.Errorf("first tool_result = %+v, want is_error", first)
+	}
+	if second.IsError {
+		t.Errorf("second tool_result = %+v, want no is_error", second)
+	}
+}
+
+func TestConvertToAnthropicRequest_ReplaysThinkingBlocks(t *testing.T) {
+	req, err := convertToAnthropicRequest(&core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{Role: "user", Content: "hi"},
+			{
+				Role:      "assistant",
+				Content:   "calling",
+				ToolCalls: []core.ToolCall{{ID: "tu_1", Type: "function", Function: core.FunctionCall{Name: "lookup", Arguments: "{}"}}},
+				ExtraFields: core.UnknownJSONFieldsFromMap(map[string]json.RawMessage{
+					core.ExtraContentField: json.RawMessage(`{"anthropic":{"thinking_blocks":[{"type":"thinking","thinking":"","signature":"sig1"},{"type":"redacted_thinking","data":"opaque"}]}}`),
+				}),
+			},
+			{Role: "tool", ToolCallID: "tu_1", Content: "result"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("convertToAnthropicRequest: %v", err)
+	}
+	blocks, ok := req.Messages[1].Content.([]anthropicContentBlock)
+	if !ok || len(blocks) != 4 {
+		t.Fatalf("assistant content = %#v, want thinking, redacted_thinking, text, tool_use", req.Messages[1].Content)
+	}
+	if blocks[0].Type != "thinking" || blocks[0].Thinking == nil || *blocks[0].Thinking != "" || blocks[0].Signature != "sig1" {
+		t.Errorf("blocks[0] = %+v", blocks[0])
+	}
+	if blocks[1].Type != "redacted_thinking" || blocks[1].Data != "opaque" {
+		t.Errorf("blocks[1] = %+v", blocks[1])
+	}
+	if blocks[2].Type != "text" || blocks[3].Type != "tool_use" {
+		t.Errorf("blocks[2:] = %+v", blocks[2:])
+	}
+	encoded, err := json.Marshal(blocks[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(encoded) != `{"type":"thinking","thinking":"","signature":"sig1"}` {
+		t.Errorf("encoded thinking block = %s, want empty thinking text kept", encoded)
+	}
+}
+
+// Reasoning another provider produced reaches Anthropic as a thinking block
+// with no signature of Anthropic's own. Anthropic rejects the whole request for
+// it ("signature: Field required", or "Invalid `signature`" for anything the
+// gateway could mint), so the block is dropped and the rest of the turn stands.
+func TestConvertToAnthropicRequest_DropsUnsignedThinkingBlocks(t *testing.T) {
+	tests := []struct {
+		name   string
+		blocks string
+		want   []string
+	}{
+		{
+			name:   "missing signature",
+			blocks: `[{"type":"thinking","thinking":"foreign"}]`,
+			want:   []string{"text"},
+		},
+		{
+			name:   "empty signature",
+			blocks: `[{"type":"thinking","thinking":"foreign","signature":""}]`,
+			want:   []string{"text"},
+		},
+		{
+			name:   "signed blocks are kept",
+			blocks: `[{"type":"thinking","thinking":"own","signature":"sig1"}]`,
+			want:   []string{"thinking", "text"},
+		},
+		{
+			name:   "redacted blocks carry data rather than a signature",
+			blocks: `[{"type":"redacted_thinking","data":"opaque"}]`,
+			want:   []string{"redacted_thinking", "text"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := convertToAnthropicRequest(&core.ChatRequest{
+				Model: "claude-sonnet-4-5-20250929",
+				Messages: []core.Message{
+					{Role: "user", Content: "hi"},
+					{
+						Role:    "assistant",
+						Content: "391",
+						ExtraFields: core.UnknownJSONFieldsFromMap(map[string]json.RawMessage{
+							core.ExtraContentField: json.RawMessage(`{"anthropic":{"thinking_blocks":` + tt.blocks + `}}`),
+						}),
+					},
+					{Role: "user", Content: "and now?"},
+				},
+			})
+			if err != nil {
+				t.Fatalf("convertToAnthropicRequest: %v", err)
+			}
+			var got []string
+			switch content := req.Messages[1].Content.(type) {
+			case []anthropicContentBlock:
+				for _, block := range content {
+					got = append(got, block.Type)
+				}
+			case string:
+				got = []string{"text"}
+			}
+			if strings.Join(got, ",") != strings.Join(tt.want, ",") {
+				t.Errorf("assistant blocks = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestConvertToAnthropicRequest_RejectsMalformedAnthropicExtraContent(t *testing.T) {
+	_, err := convertToAnthropicRequest(&core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{Role: "user", Content: "hi"},
+			{Role: "assistant", Content: "x", ExtraFields: core.UnknownJSONFieldsFromMap(map[string]json.RawMessage{
+				core.ExtraContentField: json.RawMessage(`{"anthropic":{"thinking_blocks":"nope"}}`),
+			})},
+		},
+	})
+	if gatewayErr, ok := err.(*core.GatewayError); !ok || gatewayErr.Type != core.ErrorTypeInvalidRequest {
+		t.Fatalf("error = %v, want invalid_request_error", err)
+	}
+}
+
+func TestConvertToAnthropicRequest_ToolChoiceRequiresTools(t *testing.T) {
+	_, err := convertToAnthropicRequest(&core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{Role: "user", Content: "Hello"},
+		},
+		ToolChoice: "auto",
+	})
+	if err == nil {
+		t.Fatal("expected invalid request error, got nil")
+	}
+	var gatewayErr *core.GatewayError
+	if !errors.As(err, &gatewayErr) {
+		t.Fatalf("error = %T, want *core.GatewayError", err)
+	}
+	if gatewayErr.Type != core.ErrorTypeInvalidRequest {
+		t.Fatalf("error type = %q, want invalid_request_error", gatewayErr.Type)
+	}
+	if gatewayErr.HTTPStatusCode() != http.StatusBadRequest {
+		t.Fatalf("HTTPStatusCode() = %d, want %d", gatewayErr.HTTPStatusCode(), http.StatusBadRequest)
+	}
+}
+
+func TestConvertToAnthropicRequest_ToolArgumentsMustBeJSONObject(t *testing.T) {
+	_, err := convertToAnthropicRequest(&core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{
+				Role: "assistant",
+				ToolCalls: []core.ToolCall{
+					{
+						ID:   "call_123",
+						Type: "function",
+						Function: core.FunctionCall{
+							Name:      "lookup_weather",
+							Arguments: `["Warsaw"]`,
+						},
+					},
+				},
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected invalid request error, got nil")
+	}
+	if !strings.Contains(err.Error(), "tool arguments must be a JSON object") {
+		t.Fatalf("error = %v, want JSON object validation", err)
+	}
+}
+
+func TestConvertToAnthropicRequest_NormalizesToolCallIDAndName(t *testing.T) {
+	result, err := convertToAnthropicRequest(&core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{
+				Role: "assistant",
+				ToolCalls: []core.ToolCall{
+					{
+						ID:   "  ",
+						Type: "function",
+						Function: core.FunctionCall{
+							Name:      "  lookup_weather  ",
+							Arguments: `{"city":"Warsaw"}`,
+						},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("convertToAnthropicRequest() error = %v, want nil", err)
+	}
+
+	blocks, ok := result.Messages[0].Content.([]anthropicContentBlock)
+	if !ok || len(blocks) != 1 {
+		t.Fatalf("content = %#v, want one tool_use block", result.Messages[0].Content)
+	}
+	if blocks[0].Name != "lookup_weather" {
+		t.Fatalf("tool name = %q, want lookup_weather", blocks[0].Name)
+	}
+	if blocks[0].ID == "" {
+		t.Fatal("tool id should not be empty")
+	}
+}
+
+func TestConvertToAnthropicRequest_NormalizesToolResultID(t *testing.T) {
+	result, err := convertToAnthropicRequest(&core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{Role: "tool", ToolCallID: "  call_123  ", Content: `{"temperature_c":21}`},
+		},
+	})
+	if err != nil {
+		t.Fatalf("convertToAnthropicRequest() error = %v, want nil", err)
+	}
+
+	blocks, ok := result.Messages[0].Content.([]anthropicContentBlock)
+	if !ok || len(blocks) != 1 {
+		t.Fatalf("content = %#v, want one tool_result block", result.Messages[0].Content)
+	}
+	if blocks[0].ToolUseID != "call_123" {
+		t.Fatalf("ToolUseID = %q, want call_123", blocks[0].ToolUseID)
+	}
+}
+
+func TestParseToolCallArguments_UsesJSONNumber(t *testing.T) {
+	parsed, err := parseToolCallArguments(`{"value":9007199254740993}`)
+	if err != nil {
+		t.Fatalf("parseToolCallArguments() error = %v, want nil", err)
+	}
+
+	obj, ok := parsed.(map[string]any)
+	if !ok {
+		t.Fatalf("parsed = %T, want map[string]any", parsed)
+	}
+	num, ok := obj["value"].(json.Number)
+	if !ok {
+		t.Fatalf("value = %T, want json.Number", obj["value"])
+	}
+	if string(num) != "9007199254740993" {
+		t.Fatalf("value = %q, want exact integer string", string(num))
+	}
+}
+
+func TestConvertFromAnthropicResponse(t *testing.T) {
+	resp := &anthropicResponse{
+		ID:    "msg_123",
+		Type:  "message",
+		Role:  "assistant",
+		Model: "claude-sonnet-4-5-20250929",
+		Content: []anthropicContent{
+			{Type: "text", Text: "Hello! How can I help you today?"},
+		},
+		StopReason: "end_turn",
+		Usage: anthropicUsage{
+			InputTokens:  10,
+			OutputTokens: 20,
+		},
+	}
+
+	result := convertFromAnthropicResponse(resp)
+
+	if result.ID != "msg_123" {
+		t.Errorf("ID = %q, want %q", result.ID, "msg_123")
+	}
+	if result.Object != "chat.completion" {
+		t.Errorf("Object = %q, want %q", result.Object, "chat.completion")
+	}
+	if result.Model != "claude-sonnet-4-5-20250929" {
+		t.Errorf("Model = %q, want %q", result.Model, "claude-sonnet-4-5-20250929")
+	}
+	if len(result.Choices) != 1 {
+		t.Fatalf("len(Choices) = %d, want 1", len(result.Choices))
+	}
+	if result.Choices[0].Message.Content != "Hello! How can I help you today?" {
+		t.Errorf("Message content = %q, want %q", result.Choices[0].Message.Content, "Hello! How can I help you today?")
+	}
+	if result.Choices[0].Message.Role != "assistant" {
+		t.Errorf("Message role = %q, want %q", result.Choices[0].Message.Role, "assistant")
+	}
+	if result.Choices[0].FinishReason != "stop" {
+		t.Errorf("FinishReason = %q, want %q", result.Choices[0].FinishReason, "stop")
+	}
+	if result.Usage.PromptTokens != 10 {
+		t.Errorf("PromptTokens = %d, want 10", result.Usage.PromptTokens)
+	}
+	if result.Usage.CompletionTokens != 20 {
+		t.Errorf("CompletionTokens = %d, want 20", result.Usage.CompletionTokens)
+	}
+	if result.Usage.TotalTokens != 30 {
+		t.Errorf("TotalTokens = %d, want 30", result.Usage.TotalTokens)
+	}
+}
+
+func TestConvertFromAnthropicResponse_WithToolUseStopReason(t *testing.T) {
+	resp := &anthropicResponse{
+		ID:    "msg_tool_use",
+		Type:  "message",
+		Role:  "assistant",
+		Model: "claude-sonnet-4-5-20250929",
+		Content: []anthropicContent{
+			{
+				Type:  "tool_use",
+				ID:    "toolu_123",
+				Name:  "lookup_weather",
+				Input: json.RawMessage(`{"city":"Warsaw"}`),
+			},
+		},
+		StopReason: "tool_use",
+		Usage: anthropicUsage{
+			InputTokens:  12,
+			OutputTokens: 7,
+		},
+	}
+
+	result := convertFromAnthropicResponse(resp)
+
+	if len(result.Choices) != 1 {
+		t.Fatalf("len(Choices) = %d, want 1", len(result.Choices))
+	}
+	if result.Choices[0].FinishReason != "tool_calls" {
+		t.Fatalf("FinishReason = %q, want tool_calls", result.Choices[0].FinishReason)
+	}
+	if len(result.Choices[0].Message.ToolCalls) != 1 {
+		t.Fatalf("len(ToolCalls) = %d, want 1", len(result.Choices[0].Message.ToolCalls))
+	}
+	if result.Choices[0].Message.ToolCalls[0].ID != "toolu_123" {
+		t.Fatalf("ToolCalls[0].ID = %q, want toolu_123", result.Choices[0].Message.ToolCalls[0].ID)
+	}
+	if result.Choices[0].Message.ToolCalls[0].Function.Name != "lookup_weather" {
+		t.Fatalf("ToolCalls[0].Function.Name = %q, want lookup_weather", result.Choices[0].Message.ToolCalls[0].Function.Name)
+	}
+	if result.Choices[0].Message.ToolCalls[0].Function.Arguments != `{"city":"Warsaw"}` {
+		t.Fatalf("ToolCalls[0].Function.Arguments = %q, want canonical JSON", result.Choices[0].Message.ToolCalls[0].Function.Arguments)
+	}
+}
+
+func TestNormalizeAnthropicStopReason(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "tool use", in: "tool_use", want: "tool_calls"},
+		{name: "end turn", in: "end_turn", want: "stop"},
+		{name: "stop sequence", in: "stop_sequence", want: "stop"},
+		{name: "max tokens", in: "max_tokens", want: "length"},
+		{name: "context window exceeded", in: "model_context_window_exceeded", want: "length"},
+		{name: "unknown", in: "pause_turn", want: "pause_turn"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := normalizeAnthropicStopReason(tt.in); got != tt.want {
+				t.Fatalf("normalizeAnthropicStopReason(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestConvertFromAnthropicResponse_WithCacheFields(t *testing.T) {
+	resp := &anthropicResponse{
+		ID:    "msg_cache",
+		Type:  "message",
+		Role:  "assistant",
+		Model: "claude-sonnet-4-5-20250929",
+		Content: []anthropicContent{
+			{Type: "text", Text: "Hello!"},
+		},
+		StopReason: "end_turn",
+		Usage: anthropicUsage{
+			InputTokens:              100,
+			OutputTokens:             20,
+			CacheCreationInputTokens: 50,
+			CacheReadInputTokens:     30,
+		},
+	}
+
+	result := convertFromAnthropicResponse(resp)
+
+	if result.Usage.RawUsage == nil {
+		t.Fatal("expected RawUsage to be set")
+	}
+	if result.Usage.RawUsage["cache_creation_input_tokens"] != 50 {
+		t.Errorf("RawUsage[cache_creation_input_tokens] = %v, want 50", result.Usage.RawUsage["cache_creation_input_tokens"])
+	}
+	if result.Usage.RawUsage["cache_read_input_tokens"] != 30 {
+		t.Errorf("RawUsage[cache_read_input_tokens] = %v, want 30", result.Usage.RawUsage["cache_read_input_tokens"])
+	}
+}
+
+func TestConvertFromAnthropicResponse_WithThinkingTokens(t *testing.T) {
+	tests := []struct {
+		name           string
+		thinkingTokens int
+		wantPresent    bool
+	}{
+		{name: "zero omitted", thinkingTokens: 0, wantPresent: false},
+		{name: "positive preserved", thinkingTokens: 27, wantPresent: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body := `{
+		"id": "msg_thinking",
+		"type": "message",
+		"role": "assistant",
+		"model": "claude-sonnet-4-5-20250929",
+		"content": [{"type": "text", "text": "Done"}],
+		"stop_reason": "end_turn",
+		"usage": {
+			"input_tokens": 31,
+			"output_tokens": 311,
+			"output_tokens_details": {"thinking_tokens": ` + strconv.Itoa(tt.thinkingTokens) + `}
+		}
+	}`
+			var resp anthropicResponse
+			if err := json.Unmarshal([]byte(body), &resp); err != nil {
+				t.Fatalf("json.Unmarshal() error = %v", err)
+			}
+
+			result := convertFromAnthropicResponse(&resp)
+			got, present := result.Usage.RawUsage["completion_reasoning_tokens"]
+
+			if present != tt.wantPresent {
+				t.Fatalf("completion_reasoning_tokens presence = %v, want %v", present, tt.wantPresent)
+			}
+			if tt.wantPresent && got != tt.thinkingTokens {
+				t.Errorf("RawUsage[completion_reasoning_tokens] = %v, want %d", got, tt.thinkingTokens)
+			}
+		})
+	}
+}
+
+func TestMergeAnthropicUsage_WithThinkingTokens(t *testing.T) {
+	dst := anthropicUsage{}
+	src := anthropicUsage{
+		OutputTokensDetails: anthropicOutputTokensDetails{ThinkingTokens: 27},
+	}
+
+	if !mergeAnthropicUsage(&dst, &src) {
+		t.Fatal("mergeAnthropicUsage() = false, want true")
+	}
+	if dst.OutputTokensDetails.ThinkingTokens != 27 {
+		t.Fatalf("ThinkingTokens = %d, want 27", dst.OutputTokensDetails.ThinkingTokens)
+	}
+
+	chatDetails, ok := anthropicChatUsagePayload(&dst)["completion_tokens_details"].(map[string]any)
+	if !ok || chatDetails["reasoning_tokens"] != 27 {
+		t.Fatalf("chat completion token details = %#v, want reasoning_tokens=27", chatDetails)
+	}
+	responseDetails, ok := anthropicResponsesUsagePayload(&dst)["output_tokens_details"].(map[string]any)
+	if !ok || responseDetails["reasoning_tokens"] != 27 {
+		t.Fatalf("response output token details = %#v, want reasoning_tokens=27", responseDetails)
+	}
+}
+
+func TestConvertFromAnthropicResponse_NoCacheFields(t *testing.T) {
+	resp := &anthropicResponse{
+		ID:    "msg_nocache",
+		Type:  "message",
+		Role:  "assistant",
+		Model: "claude-sonnet-4-5-20250929",
+		Content: []anthropicContent{
+			{Type: "text", Text: "Hello!"},
+		},
+		StopReason: "end_turn",
+		Usage: anthropicUsage{
+			InputTokens:  100,
+			OutputTokens: 20,
+		},
+	}
+
+	result := convertFromAnthropicResponse(resp)
+
+	if result.Usage.RawUsage != nil {
+		t.Errorf("expected RawUsage to be nil when no cache fields, got %v", result.Usage.RawUsage)
+	}
+}
+
+func TestConvertAnthropicResponseToResponses_WithCacheFields(t *testing.T) {
+	resp := &anthropicResponse{
+		ID:    "msg_cache_resp",
+		Type:  "message",
+		Role:  "assistant",
+		Model: "claude-sonnet-4-5-20250929",
+		Content: []anthropicContent{
+			{Type: "text", Text: "Hello!"},
+		},
+		StopReason: "end_turn",
+		Usage: anthropicUsage{
+			InputTokens:              100,
+			OutputTokens:             20,
+			CacheCreationInputTokens: 40,
+			CacheReadInputTokens:     60,
+		},
+	}
+
+	result := convertAnthropicResponseToResponses(resp, "claude-sonnet-4-5-20250929")
+
+	if result.Usage == nil {
+		t.Fatal("Usage should not be nil")
+	}
+	if result.Usage.RawUsage == nil {
+		t.Fatal("expected RawUsage to be set")
+	}
+	if result.Usage.RawUsage["cache_creation_input_tokens"] != 40 {
+		t.Errorf("RawUsage[cache_creation_input_tokens] = %v, want 40", result.Usage.RawUsage["cache_creation_input_tokens"])
+	}
+	if result.Usage.RawUsage["cache_read_input_tokens"] != 60 {
+		t.Errorf("RawUsage[cache_read_input_tokens] = %v, want 60", result.Usage.RawUsage["cache_read_input_tokens"])
+	}
+}
+
+func TestConvertFromAnthropicResponse_WithThinkingBlocks(t *testing.T) {
+	tests := []struct {
+		name         string
+		content      []anthropicContent
+		expectedText string
+	}{
+		{
+			name: "thinking then text",
+			content: []anthropicContent{
+				{Type: "thinking", Text: "Let me think about this..."},
+				{Type: "text", Text: "The capital of France is Paris."},
+			},
+			expectedText: "The capital of France is Paris.",
+		},
+		{
+			name: "preamble text then thinking then answer",
+			content: []anthropicContent{
+				{Type: "text", Text: "\n\n"},
+				{Type: "thinking", Text: ""},
+				{Type: "text", Text: "The capital of France is Paris."},
+			},
+			expectedText: "The capital of France is Paris.",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := &anthropicResponse{
+				ID:         "msg_456",
+				Type:       "message",
+				Role:       "assistant",
+				Model:      "claude-opus-4-6",
+				Content:    tt.content,
+				StopReason: "end_turn",
+				Usage:      anthropicUsage{InputTokens: 15, OutputTokens: 40},
+			}
+
+			result := convertFromAnthropicResponse(resp)
+
+			if len(result.Choices) == 0 {
+				t.Fatalf("expected at least 1 choice, got 0")
+			}
+			if result.Choices[0].Message.Content != tt.expectedText {
+				t.Errorf("expected %q, got %q", tt.expectedText, result.Choices[0].Message.Content)
+			}
+			if result.Usage.CompletionTokens != 40 {
+				t.Errorf("CompletionTokens = %d, want 40", result.Usage.CompletionTokens)
+			}
+		})
+	}
+}
+
+func TestExtractTextContent(t *testing.T) {
+	tests := []struct {
+		name     string
+		blocks   []anthropicContent
+		expected string
+	}{
+		{
+			name:     "single text block",
+			blocks:   []anthropicContent{{Type: "text", Text: "hello"}},
+			expected: "hello",
+		},
+		{
+			name: "thinking then text",
+			blocks: []anthropicContent{
+				{Type: "thinking", Text: "reasoning..."},
+				{Type: "text", Text: "answer"},
+			},
+			expected: "answer",
+		},
+		{
+			name: "multiple thinking blocks then text",
+			blocks: []anthropicContent{
+				{Type: "thinking", Text: "step 1"},
+				{Type: "thinking", Text: "step 2"},
+				{Type: "text", Text: "final answer"},
+			},
+			expected: "final answer",
+		},
+		{
+			name: "preamble text then thinking then answer text",
+			blocks: []anthropicContent{
+				{Type: "text", Text: "\n\n"},
+				{Type: "thinking", Text: ""},
+				{Type: "text", Text: "The capital of France is **Paris**."},
+			},
+			expected: "The capital of France is **Paris**.",
+		},
+		{
+			name: "preamble text then thinking then answer - picks last text",
+			blocks: []anthropicContent{
+				{Type: "text", Text: "preamble"},
+				{Type: "thinking", Text: "let me think..."},
+				{Type: "text", Text: "real answer"},
+			},
+			expected: "real answer",
+		},
+		{
+			name:     "empty blocks",
+			blocks:   []anthropicContent{},
+			expected: "",
+		},
+		{
+			name:     "nil blocks",
+			blocks:   nil,
+			expected: "",
+		},
+		{
+			name:     "only thinking blocks - returns empty",
+			blocks:   []anthropicContent{{Type: "thinking", Text: "some reasoning"}},
+			expected: "",
+		},
+		{
+			name:     "only thinking blocks with empty text - returns empty",
+			blocks:   []anthropicContent{{Type: "thinking", Text: ""}},
+			expected: "",
+		},
+		{
+			name:     "no type field - returns empty",
+			blocks:   []anthropicContent{{Text: "legacy response"}},
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractTextContent(tt.blocks)
+			if result != tt.expected {
+				t.Errorf("extractTextContent() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestResponses(t *testing.T) {
+	tests := []struct {
+		name          string
+		statusCode    int
+		responseBody  string
+		expectedError bool
+		checkResponse func(*testing.T, *core.ResponsesResponse)
+	}{
+		{
+			name:       "successful request with string input",
+			statusCode: http.StatusOK,
+			responseBody: `{
+				"id": "msg_123",
+				"type": "message",
+				"role": "assistant",
+				"model": "claude-sonnet-4-5-20250929",
+				"content": [{
+					"type": "text",
+					"text": "Hello! How can I help you today?"
+				}],
+				"stop_reason": "end_turn",
+				"usage": {
+					"input_tokens": 10,
+					"output_tokens": 20
+				}
+			}`,
+			expectedError: false,
+			checkResponse: func(t *testing.T, resp *core.ResponsesResponse) {
+				if resp.ID != "msg_123" {
+					t.Errorf("ID = %q, want %q", resp.ID, "msg_123")
+				}
+				if resp.Object != "response" {
+					t.Errorf("Object = %q, want %q", resp.Object, "response")
+				}
+				if resp.Model != "claude-sonnet-4-5-20250929" {
+					t.Errorf("Model = %q, want %q", resp.Model, "claude-sonnet-4-5-20250929")
+				}
+				if resp.Status != "completed" {
+					t.Errorf("Status = %q, want %q", resp.Status, "completed")
+				}
+				if len(resp.Output) != 1 {
+					t.Fatalf("len(Output) = %d, want 1", len(resp.Output))
+				}
+				if len(resp.Output[0].Content) != 1 {
+					t.Fatalf("len(Output[0].Content) = %d, want 1", len(resp.Output[0].Content))
+				}
+				if resp.Output[0].Content[0].Text != "Hello! How can I help you today?" {
+					t.Errorf("Output text = %q, want %q", resp.Output[0].Content[0].Text, "Hello! How can I help you today?")
+				}
+				if resp.Usage == nil {
+					t.Fatal("Usage should not be nil")
+				}
+				if resp.Usage.InputTokens != 10 {
+					t.Errorf("InputTokens = %d, want 10", resp.Usage.InputTokens)
+				}
+				if resp.Usage.OutputTokens != 20 {
+					t.Errorf("OutputTokens = %d, want 20", resp.Usage.OutputTokens)
+				}
+				if resp.Usage.TotalTokens != 30 {
+					t.Errorf("TotalTokens = %d, want 30", resp.Usage.TotalTokens)
+				}
+			},
+		},
+		{
+			name:          "API error - unauthorized",
+			statusCode:    http.StatusUnauthorized,
+			responseBody:  `{"type": "error", "error": {"type": "authentication_error", "message": "Invalid API key"}}`,
+			expectedError: true,
+		},
+		{
+			name:          "rate limit error",
+			statusCode:    http.StatusTooManyRequests,
+			responseBody:  `{"type": "error", "error": {"type": "rate_limit_error", "message": "Rate limit exceeded"}}`,
+			expectedError: true,
+		},
+		{
+			name:          "server error",
+			statusCode:    http.StatusInternalServerError,
+			responseBody:  `{"type": "error", "error": {"type": "api_error", "message": "Internal server error"}}`,
+			expectedError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Verify request headers
+				if r.Header.Get("Content-Type") != "application/json" {
+					t.Errorf("Content-Type = %q, want %q", r.Header.Get("Content-Type"), "application/json")
+				}
+				apiKey := r.Header.Get("x-api-key")
+				if apiKey == "" {
+					t.Error("x-api-key header should not be empty")
+				}
+				if r.Header.Get("anthropic-version") != anthropicAPIVersion {
+					t.Errorf("anthropic-version = %q, want %q", r.Header.Get("anthropic-version"), anthropicAPIVersion)
+				}
+
+				// Verify request path (Anthropic uses /messages)
+				if r.URL.Path != "/messages" {
+					t.Errorf("Path = %q, want %q", r.URL.Path, "/messages")
+				}
+
+				// Verify request body is converted to Anthropic format
+				body, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Fatalf("failed to read request body: %v", err)
+				}
+				var req anthropicRequest
+				if err := json.Unmarshal(body, &req); err != nil {
+					t.Fatalf("failed to unmarshal request: %v", err)
+				}
+
+				w.WriteHeader(tt.statusCode)
+				_, _ = w.Write([]byte(tt.responseBody))
+			}))
+			defer server.Close()
+
+			provider := NewWithHTTPClient("test-api-key", nil, llmclient.Hooks{})
+			provider.SetBaseURL(server.URL)
+
+			req := &core.ResponsesRequest{
+				Model: "claude-sonnet-4-5-20250929",
+				Input: "Hello",
+			}
+
+			resp, err := provider.Responses(context.Background(), req)
+
+			if tt.expectedError {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if tt.checkResponse != nil {
+					tt.checkResponse(t, resp)
+				}
+			}
+		})
+	}
+}
+
+func TestResponsesWithArrayInput(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify request body is converted to Anthropic format
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("failed to read request body: %v", err)
+		}
+
+		var req anthropicRequest
+		if err := json.Unmarshal(body, &req); err != nil {
+			t.Fatalf("failed to unmarshal request: %v", err)
+		}
+
+		// Verify messages are properly converted
+		if len(req.Messages) != 2 {
+			t.Errorf("len(Messages) = %d, want 2", len(req.Messages))
+		}
+		if req.Messages[0].Role != "user" {
+			t.Errorf("Messages[0].Role = %q, want %q", req.Messages[0].Role, "user")
+		}
+		if req.Messages[0].Content != "Hello" {
+			t.Errorf("Messages[0].Content = %q, want %q", req.Messages[0].Content, "Hello")
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{
+			"id": "msg_123",
+			"type": "message",
+			"role": "assistant",
+			"model": "claude-sonnet-4-5-20250929",
+			"content": [{
+				"type": "text",
+				"text": "Hello!"
+			}],
+			"stop_reason": "end_turn",
+			"usage": {
+				"input_tokens": 10,
+				"output_tokens": 5
+			}
+		}`))
+	}))
+	defer server.Close()
+
+	provider := NewWithHTTPClient("test-api-key", nil, llmclient.Hooks{})
+	provider.SetBaseURL(server.URL)
+
+	req := &core.ResponsesRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Input: []any{
+			map[string]any{
+				"role":    "user",
+				"content": "Hello",
+			},
+			map[string]any{
+				"role":    "assistant",
+				"content": "Hi there!",
+			},
+		},
+		Instructions: "Be helpful",
+	}
+
+	resp, err := provider.Responses(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if resp.ID != "msg_123" {
+		t.Errorf("ID = %q, want %q", resp.ID, "msg_123")
+	}
+}
+
+func TestResponsesWithInstructions(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("failed to read request body: %v", err)
+		}
+
+		var req anthropicRequest
+		if err := json.Unmarshal(body, &req); err != nil {
+			t.Fatalf("failed to unmarshal request: %v", err)
+		}
+
+		// Verify system instruction is set
+		if req.System != "You are a helpful assistant" {
+			t.Errorf("System = %q, want %q", req.System, "You are a helpful assistant")
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{
+			"id": "msg_123",
+			"type": "message",
+			"role": "assistant",
+			"model": "claude-sonnet-4-5-20250929",
+			"content": [{
+				"type": "text",
+				"text": "Hello!"
+			}],
+			"stop_reason": "end_turn",
+			"usage": {
+				"input_tokens": 10,
+				"output_tokens": 5
+			}
+		}`))
+	}))
+	defer server.Close()
+
+	provider := NewWithHTTPClient("test-api-key", nil, llmclient.Hooks{})
+	provider.SetBaseURL(server.URL)
+
+	req := &core.ResponsesRequest{
+		Model:        "claude-sonnet-4-5-20250929",
+		Input:        "Hello",
+		Instructions: "You are a helpful assistant",
+	}
+
+	_, err := provider.Responses(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestStreamResponses(t *testing.T) {
+	tests := []struct {
+		name          string
+		statusCode    int
+		responseBody  string
+		expectedError bool
+		checkStream   func(*testing.T, io.ReadCloser)
+	}{
+		{
+			name:       "successful streaming request",
+			statusCode: http.StatusOK,
+			responseBody: `event: message_start
+data: {"type":"message_start","message":{"id":"msg_123","type":"message","role":"assistant","model":"claude-sonnet-4-5-20250929","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"!"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2}}
+
+event: message_stop
+data: {"type":"message_stop"}
+`,
+			expectedError: false,
+			checkStream: func(t *testing.T, body io.ReadCloser) {
+				if body == nil {
+					t.Fatal("body should not be nil")
+				}
+				defer func() { _ = body.Close() }()
+
+				// Read and verify the streaming response
+				respBody, err := io.ReadAll(body)
+				if err != nil {
+					t.Fatalf("failed to read response body: %v", err)
+				}
+
+				// The response should be converted to Responses API format
+				responseStr := string(respBody)
+				if !strings.Contains(responseStr, "response.created") {
+					t.Error("response should contain response.created event")
+				}
+				if !strings.Contains(responseStr, "response.output_text.delta") {
+					t.Error("response should contain response.output_text.delta event")
+				}
+				if !strings.Contains(responseStr, "[DONE]") {
+					t.Error("response should end with [DONE]")
+				}
+			},
+		},
+		{
+			name:          "API error - unauthorized",
+			statusCode:    http.StatusUnauthorized,
+			responseBody:  `{"type": "error", "error": {"type": "authentication_error", "message": "Invalid API key"}}`,
+			expectedError: true,
+		},
+		{
+			name:          "rate limit error",
+			statusCode:    http.StatusTooManyRequests,
+			responseBody:  `{"type": "error", "error": {"type": "rate_limit_error", "message": "Rate limit exceeded"}}`,
+			expectedError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Verify request headers
+				if r.Header.Get("Content-Type") != "application/json" {
+					t.Errorf("Content-Type = %q, want %q", r.Header.Get("Content-Type"), "application/json")
+				}
+				apiKey := r.Header.Get("x-api-key")
+				if apiKey == "" {
+					t.Error("x-api-key header should not be empty")
+				}
+
+				// Verify stream is set in request body
+				body, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Fatalf("failed to read request body: %v", err)
+				}
+				var req anthropicRequest
+				if err := json.Unmarshal(body, &req); err != nil {
+					t.Fatalf("failed to unmarshal request: %v", err)
+				}
+				if !req.Stream {
+					t.Error("Stream should be true in request")
+				}
+
+				w.WriteHeader(tt.statusCode)
+				_, _ = w.Write([]byte(tt.responseBody))
+			}))
+			defer server.Close()
+
+			provider := NewWithHTTPClient("test-api-key", nil, llmclient.Hooks{})
+			provider.SetBaseURL(server.URL)
+
+			req := &core.ResponsesRequest{
+				Model: "claude-sonnet-4-5-20250929",
+				Input: "Hello",
+			}
+
+			body, err := provider.StreamResponses(context.Background(), req)
+
+			if tt.expectedError {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if tt.checkStream != nil {
+					tt.checkStream(t, body)
+				}
+			}
+		})
+	}
+}
+
+func TestStreamResponses_MergesUsageFromMessageStart(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`event: message_start
+data: {"type":"message_start","message":{"id":"msg_123","type":"message","role":"assistant","model":"claude-sonnet-4-5-20250929","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0,"cache_creation_input_tokens":4}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2}}
+
+event: message_stop
+data: {"type":"message_stop"}
+`))
+	}))
+	defer server.Close()
+
+	provider := NewWithHTTPClient("test-api-key", nil, llmclient.Hooks{})
+	provider.SetBaseURL(server.URL)
+
+	body, err := provider.StreamResponses(context.Background(), &core.ResponsesRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Input: "Hello",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() { _ = body.Close() }()
+
+	raw, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %v", err)
+	}
+
+	responseStr := string(raw)
+	if !strings.Contains(responseStr, `"type":"response.completed"`) {
+		t.Fatalf("expected response.completed event, got %q", responseStr)
+	}
+	if !strings.Contains(responseStr, `"input_tokens":10`) {
+		t.Fatalf("expected input_tokens in response.completed usage, got %q", responseStr)
+	}
+	if !strings.Contains(responseStr, `"output_tokens":2`) {
+		t.Fatalf("expected output_tokens in response.completed usage, got %q", responseStr)
+	}
+	if !strings.Contains(responseStr, `"total_tokens":12`) {
+		t.Fatalf("expected total_tokens in response.completed usage, got %q", responseStr)
+	}
+	if !strings.Contains(responseStr, `"cache_creation_input_tokens":4`) {
+		t.Fatalf("expected cache_creation_input_tokens in response.completed usage, got %q", responseStr)
+	}
+}
+
+func TestStreamResponses_WithToolCalls(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`event: message_start
+data: {"type":"message_start","message":{"id":"msg_123","type":"message","role":"assistant","model":"claude-sonnet-4-5-20250929","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"I'll check that for you."}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: content_block_start
+data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_123","name":"lookup_weather","input":{}}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"city\":\"War"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"saw\"}"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":1}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"input_tokens":10,"output_tokens":4}}
+
+event: message_stop
+data: {"type":"message_stop"}
+`))
+	}))
+	defer server.Close()
+
+	provider := NewWithHTTPClient("test-api-key", nil, llmclient.Hooks{})
+	provider.SetBaseURL(server.URL)
+
+	body, err := provider.StreamResponses(context.Background(), &core.ResponsesRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Input: "What's the weather?",
+		Tools: []map[string]any{
+			{
+				"type": "function",
+				"function": map[string]any{
+					"name": "lookup_weather",
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() { _ = body.Close() }()
+
+	raw, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %v", err)
+	}
+
+	events := parseTestSSEEvents(t, string(raw))
+	foundAdded := false
+	foundAssistantAdded := false
+	foundAssistantDone := false
+	foundTextDelta := false
+	foundArgumentsDone := false
+	foundItemDone := false
+	var argumentsDelta strings.Builder
+
+	for _, event := range events {
+		if event.Done {
+			continue
+		}
+		switch event.Name {
+		case "response.output_item.added":
+			item, _ := event.Payload["item"].(map[string]any)
+			if item["type"] == "message" && item["role"] == "assistant" && event.Payload["output_index"] == float64(0) {
+				foundAssistantAdded = true
+			}
+			if item["type"] == "function_call" && item["call_id"] == "toolu_123" && item["name"] == "lookup_weather" && item["arguments"] == "{}" && event.Payload["output_index"] == float64(1) {
+				foundAdded = true
+			}
+		case "response.output_item.done":
+			item, _ := event.Payload["item"].(map[string]any)
+			if item["type"] == "message" && item["role"] == "assistant" && event.Payload["output_index"] == float64(0) {
+				foundAssistantDone = true
+			}
+			if item["type"] == "function_call" && item["arguments"] == `{"city":"Warsaw"}` {
+				foundItemDone = true
+			}
+		case "response.output_text.delta":
+			if event.Payload["delta"] == "I'll check that for you." {
+				foundTextDelta = true
+			}
+		case "response.function_call_arguments.delta":
+			if delta, _ := event.Payload["delta"].(string); delta != "" {
+				argumentsDelta.WriteString(delta)
+			}
+		case "response.function_call_arguments.done":
+			if event.Payload["arguments"] == `{"city":"Warsaw"}` {
+				foundArgumentsDone = true
+			}
+		}
+	}
+
+	if !foundAdded {
+		t.Fatal("expected response.output_item.added for function_call")
+	}
+	if !foundAssistantAdded {
+		t.Fatal("expected assistant message response.output_item.added at output_index 0")
+	}
+	if !foundAssistantDone {
+		t.Fatal("expected assistant message response.output_item.done at output_index 0")
+	}
+	if !foundTextDelta {
+		t.Fatal("expected response.output_text.delta for assistant preamble")
+	}
+	if argumentsDelta.String() != `{"city":"Warsaw"}` {
+		t.Fatalf("streamed response.function_call_arguments.delta = %q, want %q", argumentsDelta.String(), `{"city":"Warsaw"}`)
+	}
+	if !foundArgumentsDone {
+		t.Fatal("expected response.function_call_arguments.done for function_call")
+	}
+	if !foundItemDone {
+		t.Fatal("expected response.output_item.done for function_call")
+	}
+}
+
+// TestStreamResponses_CompletedIncludesOutput verifies the terminal
+// response.completed event carries the full output array (assistant message,
+// then function_call), matching OpenAI's native behavior — strict SDK clients
+// index into response.output.
+func TestStreamResponses_CompletedIncludesOutput(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`event: message_start
+data: {"type":"message_start","message":{"id":"msg_123","type":"message","role":"assistant","model":"claude-sonnet-4-5-20250929","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"I'll check that for you."}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: content_block_start
+data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_123","name":"lookup_weather","input":{}}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"city\":\"Warsaw\"}"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":1}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"input_tokens":10,"output_tokens":4}}
+
+event: message_stop
+data: {"type":"message_stop"}
+`))
+	}))
+	defer server.Close()
+
+	provider := NewWithHTTPClient("test-api-key", nil, llmclient.Hooks{})
+	provider.SetBaseURL(server.URL)
+
+	body, err := provider.StreamResponses(context.Background(), &core.ResponsesRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Input: "What's the weather?",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() { _ = body.Close() }()
+
+	raw, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %v", err)
+	}
+
+	var output []any
+	for _, event := range parseTestSSEEvents(t, string(raw)) {
+		if event.Done || event.Name != "response.completed" {
+			continue
+		}
+		response, _ := event.Payload["response"].(map[string]any)
+		output, _ = response["output"].([]any)
+	}
+
+	if len(output) != 2 {
+		t.Fatalf("response.completed output has %d items, want 2: %#v", len(output), output)
+	}
+
+	message, _ := output[0].(map[string]any)
+	if message["type"] != "message" || message["role"] != "assistant" || message["status"] != "completed" {
+		t.Fatalf("output[0] = %#v, want completed assistant message", message)
+	}
+	messageContent, _ := message["content"].([]any)
+	if len(messageContent) != 1 {
+		t.Fatalf("message content = %#v, want one output_text part", message["content"])
+	}
+	if part, _ := messageContent[0].(map[string]any); part["type"] != "output_text" || part["text"] != "I'll check that for you." {
+		t.Fatalf("message part = %#v, want output_text %q", messageContent[0], "I'll check that for you.")
+	}
+
+	toolCall, _ := output[1].(map[string]any)
+	if toolCall["type"] != "function_call" || toolCall["status"] != "completed" {
+		t.Fatalf("output[1] = %#v, want completed function_call", toolCall)
+	}
+	if toolCall["call_id"] != "toolu_123" || toolCall["name"] != "lookup_weather" || toolCall["arguments"] != `{"city":"Warsaw"}` {
+		t.Fatalf("function_call = %#v, want toolu_123 lookup_weather with recorded arguments", toolCall)
+	}
+}
+
+// TestStreamResponses_TruncatedToolCallFinalizedAtEOF covers an upstream stream
+// that dies mid tool call (no content_block_stop / message_stop). The converter
+// must close the tool call with status "incomplete" and end the stream with
+// response.incomplete instead of fabricating completion.
+func TestStreamResponses_TruncatedToolCallFinalizedAtEOF(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`event: message_start
+data: {"type":"message_start","message":{"id":"msg_123","type":"message","role":"assistant","model":"claude-sonnet-4-5-20250929","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_123","name":"lookup_weather","input":{}}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"city\":\"War"}}
+`))
+	}))
+	defer server.Close()
+
+	provider := NewWithHTTPClient("test-api-key", nil, llmclient.Hooks{})
+	provider.SetBaseURL(server.URL)
+
+	body, err := provider.StreamResponses(context.Background(), &core.ResponsesRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Input: "What's the weather?",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() { _ = body.Close() }()
+
+	raw, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %v", err)
+	}
+
+	foundArgumentsDone := false
+	itemDoneStatus := ""
+	foundCompleted := false
+	var response map[string]any
+	for _, event := range parseTestSSEEvents(t, string(raw)) {
+		if event.Done {
+			continue
+		}
+		switch event.Name {
+		case "response.function_call_arguments.done":
+			foundArgumentsDone = true
+		case "response.output_item.done":
+			item, _ := event.Payload["item"].(map[string]any)
+			if item["type"] == "function_call" {
+				itemDoneStatus, _ = item["status"].(string)
+			}
+		case "response.completed":
+			foundCompleted = true
+		case "response.incomplete":
+			response, _ = event.Payload["response"].(map[string]any)
+		}
+	}
+
+	if foundCompleted {
+		t.Fatal("truncated stream must not end with response.completed")
+	}
+	if response == nil {
+		t.Fatal("expected response.incomplete terminal event on truncated stream")
+	}
+	if !foundArgumentsDone {
+		t.Fatal("expected response.function_call_arguments.done before the terminal event on truncated stream")
+	}
+	if itemDoneStatus != "incomplete" {
+		t.Fatalf("function_call output_item.done status = %q, want %q", itemDoneStatus, "incomplete")
+	}
+	if response["status"] != "incomplete" {
+		t.Fatalf("response.status = %v, want incomplete", response["status"])
+	}
+	details, _ := response["incomplete_details"].(map[string]any)
+	if details["reason"] != "interrupted" {
+		t.Fatalf("incomplete_details = %#v, want reason interrupted", response["incomplete_details"])
+	}
+	output, _ := response["output"].([]any)
+	if len(output) != 1 {
+		t.Fatalf("response.incomplete output has %d items, want 1: %#v", len(output), output)
+	}
+	toolCall, _ := output[0].(map[string]any)
+	if toolCall["type"] != "function_call" || toolCall["call_id"] != "toolu_123" || toolCall["status"] != "incomplete" || toolCall["arguments"] != `{"city":"War` {
+		t.Fatalf("output[0] = %#v, want incomplete function_call with accumulated arguments", toolCall)
+	}
+}
+
+// failingReadCloser returns its data on the first read and the configured
+// error afterwards, mimicking an upstream body that dies mid-transfer.
+type failingReadCloser struct {
+	data []byte
+	err  error
+	read bool
+}
+
+func (r *failingReadCloser) Read(p []byte) (int, error) {
+	if !r.read {
+		r.read = true
+		return copy(p, r.data), nil
+	}
+	return 0, r.err
+}
+
+func (r *failingReadCloser) Close() error { return nil }
+
+// TestStreamResponses_NonEOFReadErrorEndsIncomplete covers an upstream body
+// that fails with a non-EOF error mid-message: the client must still receive
+// the response.incomplete terminal event and [DONE] before the error surfaces.
+func TestStreamResponses_NonEOFReadErrorEndsIncomplete(t *testing.T) {
+	reader := &failingReadCloser{
+		data: []byte(`event: message_start
+data: {"type":"message_start","message":{"id":"msg_123","type":"message","role":"assistant","model":"claude-sonnet-4-5-20250929","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hel"}}
+
+`),
+		err: io.ErrUnexpectedEOF,
+	}
+
+	converter := newResponsesStreamConverter(reader, "claude-sonnet-4-5-20250929")
+	raw, err := io.ReadAll(converter)
+	if err != io.ErrUnexpectedEOF {
+		t.Fatalf("ReadAll() error = %v, want io.ErrUnexpectedEOF surfaced after terminal events", err)
+	}
+
+	var response map[string]any
+	sawDone := false
+	for _, event := range parseTestSSEEvents(t, string(raw)) {
+		if event.Done {
+			sawDone = true
+			continue
+		}
+		if event.Name == "response.incomplete" {
+			response, _ = event.Payload["response"].(map[string]any)
+		}
+	}
+
+	if response == nil {
+		t.Fatal("expected response.incomplete terminal event before the read error")
+	}
+	if !sawDone {
+		t.Fatal("expected trailing [DONE] before the read error")
+	}
+	if response["status"] != "incomplete" {
+		t.Fatalf("response.status = %v, want incomplete", response["status"])
+	}
+}
+
+// TestStreamResponses_StopReasonWithoutMessageStopCompletes covers a stream cut
+// after message_delta carried a stop_reason but before message_stop arrived:
+// Anthropic finished generating, so the stream must still end with
+// response.completed.
+func TestStreamResponses_StopReasonWithoutMessageStopCompletes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`event: message_start
+data: {"type":"message_start","message":{"id":"msg_123","type":"message","role":"assistant","model":"claude-sonnet-4-5-20250929","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2}}
+`))
+	}))
+	defer server.Close()
+
+	provider := NewWithHTTPClient("test-api-key", nil, llmclient.Hooks{})
+	provider.SetBaseURL(server.URL)
+
+	body, err := provider.StreamResponses(context.Background(), &core.ResponsesRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Input: "Hello",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() { _ = body.Close() }()
+
+	raw, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %v", err)
+	}
+
+	var response map[string]any
+	for _, event := range parseTestSSEEvents(t, string(raw)) {
+		if event.Done || event.Name != "response.completed" {
+			continue
+		}
+		response, _ = event.Payload["response"].(map[string]any)
+	}
+
+	if response == nil {
+		t.Fatal("expected response.completed when the stream ends after a stop_reason without message_stop")
+	}
+	if response["status"] != "completed" {
+		t.Fatalf("response.status = %v, want completed", response["status"])
+	}
+}
+
+// TestStreamResponses_ToolCallBeforeTextKeepsOutputOrder covers a tool_use
+// block preceding the first text block. The assistant message must claim the
+// next free output index (not collide with the tool call at index 0) and the
+// terminal output must preserve stream order.
+func TestStreamResponses_ToolCallBeforeTextKeepsOutputOrder(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`event: message_start
+data: {"type":"message_start","message":{"id":"msg_123","type":"message","role":"assistant","model":"claude-sonnet-4-5-20250929","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_123","name":"lookup_weather","input":{}}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"city\":\"Warsaw\"}"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: content_block_start
+data: {"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Looking it up."}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":1}
+
+event: message_stop
+data: {"type":"message_stop"}
+`))
+	}))
+	defer server.Close()
+
+	provider := NewWithHTTPClient("test-api-key", nil, llmclient.Hooks{})
+	provider.SetBaseURL(server.URL)
+
+	body, err := provider.StreamResponses(context.Background(), &core.ResponsesRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Input: "What's the weather?",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() { _ = body.Close() }()
+
+	raw, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %v", err)
+	}
+
+	addedIndexes := make(map[string]float64)
+	var output []any
+	for _, event := range parseTestSSEEvents(t, string(raw)) {
+		if event.Done {
+			continue
+		}
+		switch event.Name {
+		case "response.output_item.added":
+			item, _ := event.Payload["item"].(map[string]any)
+			itemType, _ := item["type"].(string)
+			addedIndexes[itemType], _ = event.Payload["output_index"].(float64)
+		case "response.completed":
+			response, _ := event.Payload["response"].(map[string]any)
+			output, _ = response["output"].([]any)
+		}
+	}
+
+	if addedIndexes["function_call"] != 0 || addedIndexes["message"] != 1 {
+		t.Fatalf("output indexes = %#v, want function_call at 0 and message at 1", addedIndexes)
+	}
+	if len(output) != 2 {
+		t.Fatalf("response.completed output has %d items, want 2: %#v", len(output), output)
+	}
+	first, _ := output[0].(map[string]any)
+	second, _ := output[1].(map[string]any)
+	if first["type"] != "function_call" || second["type"] != "message" {
+		t.Fatalf("output order = [%v, %v], want [function_call, message]", first["type"], second["type"])
+	}
+}
+
+func TestStreamResponses_WithEmptyToolArguments(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`event: message_start
+data: {"type":"message_start","message":{"id":"msg_123","type":"message","role":"assistant","model":"claude-sonnet-4-5-20250929","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_123","name":"lookup_weather","input":{}}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"input_tokens":10,"output_tokens":4}}
+
+event: message_stop
+data: {"type":"message_stop"}
+`))
+	}))
+	defer server.Close()
+
+	provider := NewWithHTTPClient("test-api-key", nil, llmclient.Hooks{})
+	provider.SetBaseURL(server.URL)
+
+	body, err := provider.StreamResponses(context.Background(), &core.ResponsesRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Input: "What's the weather?",
+		Tools: []map[string]any{
+			{
+				"type": "function",
+				"function": map[string]any{
+					"name": "lookup_weather",
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() { _ = body.Close() }()
+
+	raw, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %v", err)
+	}
+
+	events := parseTestSSEEvents(t, string(raw))
+	foundAdded := false
+	foundDone := false
+
+	for _, event := range events {
+		if event.Done {
+			continue
+		}
+		switch event.Name {
+		case "response.output_item.added":
+			item, _ := event.Payload["item"].(map[string]any)
+			if item["type"] == "function_call" && item["arguments"] == "{}" {
+				foundAdded = true
+			}
+		case "response.function_call_arguments.done":
+			if event.Payload["arguments"] == "{}" {
+				foundDone = true
+			}
+		}
+	}
+
+	if !foundAdded {
+		t.Fatal("expected response.output_item.added with {} arguments")
+	}
+	if !foundDone {
+		t.Fatal("expected response.function_call_arguments.done with {} arguments")
+	}
+}
+
+func TestStreamResponses_MalformedEventReturnsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`event: message_start
+data: {"type":"message_start","message":{"id":"msg_123","type":"message","role":"assistant","model":"claude-sonnet-4-5-20250929","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"broken"}
+`))
+	}))
+	defer server.Close()
+
+	provider := NewWithHTTPClient("test-api-key", nil, llmclient.Hooks{})
+	provider.SetBaseURL(server.URL)
+
+	body, err := provider.StreamResponses(context.Background(), &core.ResponsesRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Input: "Hello",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() { _ = body.Close() }()
+
+	raw, err := io.ReadAll(body)
+	if err == nil {
+		t.Fatal("expected malformed stream error")
+	}
+
+	var gatewayErr *core.GatewayError
+	if !errors.As(err, &gatewayErr) {
+		t.Fatalf("expected GatewayError, got %T", err)
+	}
+	if gatewayErr.StatusCode != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d", gatewayErr.StatusCode, http.StatusBadGateway)
+	}
+	if !strings.Contains(gatewayErr.Message, "failed to decode anthropic stream event") {
+		t.Fatalf("message = %q, want decode failure", gatewayErr.Message)
+	}
+	if !strings.Contains(string(raw), "response.created") {
+		t.Fatalf("expected stream to include prior response.created event, got %q", string(raw))
+	}
+	if strings.Contains(string(raw), "[DONE]") {
+		t.Fatalf("did not expect [DONE] after malformed event, got %q", string(raw))
+	}
+}
+
+func TestResponsesWithContext(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Simulate a slow response
+		<-r.Context().Done()
+		w.WriteHeader(http.StatusRequestTimeout)
+	}))
+	defer server.Close()
+
+	provider := NewWithHTTPClient("test-api-key", nil, llmclient.Hooks{})
+	provider.SetBaseURL(server.URL)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	req := &core.ResponsesRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Input: "Hello",
+	}
+
+	_, err := provider.Responses(ctx, req)
+	if err == nil {
+		t.Error("expected error when context is cancelled, got nil")
+	}
+}
+
+func TestConvertResponsesRequestToAnthropic(t *testing.T) {
+	temp := 0.7
+	topP := 0.2
+	maxTokens := 1024
+
+	tests := []struct {
+		name    string
+		input   *core.ResponsesRequest
+		checkFn func(*testing.T, *anthropicRequest)
+	}{
+		{
+			name: "string input",
+			input: &core.ResponsesRequest{
+				Model: "claude-sonnet-4-5-20250929",
+				Input: "Hello",
+			},
+			checkFn: func(t *testing.T, req *anthropicRequest) {
+				if req.Model != "claude-sonnet-4-5-20250929" {
+					t.Errorf("Model = %q, want %q", req.Model, "claude-sonnet-4-5-20250929")
+				}
+				if len(req.Messages) != 1 {
+					t.Errorf("len(Messages) = %d, want 1", len(req.Messages))
+				}
+				if req.Messages[0].Role != "user" {
+					t.Errorf("Messages[0].Role = %q, want %q", req.Messages[0].Role, "user")
+				}
+				if req.Messages[0].Content != "Hello" {
+					t.Errorf("Messages[0].Content = %q, want %q", req.Messages[0].Content, "Hello")
+				}
+			},
+		},
+		{
+			name: "with instructions",
+			input: &core.ResponsesRequest{
+				Model:        "claude-sonnet-4-5-20250929",
+				Input:        "Hello",
+				Instructions: "Be helpful",
+			},
+			checkFn: func(t *testing.T, req *anthropicRequest) {
+				if req.System != "Be helpful" {
+					t.Errorf("System = %q, want %q", req.System, "Be helpful")
+				}
+			},
+		},
+		{
+			name: "with parameters",
+			input: &core.ResponsesRequest{
+				Model:           "claude-sonnet-4-5-20250929",
+				Input:           "Hello",
+				Temperature:     &temp,
+				TopP:            &topP,
+				MaxOutputTokens: &maxTokens,
+			},
+			checkFn: func(t *testing.T, req *anthropicRequest) {
+				if req.Temperature == nil || *req.Temperature != 0.7 {
+					t.Errorf("Temperature = %v, want 0.7", req.Temperature)
+				}
+				// Anthropic rejects both sampling parameters at once, so
+				// top_p is dropped in favour of temperature.
+				if req.TopP != nil {
+					t.Errorf("TopP = %v, want nil", *req.TopP)
+				}
+				if req.MaxTokens != 1024 {
+					t.Errorf("MaxTokens = %d, want 1024", req.MaxTokens)
+				}
+			},
+		},
+		{
+			name: "array input with content parts",
+			input: &core.ResponsesRequest{
+				Model: "claude-sonnet-4-5-20250929",
+				Input: []any{
+					map[string]any{
+						"role": "user",
+						"content": []any{
+							map[string]any{
+								"type": "text",
+								"text": "Hello",
+							},
+							map[string]any{
+								"type": "text",
+								"text": "World",
+							},
+						},
+					},
+				},
+			},
+			checkFn: func(t *testing.T, req *anthropicRequest) {
+				if len(req.Messages) != 1 {
+					t.Fatalf("len(Messages) = %d, want 1", len(req.Messages))
+				}
+				if req.Messages[0].Content != "Hello World" {
+					t.Errorf("Messages[0].Content = %q, want %q", req.Messages[0].Content, "Hello World")
+				}
+			},
+		},
+		{
+			name: "with tools and parallel tool calls disabled",
+			input: func() *core.ResponsesRequest {
+				parallelToolCalls := false
+				return &core.ResponsesRequest{
+					Model: "claude-sonnet-4-5-20250929",
+					Input: "Hello",
+					Tools: []map[string]any{
+						{
+							"type": "function",
+							"function": map[string]any{
+								"name": "lookup_weather",
+							},
+						},
+					},
+					ToolChoice:        "auto",
+					ParallelToolCalls: &parallelToolCalls,
+				}
+			}(),
+			checkFn: func(t *testing.T, req *anthropicRequest) {
+				if len(req.Tools) != 1 {
+					t.Fatalf("len(Tools) = %d, want 1", len(req.Tools))
+				}
+				if req.ToolChoice == nil {
+					t.Fatal("ToolChoice should not be nil")
+				}
+				if req.ToolChoice.DisableParallelToolUse == nil || !*req.ToolChoice.DisableParallelToolUse {
+					t.Fatalf("disable_parallel_tool_use = %#v, want true", req.ToolChoice.DisableParallelToolUse)
+				}
+			},
+		},
+		{
+			name: "with function call loop input items",
+			input: &core.ResponsesRequest{
+				Model: "claude-sonnet-4-5-20250929",
+				Input: []any{
+					map[string]any{
+						"type":      "function_call",
+						"call_id":   "call_123",
+						"name":      "lookup_weather",
+						"arguments": `{"city":"Warsaw"}`,
+					},
+					map[string]any{
+						"type":    "function_call_output",
+						"call_id": "call_123",
+						"output":  map[string]any{"temperature_c": 21},
+					},
+				},
+			},
+			checkFn: func(t *testing.T, req *anthropicRequest) {
+				if len(req.Messages) != 2 {
+					t.Fatalf("len(Messages) = %d, want 2", len(req.Messages))
+				}
+
+				assistantBlocks, ok := req.Messages[0].Content.([]anthropicContentBlock)
+				if !ok || len(assistantBlocks) != 1 {
+					t.Fatalf("assistant content = %#v, want one tool_use block", req.Messages[0].Content)
+				}
+				if assistantBlocks[0].Type != "tool_use" || assistantBlocks[0].ID != "call_123" || assistantBlocks[0].Name != "lookup_weather" {
+					t.Fatalf("assistant tool block = %+v, want lookup_weather/call_123", assistantBlocks[0])
+				}
+
+				toolBlocks, ok := req.Messages[1].Content.([]anthropicContentBlock)
+				if !ok || len(toolBlocks) != 1 {
+					t.Fatalf("tool content = %#v, want one tool_result block", req.Messages[1].Content)
+				}
+				if req.Messages[1].Role != "user" {
+					t.Fatalf("tool role = %q, want user", req.Messages[1].Role)
+				}
+				if toolBlocks[0].Type != "tool_result" || toolBlocks[0].ToolUseID != "call_123" || toolBlocks[0].Content != `{"temperature_c":21}` {
+					t.Fatalf("tool result block = %+v, want call_123 payload", toolBlocks[0])
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := convertResponsesRequestToAnthropic(tt.input)
+			if err != nil {
+				t.Fatalf("convertResponsesRequestToAnthropic() error = %v", err)
+			}
+			tt.checkFn(t, result)
+		})
+	}
+}
+
+func TestConvertResponsesRequestToAnthropic_InvalidToolArguments(t *testing.T) {
+	_, err := convertResponsesRequestToAnthropic(&core.ResponsesRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Input: []any{
+			map[string]any{
+				"type":      "function_call",
+				"call_id":   "call_123",
+				"name":      "lookup_weather",
+				"arguments": `{"city":"Warsaw"`,
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected invalid request error, got nil")
+	}
+	var gatewayErr *core.GatewayError
+	if !errors.As(err, &gatewayErr) {
+		t.Fatalf("error = %T, want *core.GatewayError", err)
+	}
+	if gatewayErr.Type != core.ErrorTypeInvalidRequest {
+		t.Fatalf("error type = %q, want invalid_request_error", gatewayErr.Type)
+	}
+	if gatewayErr.HTTPStatusCode() != http.StatusBadRequest {
+		t.Fatalf("HTTPStatusCode() = %d, want %d", gatewayErr.HTTPStatusCode(), http.StatusBadRequest)
+	}
+}
+
+func TestConvertResponsesRequestToAnthropic_RejectsTrailingToolArgumentContent(t *testing.T) {
+	_, err := convertResponsesRequestToAnthropic(&core.ResponsesRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Input: []any{
+			map[string]any{
+				"type":      "function_call",
+				"call_id":   "call_123",
+				"name":      "lookup_weather",
+				"arguments": `{"city":"Warsaw"} garbage`,
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected invalid request error, got nil")
+	}
+	var gatewayErr *core.GatewayError
+	if !errors.As(err, &gatewayErr) {
+		t.Fatalf("error = %T, want *core.GatewayError", err)
+	}
+	if gatewayErr.Type != core.ErrorTypeInvalidRequest {
+		t.Fatalf("error type = %q, want invalid_request_error", gatewayErr.Type)
+	}
+	if gatewayErr.HTTPStatusCode() != http.StatusBadRequest {
+		t.Fatalf("HTTPStatusCode() = %d, want %d", gatewayErr.HTTPStatusCode(), http.StatusBadRequest)
+	}
+}
+
+func TestConvertResponsesRequestToAnthropic_ToolChoiceRequiresTools(t *testing.T) {
+	_, err := convertResponsesRequestToAnthropic(&core.ResponsesRequest{
+		Model:      "claude-sonnet-4-5-20250929",
+		Input:      "Hello",
+		ToolChoice: "auto",
+	})
+	if err == nil {
+		t.Fatal("expected invalid request error, got nil")
+	}
+	var gatewayErr *core.GatewayError
+	if !errors.As(err, &gatewayErr) {
+		t.Fatalf("error = %T, want *core.GatewayError", err)
+	}
+	if gatewayErr.Type != core.ErrorTypeInvalidRequest {
+		t.Fatalf("error type = %q, want invalid_request_error", gatewayErr.Type)
+	}
+	if gatewayErr.HTTPStatusCode() != http.StatusBadRequest {
+		t.Fatalf("HTTPStatusCode() = %d, want %d", gatewayErr.HTTPStatusCode(), http.StatusBadRequest)
+	}
+}
+
+func TestBuildAnthropicBatchCreateRequest_PreservesGatewayErrorDetails(t *testing.T) {
+	req := &core.BatchRequest{
+		Requests: []core.BatchRequestItem{
+			{
+				URL: "/v1/chat/completions",
+				Body: json.RawMessage(`{
+					"model":"claude-sonnet-4-5-20250929",
+					"messages":[{"role":"user","content":"Hello"}],
+					"tool_choice":"auto"
+				}`),
+			},
+		},
+	}
+
+	_, _, err := buildAnthropicBatchCreateRequest(req)
+	if err == nil {
+		t.Fatal("expected invalid request error, got nil")
+	}
+	var gatewayErr *core.GatewayError
+	if !errors.As(err, &gatewayErr) {
+		t.Fatalf("error = %T, want *core.GatewayError", err)
+	}
+	if gatewayErr.Type != core.ErrorTypeInvalidRequest {
+		t.Fatalf("error type = %q, want invalid_request_error", gatewayErr.Type)
+	}
+	if gatewayErr.Message != "batch item 0: tool_choice requires at least one tool" {
+		t.Fatalf("error message = %q", gatewayErr.Message)
+	}
+}
+
+func TestBuildAnthropicBatchCreateRequest_PrefixesToolArgumentErrors(t *testing.T) {
+	req := &core.BatchRequest{
+		Requests: []core.BatchRequestItem{
+			{
+				URL: "/v1/chat/completions",
+				Body: json.RawMessage(`{
+					"model":"claude-sonnet-4-5-20250929",
+					"messages":[{
+						"role":"assistant",
+						"tool_calls":[{
+							"id":"call_123",
+							"type":"function",
+							"function":{
+								"name":"lookup_weather",
+								"arguments":"{\"city\":\"Warsaw\"} garbage"
+							}
+						}]
+					}]
+				}`),
+			},
+		},
+	}
+
+	_, _, err := buildAnthropicBatchCreateRequest(req)
+	if err == nil {
+		t.Fatal("expected invalid request error, got nil")
+	}
+	var gatewayErr *core.GatewayError
+	if !errors.As(err, &gatewayErr) {
+		t.Fatalf("error = %T, want *core.GatewayError", err)
+	}
+	if gatewayErr.Type != core.ErrorTypeInvalidRequest {
+		t.Fatalf("error type = %q, want invalid_request_error", gatewayErr.Type)
+	}
+	if !strings.HasPrefix(gatewayErr.Message, "batch item 0: ") {
+		t.Fatalf("error message = %q, want batch item prefix", gatewayErr.Message)
+	}
+}
+
+func TestBuildAnthropicBatchCreateRequest_NormalizesFullURLResponsesEndpoint(t *testing.T) {
+	req := &core.BatchRequest{
+		Requests: []core.BatchRequestItem{
+			{
+				CustomID: "resp-1",
+				Method:   http.MethodPost,
+				URL:      "https://provider.example/v1/responses/?trace=1",
+				Body: json.RawMessage(`{
+					"model":"claude-sonnet-4-5-20250929",
+					"input":"Hello"
+				}`),
+			},
+		},
+	}
+
+	anthropicReq, endpointByCustomID, err := buildAnthropicBatchCreateRequest(req)
+	if err != nil {
+		t.Fatalf("buildAnthropicBatchCreateRequest() error = %v", err)
+	}
+	if anthropicReq == nil {
+		t.Fatal("anthropicReq = nil")
+		return
+	}
+	if len(anthropicReq.Requests) != 1 {
+		t.Fatalf("len(Requests) = %d, want 1", len(anthropicReq.Requests))
+	}
+	if anthropicReq.Requests[0].Params.Stream {
+		t.Fatal("Params.Stream = true, want false")
+	}
+	if got := endpointByCustomID["resp-1"]; got != "/v1/responses" {
+		t.Fatalf("endpointByCustomID[resp-1] = %q, want /v1/responses", got)
+	}
+}
+
+func TestBuildAnthropicBatchCreateRequest_RejectsDuplicateCustomIDs(t *testing.T) {
+	req := &core.BatchRequest{
+		Requests: []core.BatchRequestItem{
+			{
+				CustomID: "dup-1",
+				Method:   http.MethodPost,
+				URL:      "/v1/chat/completions",
+				Body: json.RawMessage(`{
+					"model":"claude-sonnet-4-5-20250929",
+					"messages":[{"role":"user","content":"hello"}]
+				}`),
+			},
+			{
+				CustomID: "dup-1",
+				Method:   http.MethodPost,
+				URL:      "/v1/responses",
+				Body: json.RawMessage(`{
+					"model":"claude-sonnet-4-5-20250929",
+					"input":"hello"
+				}`),
+			},
+		},
+	}
+
+	_, _, err := buildAnthropicBatchCreateRequest(req)
+	if err == nil {
+		t.Fatal("expected error for duplicate custom_id")
+	}
+	var gatewayErr *core.GatewayError
+	if !errors.As(err, &gatewayErr) {
+		t.Fatalf("error = %T, want *core.GatewayError", err)
+	}
+	if gatewayErr.Type != core.ErrorTypeInvalidRequest {
+		t.Fatalf("error type = %q, want invalid_request_error", gatewayErr.Type)
+	}
+	if !strings.Contains(gatewayErr.Message, `duplicate custom_id "dup-1"`) {
+		t.Fatalf("error message = %q, want duplicate custom_id", gatewayErr.Message)
+	}
+}
+
+func TestConvertDecodedBatchItemToAnthropic_ResponsesUsesSharedSemanticTranslator(t *testing.T) {
+	decoded := &core.DecodedBatchItemRequest{
+		Endpoint:  "/v1/responses",
+		Operation: core.OperationResponses,
+		Request: &core.ResponsesRequest{
+			Model:        "claude-sonnet-4-5-20250929",
+			Instructions: "Be helpful",
+			Input: []core.ResponsesInputElement{
+				{
+					Role:    "user",
+					Content: "Hello",
+				},
+			},
+		},
+	}
+
+	result, err := convertDecodedBatchItemToAnthropic(decoded)
+	if err != nil {
+		t.Fatalf("convertDecodedBatchItemToAnthropic() error = %v", err)
+	}
+	if result.System != "Be helpful" {
+		t.Fatalf("System = %q, want Be helpful", result.System)
+	}
+	if result.Stream {
+		t.Fatal("Stream = true, want false")
+	}
+	if len(result.Messages) != 1 {
+		t.Fatalf("len(Messages) = %d, want 1", len(result.Messages))
+	}
+	if result.Messages[0].Role != "user" {
+		t.Fatalf("Messages[0].Role = %q, want user", result.Messages[0].Role)
+	}
+	if result.Messages[0].Content != "Hello" {
+		t.Fatalf("Messages[0].Content = %#v, want Hello", result.Messages[0].Content)
+	}
+}
+
+func TestConvertDecodedBatchItemToAnthropic_RejectsStreaming(t *testing.T) {
+	decoded := &core.DecodedBatchItemRequest{
+		Endpoint:  "/v1/chat/completions",
+		Operation: core.OperationChatCompletions,
+		Request: &core.ChatRequest{
+			Model:  "claude-sonnet-4-5-20250929",
+			Stream: true,
+			Messages: []core.Message{
+				{
+					Role:    "user",
+					Content: "Hello",
+				},
+			},
+		},
+	}
+
+	_, err := convertDecodedBatchItemToAnthropic(decoded)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "streaming is not supported for native batch") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestConvertDecodedBatchItemToAnthropic_RejectsEmbeddings(t *testing.T) {
+	decoded := &core.DecodedBatchItemRequest{
+		Endpoint:  "/v1/embeddings",
+		Operation: core.OperationEmbeddings,
+		Request: &core.EmbeddingRequest{
+			Model: "text-embedding-3-small",
+			Input: "Hello",
+		},
+	}
+
+	_, err := convertDecodedBatchItemToAnthropic(decoded)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "anthropic does not support native embedding batches") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestConvertAnthropicResponseToResponses(t *testing.T) {
+	resp := &anthropicResponse{
+		ID:    "msg_123",
+		Type:  "message",
+		Role:  "assistant",
+		Model: "claude-sonnet-4-5-20250929",
+		Content: []anthropicContent{
+			{Type: "text", Text: "Hello! How can I help you today?"},
+		},
+		StopReason: "end_turn",
+		Usage: anthropicUsage{
+			InputTokens:  10,
+			OutputTokens: 20,
+		},
+	}
+
+	result := convertAnthropicResponseToResponses(resp, "claude-sonnet-4-5-20250929")
+
+	if result.ID != "msg_123" {
+		t.Errorf("ID = %q, want %q", result.ID, "msg_123")
+	}
+	if result.Object != "response" {
+		t.Errorf("Object = %q, want %q", result.Object, "response")
+	}
+	if result.Model != "claude-sonnet-4-5-20250929" {
+		t.Errorf("Model = %q, want %q", result.Model, "claude-sonnet-4-5-20250929")
+	}
+	if result.Status != "completed" {
+		t.Errorf("Status = %q, want %q", result.Status, "completed")
+	}
+	if len(result.Output) != 1 {
+		t.Fatalf("len(Output) = %d, want 1", len(result.Output))
+	}
+	if result.Output[0].Type != "message" {
+		t.Errorf("Output[0].Type = %q, want %q", result.Output[0].Type, "message")
+	}
+	if result.Output[0].Role != "assistant" {
+		t.Errorf("Output[0].Role = %q, want %q", result.Output[0].Role, "assistant")
+	}
+	if len(result.Output[0].Content) != 1 {
+		t.Fatalf("len(Output[0].Content) = %d, want 1", len(result.Output[0].Content))
+	}
+	if result.Output[0].Content[0].Text != "Hello! How can I help you today?" {
+		t.Errorf("Content text = %q, want %q", result.Output[0].Content[0].Text, "Hello! How can I help you today?")
+	}
+	if result.Usage == nil {
+		t.Fatal("Usage should not be nil")
+	}
+	if result.Usage.InputTokens != 10 {
+		t.Errorf("InputTokens = %d, want 10", result.Usage.InputTokens)
+	}
+	if result.Usage.OutputTokens != 20 {
+		t.Errorf("OutputTokens = %d, want 20", result.Usage.OutputTokens)
+	}
+	if result.Usage.TotalTokens != 30 {
+		t.Errorf("TotalTokens = %d, want 30", result.Usage.TotalTokens)
+	}
+}
+
+func TestConvertAnthropicResponseToResponses_WithToolUse(t *testing.T) {
+	resp := &anthropicResponse{
+		ID:    "msg_123",
+		Type:  "message",
+		Role:  "assistant",
+		Model: "claude-sonnet-4-5-20250929",
+		Content: []anthropicContent{
+			{Type: "text", Text: "I'll check that for you."},
+			{
+				Type:  "tool_use",
+				ID:    "toolu_123",
+				Name:  "lookup_weather",
+				Input: json.RawMessage(`{"city":"Warsaw"}`),
+			},
+		},
+		StopReason: "tool_use",
+		Usage: anthropicUsage{
+			InputTokens:  10,
+			OutputTokens: 20,
+		},
+	}
+
+	result := convertAnthropicResponseToResponses(resp, "claude-sonnet-4-5-20250929")
+
+	if len(result.Output) != 2 {
+		t.Fatalf("len(Output) = %d, want 2", len(result.Output))
+	}
+	if result.Output[0].Type != "message" {
+		t.Fatalf("Output[0].Type = %q, want message", result.Output[0].Type)
+	}
+	if result.Output[0].Content[0].Text != "I'll check that for you." {
+		t.Fatalf("Output[0].Content[0].Text = %q, want tool preamble", result.Output[0].Content[0].Text)
+	}
+	if result.Output[1].Type != "function_call" {
+		t.Fatalf("Output[1].Type = %q, want function_call", result.Output[1].Type)
+	}
+	if result.Output[1].CallID != "toolu_123" {
+		t.Fatalf("Output[1].CallID = %q, want toolu_123", result.Output[1].CallID)
+	}
+	if result.Output[1].Name != "lookup_weather" {
+		t.Fatalf("Output[1].Name = %q, want lookup_weather", result.Output[1].Name)
+	}
+	if result.Output[1].Arguments != `{"city":"Warsaw"}` {
+		t.Fatalf("Output[1].Arguments = %q, want canonical JSON", result.Output[1].Arguments)
+	}
+}
+
+func TestConvertAnthropicResponseToResponses_WithThinkingBlocks(t *testing.T) {
+	tests := []struct {
+		name         string
+		content      []anthropicContent
+		expectedText string
+		wantReplay   string
+	}{
+		{
+			name: "thinking then text",
+			content: []anthropicContent{
+				{Type: "thinking", Thinking: "The user is asking about geography...", Signature: "sig-1"},
+				{Type: "text", Text: "The capital of France is Paris."},
+			},
+			expectedText: "The capital of France is Paris.",
+			wantReplay:   `{"anthropic":{"thinking_blocks":[{"type":"thinking","thinking":"The user is asking about geography...","signature":"sig-1"}]}}`,
+		},
+		{
+			name: "preamble text then thinking then answer",
+			content: []anthropicContent{
+				{Type: "text", Text: "\n\n"},
+				{Type: "thinking", Thinking: "", Signature: "sig-2"},
+				{Type: "text", Text: "The capital of France is Paris."},
+			},
+			expectedText: "The capital of France is Paris.",
+			// A thinking block whose text the model omitted still has to be
+			// replayed: the signature covers the block, not the text.
+			wantReplay: `{"anthropic":{"thinking_blocks":[{"type":"thinking","thinking":"","signature":"sig-2"}]}}`,
+		},
+		{
+			name: "redacted thinking",
+			content: []anthropicContent{
+				{Type: "redacted_thinking", Data: "opaque"},
+				{Type: "text", Text: "The capital of France is Paris."},
+			},
+			expectedText: "The capital of France is Paris.",
+			wantReplay:   `{"anthropic":{"thinking_blocks":[{"type":"redacted_thinking","data":"opaque"}]}}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := &anthropicResponse{
+				ID:         "msg_789",
+				Type:       "message",
+				Role:       "assistant",
+				Model:      "claude-opus-4-6",
+				Content:    tt.content,
+				StopReason: "end_turn",
+				Usage:      anthropicUsage{InputTokens: 20, OutputTokens: 50},
+			}
+
+			result := convertAnthropicResponseToResponses(resp, "claude-opus-4-6")
+
+			// A thinking block always produces a leading reasoning item: it
+			// carries the signature the next turn has to replay, even when the
+			// model left the thinking text empty.
+			if len(result.Output) != 2 {
+				t.Fatalf("len(Output) = %d, want a reasoning item and a message", len(result.Output))
+			}
+			reasoning, message := result.Output[0], result.Output[1]
+			if reasoning.Type != "reasoning" {
+				t.Fatalf("Output[0].Type = %q, want reasoning", reasoning.Type)
+			}
+			if raw := reasoning.ExtraFields.Lookup(core.ExtraContentField); string(raw) != tt.wantReplay {
+				t.Errorf("reasoning replay state = %s, want %s", raw, tt.wantReplay)
+			}
+			if len(message.Content) == 0 {
+				t.Fatalf("len(Output[1].Content) = 0, want at least 1")
+			}
+			if message.Content[0].Text != tt.expectedText {
+				t.Errorf("expected %q, got %q", tt.expectedText, message.Content[0].Text)
+			}
+			if result.Usage.OutputTokens != 50 {
+				t.Errorf("OutputTokens = %d, want 50", result.Usage.OutputTokens)
+			}
+		})
+	}
+}
+
+func TestConvertToAnthropicRequest_ReasoningEffort(t *testing.T) {
+	tests := []struct {
+		name              string
+		model             string
+		reasoning         *core.Reasoning
+		maxTokens         *int
+		setTemperature    bool
+		setTemperatureOne bool
+		expectedThinkType string
+		expectedBudget    int
+		expectedEffort    string
+		expectedMaxTokens int
+		expectNilTemp     bool
+		expectedTemp      *float64
+	}{
+		{
+			name:              "reasoning nil - no thinking",
+			model:             "claude-3-5-sonnet-20241022",
+			reasoning:         nil,
+			maxTokens:         new(1000),
+			expectedMaxTokens: 1000,
+		},
+		{
+			name:              "empty effort - no thinking",
+			model:             "claude-3-5-sonnet-20241022",
+			reasoning:         &core.Reasoning{Effort: ""},
+			maxTokens:         new(1000),
+			expectedMaxTokens: 1000,
+		},
+		{
+			name:              "legacy model - low effort",
+			model:             "claude-3-5-sonnet-20241022",
+			reasoning:         &core.Reasoning{Effort: "low"},
+			maxTokens:         new(10000),
+			expectedThinkType: "enabled",
+			expectedBudget:    5000,
+			expectedMaxTokens: 10000,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "legacy model - medium effort",
+			model:             "claude-3-5-sonnet-20241022",
+			reasoning:         &core.Reasoning{Effort: "medium"},
+			maxTokens:         new(15000),
+			expectedThinkType: "enabled",
+			expectedBudget:    10000,
+			expectedMaxTokens: 15000,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "legacy model - high effort",
+			model:             "claude-3-5-sonnet-20241022",
+			reasoning:         &core.Reasoning{Effort: "high"},
+			maxTokens:         new(25000),
+			expectedThinkType: "enabled",
+			expectedBudget:    20000,
+			expectedMaxTokens: 25000,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "legacy model - invalid effort defaults to low",
+			model:             "claude-3-5-sonnet-20241022",
+			reasoning:         &core.Reasoning{Effort: "invalid"},
+			maxTokens:         new(10000),
+			expectedThinkType: "enabled",
+			expectedBudget:    5000,
+			expectedMaxTokens: 10000,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "legacy model - bumps max_tokens when too low",
+			model:             "claude-3-5-sonnet-20241022",
+			reasoning:         &core.Reasoning{Effort: "high"},
+			maxTokens:         new(1000),
+			expectedThinkType: "enabled",
+			expectedBudget:    20000,
+			expectedMaxTokens: 21024,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "legacy model - removes temperature",
+			model:             "claude-3-5-sonnet-20241022",
+			reasoning:         &core.Reasoning{Effort: "medium"},
+			maxTokens:         new(15000),
+			setTemperature:    true,
+			expectedThinkType: "enabled",
+			expectedBudget:    10000,
+			expectedMaxTokens: 15000,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "legacy model - preserves temperature=1.0 with reasoning",
+			model:             "claude-3-5-sonnet-20241022",
+			reasoning:         &core.Reasoning{Effort: "medium"},
+			maxTokens:         new(15000),
+			setTemperatureOne: true,
+			expectedThinkType: "enabled",
+			expectedBudget:    10000,
+			expectedMaxTokens: 15000,
+			expectNilTemp:     false,
+			expectedTemp:      new(1.0),
+		},
+		{
+			name:              "4.6 model - adaptive thinking with high effort",
+			model:             "claude-opus-4-6",
+			reasoning:         &core.Reasoning{Effort: "high"},
+			maxTokens:         new(4096),
+			expectedThinkType: "adaptive",
+			expectedEffort:    "high",
+			expectedMaxTokens: 4096,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "4.6 model - adaptive thinking with low effort",
+			model:             "claude-sonnet-4-6-20260301",
+			reasoning:         &core.Reasoning{Effort: "low"},
+			maxTokens:         new(4096),
+			expectedThinkType: "adaptive",
+			expectedEffort:    "low",
+			expectedMaxTokens: 4096,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "4.6 model - does not bump max_tokens",
+			model:             "claude-opus-4-6",
+			reasoning:         &core.Reasoning{Effort: "high"},
+			maxTokens:         new(1000),
+			expectedThinkType: "adaptive",
+			expectedEffort:    "high",
+			expectedMaxTokens: 1000,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "4.6 model - removes temperature",
+			model:             "claude-opus-4-6",
+			reasoning:         &core.Reasoning{Effort: "medium"},
+			maxTokens:         new(4096),
+			setTemperature:    true,
+			expectedThinkType: "adaptive",
+			expectedEffort:    "medium",
+			expectedMaxTokens: 4096,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "4.6 model - invalid effort normalizes to low",
+			model:             "claude-opus-4-6",
+			reasoning:         &core.Reasoning{Effort: "extreme"},
+			maxTokens:         new(4096),
+			expectedThinkType: "adaptive",
+			expectedEffort:    "low",
+			expectedMaxTokens: 4096,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "fable 5 - adaptive thinking with high effort",
+			model:             "claude-fable-5",
+			reasoning:         &core.Reasoning{Effort: "high"},
+			maxTokens:         new(4096),
+			expectedThinkType: "adaptive",
+			expectedEffort:    "high",
+			expectedMaxTokens: 4096,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "opus 4.8 - adaptive thinking with xhigh effort",
+			model:             "claude-opus-4-8",
+			reasoning:         &core.Reasoning{Effort: "xhigh"},
+			maxTokens:         new(4096),
+			expectedThinkType: "adaptive",
+			expectedEffort:    "xhigh",
+			expectedMaxTokens: 4096,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "opus 4.8 - adaptive thinking with max effort",
+			model:             "claude-opus-4-8-20260301",
+			reasoning:         &core.Reasoning{Effort: "max"},
+			maxTokens:         new(4096),
+			expectedThinkType: "adaptive",
+			expectedEffort:    "max",
+			expectedMaxTokens: 4096,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "opus 4.7 - adaptive thinking with high effort",
+			model:             "claude-opus-4-7",
+			reasoning:         &core.Reasoning{Effort: "high"},
+			maxTokens:         new(4096),
+			expectedThinkType: "adaptive",
+			expectedEffort:    "high",
+			expectedMaxTokens: 4096,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "legacy model - xhigh effort caps at high budget",
+			model:             "claude-3-5-sonnet-20241022",
+			reasoning:         &core.Reasoning{Effort: "xhigh"},
+			maxTokens:         new(25000),
+			expectedThinkType: "enabled",
+			expectedBudget:    20000,
+			expectedMaxTokens: 25000,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "legacy model - max effort caps at high budget",
+			model:             "claude-3-5-sonnet-20241022",
+			reasoning:         &core.Reasoning{Effort: "max"},
+			maxTokens:         new(25000),
+			expectedThinkType: "enabled",
+			expectedBudget:    20000,
+			expectedMaxTokens: 25000,
+			expectNilTemp:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &core.ChatRequest{
+				Model:     tt.model,
+				Messages:  []core.Message{{Role: "user", Content: "test"}},
+				MaxTokens: tt.maxTokens,
+				Reasoning: tt.reasoning,
+			}
+			if tt.setTemperatureOne {
+				temp := 1.0
+				req.Temperature = &temp
+			} else if tt.setTemperature {
+				temp := 0.7
+				req.Temperature = &temp
+			}
+
+			result, err := convertToAnthropicRequest(req)
+			if err != nil {
+				t.Fatalf("convertToAnthropicRequest() error = %v", err)
+			}
+
+			if tt.expectedThinkType == "" {
+				if result.Thinking != nil {
+					t.Errorf("Thinking should be nil but got %+v", result.Thinking)
+				}
+				if result.OutputConfig != nil {
+					t.Errorf("OutputConfig should be nil but got %+v", result.OutputConfig)
+				}
+			} else {
+				if result.Thinking == nil {
+					t.Fatal("Thinking should not be nil")
+				}
+				if result.Thinking.Type != tt.expectedThinkType {
+					t.Errorf("Thinking.Type = %q, want %q", result.Thinking.Type, tt.expectedThinkType)
+				}
+				if tt.expectedThinkType == "enabled" {
+					if result.Thinking.BudgetTokens != tt.expectedBudget {
+						t.Errorf("BudgetTokens = %d, want %d", result.Thinking.BudgetTokens, tt.expectedBudget)
+					}
+				}
+				if tt.expectedThinkType == "adaptive" {
+					if result.OutputConfig == nil {
+						t.Fatal("OutputConfig should not be nil for adaptive thinking")
+					}
+					if result.OutputConfig.Effort != tt.expectedEffort {
+						t.Errorf("OutputConfig.Effort = %q, want %q", result.OutputConfig.Effort, tt.expectedEffort)
+					}
+				}
+			}
+
+			if result.MaxTokens != tt.expectedMaxTokens {
+				t.Errorf("MaxTokens = %d, want %d", result.MaxTokens, tt.expectedMaxTokens)
+			}
+
+			if tt.expectNilTemp && result.Temperature != nil {
+				t.Errorf("Temperature should be nil but is %v", *result.Temperature)
+			}
+			if tt.expectedTemp != nil {
+				if result.Temperature == nil {
+					t.Errorf("Temperature should be %v but is nil", *tt.expectedTemp)
+				} else if *result.Temperature != *tt.expectedTemp {
+					t.Errorf("Temperature = %v, want %v", *result.Temperature, *tt.expectedTemp)
+				}
+			}
+		})
+	}
+}
+
+func TestConvertResponsesRequestToAnthropic_ReasoningEffort(t *testing.T) {
+	tests := []struct {
+		name              string
+		model             string
+		reasoning         *core.Reasoning
+		maxOutputTokens   *int
+		setTemperature    bool
+		expectedThinkType string
+		expectedBudget    int
+		expectedEffort    string
+		expectedMaxTokens int
+		expectNilTemp     bool
+	}{
+		{
+			name:              "no reasoning",
+			model:             "claude-3-5-sonnet-20241022",
+			reasoning:         nil,
+			maxOutputTokens:   new(1000),
+			expectedMaxTokens: 1000,
+		},
+		{
+			name:              "empty effort",
+			model:             "claude-3-5-sonnet-20241022",
+			reasoning:         &core.Reasoning{Effort: ""},
+			maxOutputTokens:   new(1000),
+			expectedMaxTokens: 1000,
+		},
+		{
+			name:              "legacy model - low effort bumps max tokens",
+			model:             "claude-3-5-sonnet-20241022",
+			reasoning:         &core.Reasoning{Effort: "low"},
+			maxOutputTokens:   new(1000),
+			expectedThinkType: "enabled",
+			expectedBudget:    5000,
+			expectedMaxTokens: 6024,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "legacy model - high effort with sufficient tokens",
+			model:             "claude-3-5-sonnet-20241022",
+			reasoning:         &core.Reasoning{Effort: "high"},
+			maxOutputTokens:   new(25000),
+			expectedThinkType: "enabled",
+			expectedBudget:    20000,
+			expectedMaxTokens: 25000,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "legacy model - removes temperature",
+			model:             "claude-3-5-sonnet-20241022",
+			reasoning:         &core.Reasoning{Effort: "medium"},
+			maxOutputTokens:   new(15000),
+			setTemperature:    true,
+			expectedThinkType: "enabled",
+			expectedBudget:    10000,
+			expectedMaxTokens: 15000,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "4.6 model - adaptive thinking",
+			model:             "claude-opus-4-6",
+			reasoning:         &core.Reasoning{Effort: "high"},
+			maxOutputTokens:   new(4096),
+			expectedThinkType: "adaptive",
+			expectedEffort:    "high",
+			expectedMaxTokens: 4096,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "4.6 model - does not bump max_tokens",
+			model:             "claude-opus-4-6",
+			reasoning:         &core.Reasoning{Effort: "high"},
+			maxOutputTokens:   new(1000),
+			expectedThinkType: "adaptive",
+			expectedEffort:    "high",
+			expectedMaxTokens: 1000,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "4.6 model - removes temperature",
+			model:             "claude-opus-4-6",
+			reasoning:         &core.Reasoning{Effort: "medium"},
+			maxOutputTokens:   new(4096),
+			setTemperature:    true,
+			expectedThinkType: "adaptive",
+			expectedEffort:    "medium",
+			expectedMaxTokens: 4096,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "4.6 model - invalid effort normalizes to low",
+			model:             "claude-opus-4-6",
+			reasoning:         &core.Reasoning{Effort: "extreme"},
+			maxOutputTokens:   new(4096),
+			expectedThinkType: "adaptive",
+			expectedEffort:    "low",
+			expectedMaxTokens: 4096,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "fable 5 - adaptive thinking with high effort",
+			model:             "claude-fable-5",
+			reasoning:         &core.Reasoning{Effort: "high"},
+			maxOutputTokens:   new(4096),
+			expectedThinkType: "adaptive",
+			expectedEffort:    "high",
+			expectedMaxTokens: 4096,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "opus 4.8 - adaptive thinking with xhigh effort",
+			model:             "claude-opus-4-8",
+			reasoning:         &core.Reasoning{Effort: "xhigh"},
+			maxOutputTokens:   new(4096),
+			expectedThinkType: "adaptive",
+			expectedEffort:    "xhigh",
+			expectedMaxTokens: 4096,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "opus 4.8 - adaptive thinking with max effort",
+			model:             "claude-opus-4-8-20260301",
+			reasoning:         &core.Reasoning{Effort: "max"},
+			maxOutputTokens:   new(4096),
+			expectedThinkType: "adaptive",
+			expectedEffort:    "max",
+			expectedMaxTokens: 4096,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "opus 4.7 - adaptive thinking with high effort",
+			model:             "claude-opus-4-7",
+			reasoning:         &core.Reasoning{Effort: "high"},
+			maxOutputTokens:   new(4096),
+			expectedThinkType: "adaptive",
+			expectedEffort:    "high",
+			expectedMaxTokens: 4096,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "legacy model - xhigh effort caps at high budget",
+			model:             "claude-3-5-sonnet-20241022",
+			reasoning:         &core.Reasoning{Effort: "xhigh"},
+			maxOutputTokens:   new(25000),
+			expectedThinkType: "enabled",
+			expectedBudget:    20000,
+			expectedMaxTokens: 25000,
+			expectNilTemp:     true,
+		},
+		{
+			name:              "legacy model - max effort caps at high budget",
+			model:             "claude-3-5-sonnet-20241022",
+			reasoning:         &core.Reasoning{Effort: "max"},
+			maxOutputTokens:   new(25000),
+			expectedThinkType: "enabled",
+			expectedBudget:    20000,
+			expectedMaxTokens: 25000,
+			expectNilTemp:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &core.ResponsesRequest{
+				Model:           tt.model,
+				Input:           "test input",
+				MaxOutputTokens: tt.maxOutputTokens,
+				Reasoning:       tt.reasoning,
+			}
+			if tt.setTemperature {
+				temp := 0.7
+				req.Temperature = &temp
+			}
+
+			result, err := convertResponsesRequestToAnthropic(req)
+			if err != nil {
+				t.Fatalf("convertResponsesRequestToAnthropic() error = %v", err)
+			}
+
+			if tt.expectedThinkType == "" {
+				if result.Thinking != nil {
+					t.Errorf("Thinking should be nil but got %+v", result.Thinking)
+				}
+				if result.OutputConfig != nil {
+					t.Errorf("OutputConfig should be nil but got %+v", result.OutputConfig)
+				}
+			} else {
+				if result.Thinking == nil {
+					t.Fatal("Thinking should not be nil")
+				}
+				if result.Thinking.Type != tt.expectedThinkType {
+					t.Errorf("Thinking.Type = %q, want %q", result.Thinking.Type, tt.expectedThinkType)
+				}
+				if tt.expectedThinkType == "enabled" {
+					if result.Thinking.BudgetTokens != tt.expectedBudget {
+						t.Errorf("BudgetTokens = %d, want %d", result.Thinking.BudgetTokens, tt.expectedBudget)
+					}
+				}
+				if tt.expectedThinkType == "adaptive" {
+					if result.OutputConfig == nil {
+						t.Fatal("OutputConfig should not be nil for adaptive thinking")
+					}
+					if result.OutputConfig.Effort != tt.expectedEffort {
+						t.Errorf("OutputConfig.Effort = %q, want %q", result.OutputConfig.Effort, tt.expectedEffort)
+					}
+				}
+			}
+
+			if result.MaxTokens != tt.expectedMaxTokens {
+				t.Errorf("MaxTokens = %d, want %d", result.MaxTokens, tt.expectedMaxTokens)
+			}
+
+			if tt.expectNilTemp && result.Temperature != nil {
+				t.Errorf("Temperature should be nil but is %v", *result.Temperature)
+			}
+		})
+	}
+}
+
+func TestIsAdaptiveThinkingModel(t *testing.T) {
+	tests := []struct {
+		model    string
+		expected bool
+	}{
+		{"claude-fable-5", true},
+		{"claude-fable-5-20260601", true},
+		{"claude-fable-5-1", true},
+		{"claude-mythos-5", true},
+		{"claude-mythos-5-1-20260901", true},
+		{"claude-opus-5", true},
+		{"claude-opus-5-20260601", true},
+		{"claude-sonnet-5", true},
+		{"claude-sonnet-5-20260601", true},
+		// Haiku 4.5 predates adaptive thinking and stays on manual budgets.
+		{"claude-haiku-4-5-20251001", false},
+		{"claude-opus-4-8", true},
+		{"claude-opus-4-8-20260301", true},
+		{"claude-opus-4-7", true},
+		{"claude-opus-4-7-20260101", true},
+		// Only the prefixes in adaptiveThinkingPrefixes are adaptive; a
+		// hypothetical Sonnet 4.8 must not be assumed adaptive until added.
+		{"claude-sonnet-4-8", false},
+		{"claude-sonnet-4-8-20260301", false},
+		{"claude-opus-4-6", true},
+		{"claude-opus-4-6-20260301", true},
+		{"claude-sonnet-4-6", true},
+		{"claude-sonnet-4-6-20260301", true},
+		{"claude-haiku-4-6", false},
+		{"claude-haiku-4-6-20260501", false},
+		{"claude-3-5-sonnet-20241022", false},
+		{"claude-opus-4-5-20251101", false},
+		{"claude-4-60", false},
+		{"claude-opus-4-6x", false},
+		{"claude-opus-4-65", false},
+		{"something-claude-opus-4-6", false},
+		{"", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.model, func(t *testing.T) {
+			if got := isAdaptiveThinkingModel(tt.model); got != tt.expected {
+				t.Errorf("isAdaptiveThinkingModel(%q) = %v, want %v", tt.model, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestConvertToAnthropicRequest_MultimodalImageContent(t *testing.T) {
+	req := &core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{
+				Role: "user",
+				Content: []core.ContentPart{
+					{Type: "text", Text: "Describe the image."},
+					{
+						Type: "image_url",
+						ImageURL: &core.ImageURLContent{
+							URL: "data:image/png;base64,ZmFrZQ==",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	result, err := convertToAnthropicRequest(req)
+	if err != nil {
+		t.Fatalf("convertToAnthropicRequest() error = %v", err)
+	}
+	if len(result.Messages) != 1 {
+		t.Fatalf("len(Messages) = %d, want 1", len(result.Messages))
+	}
+
+	blocks, ok := result.Messages[0].Content.([]anthropicContentBlock)
+	if !ok {
+		t.Fatalf("message content type = %T, want []anthropicContentBlock", result.Messages[0].Content)
+	}
+	if len(blocks) != 2 {
+		t.Fatalf("len(blocks) = %d, want 2", len(blocks))
+	}
+	if blocks[0].Type != "text" || blocks[0].Text != "Describe the image." {
+		t.Fatalf("unexpected first block: %+v", blocks[0])
+	}
+	if blocks[1].Type != "image" || blocks[1].Source == nil || blocks[1].Source.MediaType != "image/png" || blocks[1].Source.Data != "ZmFrZQ==" {
+		t.Fatalf("unexpected second block: %+v", blocks[1])
+	}
+}
+
+func TestConvertToAnthropicRequest_PreservesCacheControlOnContentBlocks(t *testing.T) {
+	req := &core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{
+				Role: "user",
+				Content: []core.ContentPart{
+					{
+						Type: "text",
+						Text: "Reusable prefix.",
+						ExtraFields: core.UnknownJSONFieldsFromMap(map[string]json.RawMessage{
+							"cache_control": json.RawMessage(`{"type":"ephemeral"}`),
+						}),
+					},
+					{
+						Type: "image_url",
+						ImageURL: &core.ImageURLContent{
+							URL: "data:image/png;base64,ZmFrZQ==",
+						},
+						ExtraFields: core.UnknownJSONFieldsFromMap(map[string]json.RawMessage{
+							"cache_control": json.RawMessage(`{"type":"ephemeral"}`),
+						}),
+					},
+				},
+			},
+		},
+	}
+
+	result, err := convertToAnthropicRequest(req)
+	if err != nil {
+		t.Fatalf("convertToAnthropicRequest() error = %v", err)
+	}
+
+	blocks, ok := result.Messages[0].Content.([]anthropicContentBlock)
+	if !ok {
+		t.Fatalf("message content type = %T, want []anthropicContentBlock", result.Messages[0].Content)
+	}
+	if len(blocks) != 2 {
+		t.Fatalf("len(blocks) = %d, want 2", len(blocks))
+	}
+	for i, block := range blocks {
+		if string(block.CacheControl) != `{"type":"ephemeral"}` {
+			t.Fatalf("blocks[%d].CacheControl = %s, want ephemeral cache_control", i, block.CacheControl)
+		}
+	}
+
+	body, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	if got := strings.Count(string(body), `"cache_control":{"type":"ephemeral"}`); got != 2 {
+		t.Fatalf("marshaled request has %d cache_control blocks, want 2: %s", got, body)
+	}
+}
+
+func TestConvertToAnthropicRequest_PreservesCacheControlOnSystemBlocks(t *testing.T) {
+	req := &core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{
+				Role: "system",
+				Content: []core.ContentPart{
+					{
+						Type: "text",
+						Text: "Reusable system prefix.",
+						ExtraFields: core.UnknownJSONFieldsFromMap(map[string]json.RawMessage{
+							"cache_control": json.RawMessage(`{"type":"ephemeral"}`),
+						}),
+					},
+				},
+			},
+			{Role: "user", Content: "hello"},
+		},
+	}
+
+	result, err := convertToAnthropicRequest(req)
+	if err != nil {
+		t.Fatalf("convertToAnthropicRequest() error = %v", err)
+	}
+
+	blocks, ok := result.System.([]anthropicContentBlock)
+	if !ok {
+		t.Fatalf("System type = %T, want []anthropicContentBlock", result.System)
+	}
+	if len(blocks) != 1 {
+		t.Fatalf("len(System blocks) = %d, want 1", len(blocks))
+	}
+	if blocks[0].Type != "text" || blocks[0].Text != "Reusable system prefix." {
+		t.Fatalf("unexpected system block: %+v", blocks[0])
+	}
+	if string(blocks[0].CacheControl) != `{"type":"ephemeral"}` {
+		t.Fatalf("System[0].CacheControl = %s, want ephemeral cache_control", blocks[0].CacheControl)
+	}
+}
+
+func TestConvertToAnthropicRequest_PreservesCacheControlOnRequestToolsAndToolHistory(t *testing.T) {
+	cacheExtra := core.UnknownJSONFieldsFromMap(map[string]json.RawMessage{
+		"cache_control": json.RawMessage(`{"type":"ephemeral"}`),
+	})
+	req := &core.ChatRequest{
+		Model:       "claude-sonnet-4-5-20250929",
+		ExtraFields: cacheExtra,
+		Tools: []map[string]any{{
+			"type":          "function",
+			"function":      map[string]any{"name": "lookup", "parameters": map[string]any{"type": "object"}},
+			"cache_control": map[string]any{"type": "ephemeral"},
+		}},
+		Messages: []core.Message{
+			{Role: "assistant", ToolCalls: []core.ToolCall{{
+				ID: "tool-1", Type: "function", Function: core.FunctionCall{Name: "lookup", Arguments: `{}`}, ExtraFields: cacheExtra,
+			}}},
+			{Role: "tool", ToolCallID: "tool-1", Content: "result", ExtraFields: cacheExtra},
+		},
+	}
+
+	result, err := convertToAnthropicRequest(req)
+	if err != nil {
+		t.Fatalf("convertToAnthropicRequest() error = %v", err)
+	}
+	want := `{"type":"ephemeral"}`
+	if got := string(result.CacheControl); got != want {
+		t.Errorf("request CacheControl = %s, want %s", got, want)
+	}
+	if got := string(result.Tools[0].CacheControl); got != want {
+		t.Errorf("tool CacheControl = %s, want %s", got, want)
+	}
+	assistantBlocks := result.Messages[0].Content.([]anthropicContentBlock)
+	if got := string(assistantBlocks[0].CacheControl); got != want {
+		t.Errorf("tool_use CacheControl = %s, want %s", got, want)
+	}
+	toolBlocks := result.Messages[1].Content.([]anthropicContentBlock)
+	if got := string(toolBlocks[0].CacheControl); got != want {
+		t.Errorf("tool_result CacheControl = %s, want %s", got, want)
+	}
+}
+
+func TestConvertToAnthropicRequest_PreservesFunctionLevelToolCallCacheControl(t *testing.T) {
+	cacheExtra := core.UnknownJSONFieldsFromMap(map[string]json.RawMessage{
+		"cache_control": json.RawMessage(`{"type":"ephemeral"}`),
+	})
+	req := &core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{{Role: "assistant", ToolCalls: []core.ToolCall{{
+			ID:   "tool-1",
+			Type: "function",
+			Function: core.FunctionCall{
+				Name:        "lookup",
+				Arguments:   `{}`,
+				ExtraFields: cacheExtra,
+			},
+		}}}},
+	}
+
+	result, err := convertToAnthropicRequest(req)
+	if err != nil {
+		t.Fatalf("convertToAnthropicRequest() error = %v", err)
+	}
+	blocks := result.Messages[0].Content.([]anthropicContentBlock)
+	if got := string(blocks[0].CacheControl); got != `{"type":"ephemeral"}` {
+		t.Fatalf("tool_use CacheControl = %s, want function-level cache_control", got)
+	}
+}
+
+func TestConvertToAnthropicRequest_PreservesAllSystemMessages(t *testing.T) {
+	req := &core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{Role: "system", Content: "first system"},
+			{Role: "system", Content: "second system"},
+			{Role: "user", Content: "hello"},
+		},
+	}
+
+	result, err := convertToAnthropicRequest(req)
+	if err != nil {
+		t.Fatalf("convertToAnthropicRequest() error = %v", err)
+	}
+	if result.System != "first system\n\nsecond system" {
+		t.Fatalf("System = %q, want merged system text", result.System)
+	}
+}
+
+func TestConvertToAnthropicRequest_RejectsNilRequest(t *testing.T) {
+	_, err := convertToAnthropicRequest(nil)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "anthropic chat request is required") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestConvertToAnthropicRequest_MultimodalImageContent_DataURLWithExtraMetadata(t *testing.T) {
+	req := &core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{
+				Role: "user",
+				Content: []core.ContentPart{
+					{
+						Type: "image_url",
+						ImageURL: &core.ImageURLContent{
+							URL: "data:image/png;charset=utf-8;BASE64,ZmFrZQ==",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	result, err := convertToAnthropicRequest(req)
+	if err != nil {
+		t.Fatalf("convertToAnthropicRequest() error = %v", err)
+	}
+	blocks, ok := result.Messages[0].Content.([]anthropicContentBlock)
+	if !ok || len(blocks) != 1 || blocks[0].Source == nil {
+		t.Fatalf("unexpected image block: %#v", result.Messages[0].Content)
+	}
+	if blocks[0].Source.Type != "base64" || blocks[0].Source.MediaType != "image/png" || blocks[0].Source.Data != "ZmFrZQ==" {
+		t.Fatalf("unexpected image source: %+v", blocks[0].Source)
+	}
+}
+
+func TestConvertToAnthropicRequest_RejectsInputAudio(t *testing.T) {
+	req := &core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{
+				Role: "user",
+				Content: []core.ContentPart{
+					{
+						Type: "input_audio",
+						InputAudio: &core.InputAudioContent{
+							Data:   "abc",
+							Format: "wav",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	_, err := convertToAnthropicRequest(req)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "input_audio") {
+		t.Fatalf("expected input_audio error, got %v", err)
+	}
+}
+
+func TestConvertToAnthropicRequest_MultimodalRemoteImageContent(t *testing.T) {
+	req := &core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{
+				Role: "user",
+				Content: []core.ContentPart{
+					{
+						Type: "image_url",
+						ImageURL: &core.ImageURLContent{
+							URL:       "https://example.com/image.png",
+							MediaType: "image/png",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	result, err := convertToAnthropicRequest(req)
+	if err != nil {
+		t.Fatalf("convertToAnthropicRequest() error = %v", err)
+	}
+	if len(result.Messages) != 1 {
+		t.Fatalf("len(Messages) = %d, want 1", len(result.Messages))
+	}
+
+	blocks, ok := result.Messages[0].Content.([]anthropicContentBlock)
+	if !ok {
+		t.Fatalf("message content type = %T, want []anthropicContentBlock", result.Messages[0].Content)
+	}
+	if len(blocks) != 1 {
+		t.Fatalf("len(blocks) = %d, want 1", len(blocks))
+	}
+	if blocks[0].Type != "image" || blocks[0].Source == nil {
+		t.Fatalf("unexpected image block: %+v", blocks[0])
+	}
+	if blocks[0].Source.Type != "url" || blocks[0].Source.URL != "https://example.com/image.png" {
+		t.Fatalf("unexpected image source: %+v", blocks[0].Source)
+	}
+	if blocks[0].Source.Data != "" || blocks[0].Source.MediaType != "" {
+		t.Fatalf("expected url source without data/media_type, got %+v", blocks[0].Source)
+	}
+}
+
+func TestConvertToAnthropicRequest_AllowsRemoteImageWithoutMediaType(t *testing.T) {
+	req := &core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{
+				Role: "user",
+				Content: []core.ContentPart{
+					{
+						Type: "image_url",
+						ImageURL: &core.ImageURLContent{
+							URL: "https://example.com/image.png",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	result, err := convertToAnthropicRequest(req)
+	if err != nil {
+		t.Fatalf("convertToAnthropicRequest() error = %v", err)
+	}
+	blocks, ok := result.Messages[0].Content.([]anthropicContentBlock)
+	if !ok || len(blocks) != 1 || blocks[0].Source == nil {
+		t.Fatalf("unexpected image block: %#v", result.Messages[0].Content)
+	}
+	if blocks[0].Source.Type != "url" || blocks[0].Source.URL != "https://example.com/image.png" {
+		t.Fatalf("unexpected image source: %+v", blocks[0].Source)
+	}
+	if blocks[0].Source.MediaType != "" {
+		t.Fatalf("expected media_type to be omitted for url source, got %+v", blocks[0].Source)
+	}
+}
+
+func TestConvertToAnthropicRequest_IgnoresRemoteImageMediaTypeHint(t *testing.T) {
+	req := &core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{
+				Role: "user",
+				Content: []core.ContentPart{
+					{
+						Type: "image_url",
+						ImageURL: &core.ImageURLContent{
+							URL:       "https://example.com/image.svg",
+							MediaType: "image/svg+xml",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	result, err := convertToAnthropicRequest(req)
+	if err != nil {
+		t.Fatalf("convertToAnthropicRequest() error = %v", err)
+	}
+	blocks, ok := result.Messages[0].Content.([]anthropicContentBlock)
+	if !ok || len(blocks) != 1 || blocks[0].Source == nil {
+		t.Fatalf("unexpected image block: %#v", result.Messages[0].Content)
+	}
+	if blocks[0].Source.Type != "url" || blocks[0].Source.URL != "https://example.com/image.svg" {
+		t.Fatalf("unexpected image source: %+v", blocks[0].Source)
+	}
+	if blocks[0].Source.MediaType != "" {
+		t.Fatalf("expected media_type to be omitted for url source, got %+v", blocks[0].Source)
+	}
+}
+
+func TestConvertToAnthropicRequest_RejectsInvalidRemoteImageURLs(t *testing.T) {
+	tests := []string{
+		"https:",
+		"https://",
+		"/relative/path.png",
+	}
+
+	for _, rawURL := range tests {
+		t.Run(rawURL, func(t *testing.T) {
+			req := &core.ChatRequest{
+				Model: "claude-sonnet-4-5-20250929",
+				Messages: []core.Message{
+					{
+						Role: "user",
+						Content: []core.ContentPart{
+							{
+								Type: "image_url",
+								ImageURL: &core.ImageURLContent{
+									URL: rawURL,
+								},
+							},
+						},
+					},
+				},
+			}
+
+			_, err := convertToAnthropicRequest(req)
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), "anthropic chat image_url must be a data: URL or http/https URL") {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestConvertResponsesRequestToAnthropic_RejectsInvalidInputItems(t *testing.T) {
+	tests := []struct {
+		name  string
+		input []any
+	}{
+		{
+			name: "non-object item",
+			input: []any{
+				"bad-item",
+			},
+		},
+		{
+			name: "missing role",
+			input: []any{
+				map[string]any{
+					"content": []any{
+						map[string]any{
+							"type": "input_text",
+							"text": "hello",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "invalid content",
+			input: []any{
+				map[string]any{
+					"role": "user",
+					"content": []any{
+						map[string]any{
+							"type": "unknown",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := convertResponsesRequestToAnthropic(&core.ResponsesRequest{
+				Model: "claude-sonnet-4-5-20250929",
+				Input: tt.input,
+			})
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), "invalid responses input item") {
+				t.Fatalf("expected invalid responses input item error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestConvertResponsesRequestToAnthropic_RejectsUnsupportedInputType(t *testing.T) {
+	_, err := convertResponsesRequestToAnthropic(&core.ResponsesRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Input: 123,
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "invalid responses input: unsupported type") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestConvertResponsesRequestToAnthropic_TrimsRoleBeforeAppend(t *testing.T) {
+	req, err := convertResponsesRequestToAnthropic(&core.ResponsesRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Input: []any{
+			map[string]any{
+				"role":    "  user  ",
+				"content": "hello",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("convertResponsesRequestToAnthropic() error = %v", err)
+	}
+	if len(req.Messages) != 1 {
+		t.Fatalf("len(Messages) = %d, want 1", len(req.Messages))
+	}
+	if req.Messages[0].Role != "user" {
+		t.Fatalf("Messages[0].Role = %q, want user", req.Messages[0].Role)
+	}
+}
+
+func TestConvertResponsesRequestToAnthropic_PreservesAllSystemMessages(t *testing.T) {
+	req, err := convertResponsesRequestToAnthropic(&core.ResponsesRequest{
+		Model:        "claude-sonnet-4-5-20250929",
+		Instructions: "instruction system",
+		Input: []core.ResponsesInputElement{
+			{
+				Role:    "system",
+				Content: "input system",
+			},
+			{
+				Role:    "user",
+				Content: "hello",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("convertResponsesRequestToAnthropic() error = %v", err)
+	}
+	if req.System != "instruction system\n\ninput system" {
+		t.Fatalf("System = %q, want merged system text", req.System)
+	}
+}
+
+func TestConvertResponsesRequestToAnthropic_RejectsNilRequest(t *testing.T) {
+	_, err := convertResponsesRequestToAnthropic(nil)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "anthropic responses request is required") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestConvertResponsesRequestToAnthropic_TypedInputPromotesSystemRole(t *testing.T) {
+	req, err := convertResponsesRequestToAnthropic(&core.ResponsesRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Input: []core.ResponsesInputElement{
+			{
+				Role:    "system",
+				Content: "be concise",
+			},
+			{
+				Role: " user ",
+				Content: []core.ContentPart{
+					{Type: "input_text", Text: "hello"},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("convertResponsesRequestToAnthropic() error = %v", err)
+	}
+	if req.System != "be concise" {
+		t.Fatalf("System = %q, want be concise", req.System)
+	}
+	if len(req.Messages) != 1 {
+		t.Fatalf("len(Messages) = %d, want 1", len(req.Messages))
+	}
+	if req.Messages[0].Role != "user" {
+		t.Fatalf("Messages[0].Role = %q, want user", req.Messages[0].Role)
+	}
+	if req.Messages[0].Content != "hello" {
+		t.Fatalf("Messages[0].Content = %#v, want hello", req.Messages[0].Content)
+	}
+}
+
+func TestConvertResponsesRequestToAnthropic_PreservesMultimodalImageInput(t *testing.T) {
+	req, err := convertResponsesRequestToAnthropic(&core.ResponsesRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Input: []any{
+			map[string]any{
+				"role": "user",
+				"content": []any{
+					map[string]any{
+						"type": "input_text",
+						"text": "Describe the image.",
+					},
+					map[string]any{
+						"type": "input_image",
+						"image_url": map[string]any{
+							"url": "data:image/png;base64,ZmFrZQ==",
+						},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("convertResponsesRequestToAnthropic() error = %v", err)
+	}
+	if len(req.Messages) != 1 {
+		t.Fatalf("len(Messages) = %d, want 1", len(req.Messages))
+	}
+
+	blocks, ok := req.Messages[0].Content.([]anthropicContentBlock)
+	if !ok {
+		t.Fatalf("Messages[0].Content = %#v, want []anthropicContentBlock", req.Messages[0].Content)
+	}
+	if len(blocks) != 2 {
+		t.Fatalf("len(blocks) = %d, want 2", len(blocks))
+	}
+	if blocks[0].Type != "text" || blocks[0].Text != "Describe the image." {
+		t.Fatalf("unexpected text block: %+v", blocks[0])
+	}
+	if blocks[1].Type != "image" || blocks[1].Source == nil {
+		t.Fatalf("unexpected image block: %+v", blocks[1])
+	}
+	if blocks[1].Source.Type != "base64" || blocks[1].Source.MediaType != "image/png" || blocks[1].Source.Data != "ZmFrZQ==" {
+		t.Fatalf("unexpected image source: %+v", blocks[1].Source)
+	}
+}
+
+func TestConvertResponsesRequestToAnthropic_ToolRoleRequiresToolCallID(t *testing.T) {
+	_, err := convertResponsesRequestToAnthropic(&core.ResponsesRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Input: []core.ResponsesInputElement{
+			{
+				Role:    "tool",
+				Content: "hello",
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "tool message is missing tool_call_id") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestEmbeddings_ReturnsUnsupportedError(t *testing.T) {
+	p := &Provider{}
+	_, err := p.Embeddings(context.Background(), &core.EmbeddingRequest{
+		Model: "text-embedding-3-small",
+		Input: "hello",
+	})
+	if err == nil {
+		t.Fatal("expected error from Anthropic Embeddings, got nil")
+	}
+
+	var gatewayErr *core.GatewayError
+	if !errors.As(err, &gatewayErr) {
+		t.Fatalf("expected GatewayError, got %T: %v", err, err)
+	}
+	if gatewayErr.HTTPStatusCode() != 400 {
+		t.Errorf("expected HTTP 400, got %d", gatewayErr.HTTPStatusCode())
+	}
+	if !strings.Contains(err.Error(), "anthropic does not support embeddings") {
+		t.Errorf("expected message about anthropic not supporting embeddings, got: %s", err.Error())
+	}
+}
+
+func TestConvertToAnthropicRequest_NormalizesInputTextType(t *testing.T) {
+	req := &core.ChatRequest{
+		Model: "claude-sonnet-4-5-20250929",
+		Messages: []core.Message{
+			{
+				Role: "user",
+				Content: []core.ContentPart{
+					{Type: "input_text", Text: "First part."},
+					{Type: "input_text", Text: "Second part."},
+				},
+			},
+		},
+	}
+
+	result, err := convertToAnthropicRequest(req)
+	if err != nil {
+		t.Fatalf("convertToAnthropicRequest() error = %v", err)
+	}
+	if len(result.Messages) != 1 {
+		t.Fatalf("len(Messages) = %d, want 1", len(result.Messages))
+	}
+
+	blocks, ok := result.Messages[0].Content.([]anthropicContentBlock)
+	if !ok {
+		t.Fatalf("message content type = %T, want []anthropicContentBlock", result.Messages[0].Content)
+	}
+	if len(blocks) != 2 {
+		t.Fatalf("len(blocks) = %d, want 2", len(blocks))
+	}
+	for i, block := range blocks {
+		if block.Type != "text" {
+			t.Errorf("blocks[%d].Type = %q, want \"text\"", i, block.Type)
+		}
+	}
+	if blocks[0].Text != "First part." {
+		t.Errorf("blocks[0].Text = %q, want \"First part.\"", blocks[0].Text)
+	}
+	if blocks[1].Text != "Second part." {
+		t.Errorf("blocks[1].Text = %q, want \"Second part.\"", blocks[1].Text)
+	}
+}
+
+func TestPassthrough(t *testing.T) {
+	var gotPath string
+	var gotAPIKey string
+	var gotVersion string
+	var gotBody string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.RequestURI()
+		gotAPIKey = r.Header.Get("x-api-key")
+		gotVersion = r.Header.Get("anthropic-version")
+		body, _ := io.ReadAll(r.Body)
+		gotBody = string(body)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"message":"bad request"}}`))
+	}))
+	defer server.Close()
+
+	provider := NewWithHTTPClient("test-api-key", server.Client(), llmclient.Hooks{})
+	provider.SetBaseURL(server.URL)
+
+	resp, err := provider.Passthrough(context.Background(), &core.PassthroughRequest{
+		Method:   http.MethodPost,
+		Endpoint: "messages",
+		Body:     io.NopCloser(strings.NewReader(`{"model":"claude-sonnet-4-5"}`)),
+		Headers: http.Header{
+			"Content-Type":      {"application/json"},
+			"anthropic-version": {"2024-10-22"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	if gotPath != "/messages" {
+		t.Fatalf("path = %q, want /messages", gotPath)
+	}
+	if gotAPIKey != "test-api-key" {
+		t.Fatalf("x-api-key = %q", gotAPIKey)
+	}
+	if gotVersion != "2024-10-22" {
+		t.Fatalf("anthropic-version = %q", gotVersion)
+	}
+	if gotBody != `{"model":"claude-sonnet-4-5"}` {
+		t.Fatalf("body = %q", gotBody)
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %v", err)
+	}
+	if string(body) != `{"error":{"message":"bad request"}}` {
+		t.Fatalf("response body = %q", string(body))
+	}
+}
+
+func TestSetHeadersOAuthToken(t *testing.T) {
+	tests := []struct {
+		name       string
+		key        string
+		wantAPIKey string
+		wantAuth   string
+		wantBeta   string
+	}{
+		{
+			name:       "api key uses x-api-key",
+			key:        "sk-ant-api03-abc",
+			wantAPIKey: "sk-ant-api03-abc",
+		},
+		{
+			name:     "oauth token uses bearer and oauth beta",
+			key:      "sk-ant-oat01-abc",
+			wantAuth: "Bearer sk-ant-oat01-abc",
+			wantBeta: oauthBetaFlag,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &Provider{keys: providers.NewKeyring(tt.key)}
+			req := httptest.NewRequest(http.MethodPost, "/messages", nil)
+			p.setHeaders(req)
+
+			if got := req.Header.Get("x-api-key"); got != tt.wantAPIKey {
+				t.Errorf("x-api-key = %q, want %q", got, tt.wantAPIKey)
+			}
+			if got := req.Header.Get("Authorization"); got != tt.wantAuth {
+				t.Errorf("Authorization = %q, want %q", got, tt.wantAuth)
+			}
+			if got := req.Header.Get(anthropicBetaHeader); got != tt.wantBeta {
+				t.Errorf("anthropic-beta = %q, want %q", got, tt.wantBeta)
+			}
+			if got := req.Header.Get("anthropic-version"); got != anthropicAPIVersion {
+				t.Errorf("anthropic-version = %q, want %q", got, anthropicAPIVersion)
+			}
+		})
+	}
+}
+
+func TestPassthroughOAuthToken(t *testing.T) {
+	tests := []struct {
+		name       string
+		clientBeta string
+		wantBeta   []string
+	}{
+		{
+			name:     "no client beta keeps provider oauth beta",
+			wantBeta: []string{oauthBetaFlag},
+		},
+		{
+			name:       "client beta merged with oauth flag",
+			clientBeta: "claude-code-20250219,interleaved-thinking-2025-05-14",
+			wantBeta:   []string{"claude-code-20250219,interleaved-thinking-2025-05-14", oauthBetaFlag},
+		},
+		{
+			name:       "client beta already containing oauth flag unchanged",
+			clientBeta: "claude-code-20250219," + oauthBetaFlag,
+			wantBeta:   []string{"claude-code-20250219," + oauthBetaFlag},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotAuth, gotAPIKey string
+			var gotBeta []string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotAuth = r.Header.Get("Authorization")
+				gotAPIKey = r.Header.Get("x-api-key")
+				gotBeta = r.Header.Values(anthropicBetaHeader)
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{}`))
+			}))
+			defer server.Close()
+
+			provider := NewWithHTTPClient("sk-ant-oat01-abc", server.Client(), llmclient.Hooks{})
+			provider.SetBaseURL(server.URL)
+
+			headers := http.Header{"Content-Type": {"application/json"}}
+			if tt.clientBeta != "" {
+				headers.Set(anthropicBetaHeader, tt.clientBeta)
+			}
+			resp, err := provider.Passthrough(context.Background(), &core.PassthroughRequest{
+				Method:   http.MethodPost,
+				Endpoint: "messages",
+				Body:     io.NopCloser(strings.NewReader(`{"model":"claude-sonnet-5"}`)),
+				Headers:  headers,
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			defer func() {
+				_ = resp.Body.Close()
+			}()
+
+			if gotAuth != "Bearer sk-ant-oat01-abc" {
+				t.Errorf("Authorization = %q, want Bearer token", gotAuth)
+			}
+			if gotAPIKey != "" {
+				t.Errorf("x-api-key = %q, want empty", gotAPIKey)
+			}
+			if len(gotBeta) != len(tt.wantBeta) {
+				t.Fatalf("anthropic-beta values = %v, want %v", gotBeta, tt.wantBeta)
+			}
+			for i := range gotBeta {
+				if gotBeta[i] != tt.wantBeta[i] {
+					t.Errorf("anthropic-beta[%d] = %q, want %q", i, gotBeta[i], tt.wantBeta[i])
+				}
+			}
+		})
+	}
+}
+
+// A keyring mixing OAuth tokens and API keys must keep each request
+// self-consistent: the oauth beta merge and the auth header always describe
+// the credential actually dispatched.
+func TestPassthroughMixedKeyringConsistency(t *testing.T) {
+	type observed struct {
+		auth   string
+		apiKey string
+		beta   string
+	}
+	var got []observed
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = append(got, observed{
+			auth:   r.Header.Get("Authorization"),
+			apiKey: r.Header.Get("x-api-key"),
+			beta:   strings.Join(r.Header.Values(anthropicBetaHeader), ","),
+		})
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	p := &Provider{
+		keys:                 providers.NewKeyring("sk-ant-oat01-a", "sk-ant-api03-b"),
+		batchResultEndpoints: make(map[string]map[string]string),
+	}
+	cfg := llmclient.DefaultConfig("anthropic", server.URL)
+	p.client = llmclient.NewWithHTTPClient(server.Client(), cfg, p.setHeaders)
+
+	for range 4 {
+		headers := http.Header{"Content-Type": {"application/json"}}
+		headers.Set(anthropicBetaHeader, "claude-code-20250219")
+		resp, err := p.Passthrough(context.Background(), &core.PassthroughRequest{
+			Method:   http.MethodPost,
+			Endpoint: "messages",
+			Body:     io.NopCloser(strings.NewReader(`{"model":"claude-sonnet-5"}`)),
+			Headers:  headers,
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		_ = resp.Body.Close()
+	}
+
+	sawOAuth, sawAPIKey := false, false
+	for i, o := range got {
+		hasOAuthBeta := strings.Contains(o.beta, oauthBetaFlag)
+		switch {
+		case o.auth != "":
+			sawOAuth = true
+			if o.apiKey != "" {
+				t.Errorf("request %d: both Authorization and x-api-key set", i)
+			}
+			if !hasOAuthBeta {
+				t.Errorf("request %d: OAuth credential without oauth beta (beta = %q)", i, o.beta)
+			}
+		case o.apiKey != "":
+			sawAPIKey = true
+			if hasOAuthBeta {
+				t.Errorf("request %d: API key with oauth beta (beta = %q)", i, o.beta)
+			}
+		default:
+			t.Errorf("request %d: no credential sent", i)
+		}
+	}
+	if !sawOAuth || !sawAPIKey {
+		t.Fatalf("rotation did not cover both credentials (oauth=%v apiKey=%v)", sawOAuth, sawAPIKey)
+	}
+}
+
+func TestResolveDefaultMaxTokens(t *testing.T) {
+	tests := []struct {
+		name string
+		env  string
+		want int
+	}{
+		{name: "unset returns fallback", env: "", want: fallbackMaxTokens},
+		{name: "valid integer is honoured", env: "16384", want: 16384},
+		{name: "whitespace trimmed", env: "  8192  ", want: 8192},
+		{name: "zero falls back", env: "0", want: fallbackMaxTokens},
+		{name: "negative falls back", env: "-1", want: fallbackMaxTokens},
+		{name: "non-numeric falls back", env: "lots", want: fallbackMaxTokens},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv(defaultMaxTokensEnvVar, tt.env)
+			if got := resolveDefaultMaxTokens(); got != tt.want {
+				t.Errorf("resolveDefaultMaxTokens() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestConvertToAnthropicRequest_HonoursDefaultMaxTokensEnv(t *testing.T) {
+	t.Setenv(defaultMaxTokensEnvVar, "32768")
+	req := &core.ChatRequest{
+		Model: "claude-sonnet-4-6",
+		Messages: []core.Message{
+			{Role: "user", Content: "Hello"},
+		},
+	}
+	got, err := convertToAnthropicRequest(req)
+	if err != nil {
+		t.Fatalf("convertToAnthropicRequest returned error: %v", err)
+	}
+	if got.MaxTokens != 32768 {
+		t.Errorf("MaxTokens = %d, want 32768", got.MaxTokens)
+	}
+}
+
+func TestConvertToAnthropicRequestSystemRoleMessages(t *testing.T) {
+	cacheMarker := core.UnknownJSONFieldsFromMap(map[string]json.RawMessage{
+		"cache_control": json.RawMessage(`{"type":"ephemeral"}`),
+	})
+	messages := []core.Message{
+		{Role: "system", Content: "leading instructions"},
+		{Role: "user", Content: "hi"},
+		{Role: "assistant", Content: "hello"},
+		{Role: "system", Content: []core.ContentPart{
+			{Type: "text", Text: "mid-conversation reminder", ExtraFields: cacheMarker},
+		}},
+		{Role: "user", Content: "continue"},
+	}
+
+	t.Run("supported model keeps mid-conversation system in place", func(t *testing.T) {
+		out, err := convertToAnthropicRequest(&core.ChatRequest{
+			Model:    "claude-fable-5",
+			Messages: messages,
+		})
+		if err != nil {
+			t.Fatalf("convertToAnthropicRequest() error = %v", err)
+		}
+		if out.System != "leading instructions" {
+			t.Fatalf("System = %#v, want only the leading instructions", out.System)
+		}
+		if len(out.Messages) != 4 {
+			t.Fatalf("len(Messages) = %d, want 4 (user, assistant, system, user)", len(out.Messages))
+		}
+		if out.Messages[2].Role != "system" {
+			t.Fatalf("Messages[2].Role = %q, want system", out.Messages[2].Role)
+		}
+		blocks, ok := out.Messages[2].Content.([]anthropicContentBlock)
+		if !ok || len(blocks) != 1 {
+			t.Fatalf("Messages[2].Content = %#v, want one text block", out.Messages[2].Content)
+		}
+		if blocks[0].Text != "mid-conversation reminder" {
+			t.Fatalf("system block text = %q", blocks[0].Text)
+		}
+		if string(blocks[0].CacheControl) != `{"type":"ephemeral"}` {
+			t.Fatalf("system block cache_control = %q, want ephemeral marker", blocks[0].CacheControl)
+		}
+	})
+
+	t.Run("legacy model hoists mid-conversation system into the system prompt", func(t *testing.T) {
+		out, err := convertToAnthropicRequest(&core.ChatRequest{
+			Model:    "claude-sonnet-4-5-20250929",
+			Messages: messages,
+		})
+		if err != nil {
+			t.Fatalf("convertToAnthropicRequest() error = %v", err)
+		}
+		if len(out.Messages) != 3 {
+			t.Fatalf("len(Messages) = %d, want 3 (user, assistant, user)", len(out.Messages))
+		}
+		blocks, ok := out.System.([]anthropicContentBlock)
+		if !ok || len(blocks) != 2 {
+			t.Fatalf("System = %#v, want leading + hoisted blocks", out.System)
+		}
+		if blocks[1].Text != "mid-conversation reminder" || string(blocks[1].CacheControl) != `{"type":"ephemeral"}` {
+			t.Fatalf("hoisted block = %+v, want reminder with cache_control", blocks[1])
+		}
+	})
+}
+
+func TestSupportsSystemRoleMessages(t *testing.T) {
+	for model, want := range map[string]bool{
+		"claude-fable-5":             true,
+		"claude-mythos-5":            true,
+		"claude-opus-4-8-20260301":   true,
+		"claude-opus-5-20260115":     true,
+		"claude-sonnet-5-20250929":   true,
+		"claude-sonnet-4-5-20250929": false,
+		"claude-opus-4-6":            false,
+		"claude-haiku-4-5-20251001":  false,
+		"claude-3-5-haiku-20241022":  false,
+	} {
+		if got := supportsSystemRoleMessages(model); got != want {
+			t.Errorf("supportsSystemRoleMessages(%q) = %v, want %v", model, got, want)
+		}
+	}
+}
+
+// TestMessagesCacheBreakpointsSurviveTranslation pins the end-to-end invariant
+// that broke prompt caching for Claude Code sessions: a /v1/messages request
+// whose moving cache_control breakpoint rides on an interleaved system-role
+// message must reach the provider with all breakpoints intact and in place.
+func TestMessagesCacheBreakpointsSurviveTranslation(t *testing.T) {
+	decoded, err := anthropicapi.DecodeMessagesRequest([]byte(`{
+		"model": "claude-fable-5",
+		"max_tokens": 100,
+		"system": [
+			{"type":"text","text":"base prompt"},
+			{"type":"text","text":"stable context","cache_control":{"type":"ephemeral"}}
+		],
+		"messages": [
+			{"role":"user","content":[{"type":"text","text":"hi"}]},
+			{"role":"assistant","content":[{"type":"text","text":"hello"}]},
+			{"role":"system","content":[{"type":"text","text":"reminder","cache_control":{"type":"ephemeral"}}]}
+		]
+	}`))
+	if err != nil {
+		t.Fatalf("DecodeMessagesRequest: %v", err)
+	}
+	chat, err := anthropicapi.ToChatRequest(decoded)
+	if err != nil {
+		t.Fatalf("ToChatRequest: %v", err)
+	}
+	out, err := convertToAnthropicRequest(chat)
+	if err != nil {
+		t.Fatalf("convertToAnthropicRequest: %v", err)
+	}
+	wire, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if got := strings.Count(string(wire), "cache_control"); got != 2 {
+		t.Fatalf("wire body carries %d cache_control markers, want 2: %s", got, wire)
+	}
+	last := out.Messages[len(out.Messages)-1]
+	if last.Role != "system" {
+		t.Fatalf("last wire message role = %q, want the trailing system reminder", last.Role)
+	}
+	blocks, ok := last.Content.([]anthropicContentBlock)
+	if !ok || len(blocks) != 1 || len(blocks[0].CacheControl) == 0 {
+		t.Fatalf("trailing system message = %#v, want one block with cache_control", last.Content)
+	}
+}
+
+func TestRejectsSamplingParameters(t *testing.T) {
+	for model, want := range map[string]bool{
+		"claude-fable-5":             true,
+		"claude-fable-5-1":           true,
+		"claude-mythos-5-1":          true,
+		"claude-opus-5":              true,
+		"claude-sonnet-5-20260601":   true,
+		"claude-opus-4-8":            true,
+		"claude-opus-4-7-20260101":   true,
+		"claude-opus-4-6":            false,
+		"claude-sonnet-4-6":          false,
+		"claude-sonnet-4-5-20250929": false,
+		"claude-haiku-4-5-20251001":  false,
+		"claude-opus-4-75":           false,
+		"":                           false,
+	} {
+		if got := rejectsSamplingParameters(model); got != want {
+			t.Errorf("rejectsSamplingParameters(%q) = %v, want %v", model, got, want)
+		}
+	}
+}
+
+func TestConvertToAnthropicRequestDropsConflictingSamplingParameter(t *testing.T) {
+	ptr := func(v float64) *float64 { return &v }
+	tests := []struct {
+		name        string
+		model       string
+		temperature *float64
+		topP        *float64
+		wantTemp    *float64
+		wantTopP    *float64
+	}{
+		{
+			name:        "both sent keeps temperature only",
+			model:       "claude-haiku-4-5-20251001",
+			temperature: ptr(0.5),
+			topP:        ptr(0.9),
+			wantTemp:    ptr(0.5),
+		},
+		{
+			name:        "temperature alone is forwarded",
+			model:       "claude-haiku-4-5-20251001",
+			temperature: ptr(0.5),
+			wantTemp:    ptr(0.5),
+		},
+		{
+			name:     "top_p alone is forwarded",
+			model:    "claude-haiku-4-5-20251001",
+			topP:     ptr(0.9),
+			wantTopP: ptr(0.9),
+		},
+		{
+			name:        "models rejecting sampling lose both",
+			model:       "claude-opus-4-8",
+			temperature: ptr(0.5),
+			topP:        ptr(0.9),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, err := convertToAnthropicRequest(&core.ChatRequest{
+				Model:       tt.model,
+				Messages:    []core.Message{{Role: "user", Content: "hi"}},
+				Temperature: tt.temperature,
+				TopP:        tt.topP,
+			})
+			if err != nil {
+				t.Fatalf("convertToAnthropicRequest: %v", err)
+			}
+			if !equalFloatPtr(out.Temperature, tt.wantTemp) {
+				t.Errorf("temperature = %v, want %v", out.Temperature, tt.wantTemp)
+			}
+			if !equalFloatPtr(out.TopP, tt.wantTopP) {
+				t.Errorf("top_p = %v, want %v", out.TopP, tt.wantTopP)
+			}
+		})
+	}
+}
+
+func equalFloatPtr(got, want *float64) bool {
+	if got == nil || want == nil {
+		return got == nil && want == nil
+	}
+	return *got == *want
+}
+
+func TestRejectsForcedToolChoice(t *testing.T) {
+	for model, want := range map[string]bool{
+		"claude-fable-5-1":          true,
+		"claude-fable-5-1-20260901": true,
+		"claude-mythos-5-1":         true,
+		"claude-fable-5":            false,
+		"claude-fable-5-20260601":   false,
+		"claude-fable-5-10":         false,
+		"claude-opus-5":             false,
+		"claude-sonnet-4-6":         false,
+	} {
+		if got := rejectsForcedToolChoice(model); got != want {
+			t.Errorf("rejectsForcedToolChoice(%q) = %v, want %v", model, got, want)
+		}
+	}
+}
+
+func TestConvertToAnthropicRequest_DropsSamplingForModelsThatRejectIt(t *testing.T) {
+	temp := 0.2
+	topP := 0.9
+	tests := []struct {
+		name     string
+		model    string
+		wantKept bool
+	}{
+		{name: "fable 5.1 drops temperature and top_p", model: "claude-fable-5-1"},
+		{name: "opus 4.7 drops temperature and top_p", model: "claude-opus-4-7"},
+		// Models that still accept sampling parameters keep temperature;
+		// top_p goes because Anthropic refuses the two together.
+		{name: "sonnet 4.6 keeps temperature", model: "claude-sonnet-4-6", wantKept: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, err := convertToAnthropicRequest(&core.ChatRequest{
+				Model:       tt.model,
+				Temperature: &temp,
+				TopP:        &topP,
+				Messages:    []core.Message{{Role: "user", Content: "Hello"}},
+			})
+			if err != nil {
+				t.Fatalf("convertToAnthropicRequest() error = %v", err)
+			}
+			if tt.wantKept {
+				if out.Temperature == nil || *out.Temperature != temp || out.TopP != nil {
+					t.Fatalf("Temperature = %v, TopP = %v, want %v and nil", out.Temperature, out.TopP, temp)
+				}
+				return
+			}
+			if out.Temperature != nil || out.TopP != nil {
+				t.Fatalf("Temperature = %v, TopP = %v, want both dropped", out.Temperature, out.TopP)
+			}
+		})
+	}
+}
+
+func TestConvertToAnthropicRequest_RelaxesForcedToolChoice(t *testing.T) {
+	tools := []map[string]any{{
+		"type": "function",
+		"function": map[string]any{
+			"name":       "get_weather",
+			"parameters": map[string]any{"type": "object"},
+		},
+	}}
+	parallelOff := false
+	tests := []struct {
+		name            string
+		model           string
+		toolChoice      any
+		system          string
+		parallel        *bool
+		wantType        string
+		wantName        string
+		wantInstruction string
+	}{
+		{
+			name:            "required becomes auto with a generic instruction",
+			model:           "claude-fable-5-1",
+			toolChoice:      "required",
+			wantType:        "auto",
+			wantInstruction: "You must respond by calling one of the provided tools.",
+		},
+		{
+			name:            "named function becomes auto with a named instruction",
+			model:           "claude-mythos-5-1",
+			toolChoice:      map[string]any{"type": "function", "function": map[string]any{"name": "get_weather"}},
+			wantType:        "auto",
+			wantInstruction: `You must respond by calling the tool named "get_weather".`,
+		},
+		{
+			name:            "instruction is appended after an existing system prompt",
+			model:           "claude-fable-5-1",
+			toolChoice:      "required",
+			system:          "You are terse.",
+			wantType:        "auto",
+			wantInstruction: "You are terse.\n\nYou must respond by calling one of the provided tools.",
+		},
+		{
+			name:            "parallel_tool_calls=false survives the downgrade",
+			model:           "claude-fable-5-1",
+			toolChoice:      "required",
+			parallel:        &parallelOff,
+			wantType:        "auto",
+			wantInstruction: "You must respond by calling one of the provided tools.",
+		},
+		{
+			name:       "auto is forwarded untouched",
+			model:      "claude-fable-5-1",
+			toolChoice: "auto",
+			wantType:   "auto",
+		},
+		{
+			name:       "fable 5 keeps forced tool use",
+			model:      "claude-fable-5",
+			toolChoice: map[string]any{"type": "function", "function": map[string]any{"name": "get_weather"}},
+			wantType:   "tool",
+			wantName:   "get_weather",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			messages := []core.Message{}
+			if tt.system != "" {
+				messages = append(messages, core.Message{Role: "system", Content: tt.system})
+			}
+			messages = append(messages, core.Message{Role: "user", Content: "Weather in Warsaw?"})
+			out, err := convertToAnthropicRequest(&core.ChatRequest{
+				Model:             tt.model,
+				Tools:             tools,
+				ToolChoice:        tt.toolChoice,
+				ParallelToolCalls: tt.parallel,
+				Messages:          messages,
+			})
+			if err != nil {
+				t.Fatalf("convertToAnthropicRequest() error = %v", err)
+			}
+			if out.ToolChoice == nil {
+				t.Fatalf("ToolChoice = nil, want type %q", tt.wantType)
+			}
+			if out.ToolChoice.Type != tt.wantType || out.ToolChoice.Name != tt.wantName {
+				t.Fatalf("ToolChoice = %+v, want type %q name %q", out.ToolChoice, tt.wantType, tt.wantName)
+			}
+			if tt.parallel != nil && (out.ToolChoice.DisableParallelToolUse == nil || !*out.ToolChoice.DisableParallelToolUse) {
+				t.Fatalf("DisableParallelToolUse = %v, want true", out.ToolChoice.DisableParallelToolUse)
+			}
+			gotSystem, _ := out.System.(string)
+			if gotSystem != tt.wantInstruction {
+				t.Fatalf("System = %q, want %q", gotSystem, tt.wantInstruction)
+			}
+		})
+	}
+}
+
+func TestConvertToAnthropicRequest_AdaptiveThinkingForDatedFableAndMythos(t *testing.T) {
+	for _, model := range []string{"claude-fable-5-1-20260901", "claude-mythos-5-1-20260901"} {
+		t.Run("chat "+model, func(t *testing.T) {
+			out, err := convertToAnthropicRequest(&core.ChatRequest{
+				Model:     model,
+				Reasoning: &core.Reasoning{Effort: "high"},
+				Messages:  []core.Message{{Role: "user", Content: "Hello"}},
+			})
+			if err != nil {
+				t.Fatalf("convertToAnthropicRequest() error = %v", err)
+			}
+			assertAdaptiveHighEffort(t, out)
+		})
+		t.Run("responses "+model, func(t *testing.T) {
+			out, err := convertResponsesRequestToAnthropic(&core.ResponsesRequest{
+				Model:     model,
+				Input:     "Hello",
+				Reasoning: &core.Reasoning{Effort: "high"},
+			})
+			if err != nil {
+				t.Fatalf("convertResponsesRequestToAnthropic() error = %v", err)
+			}
+			assertAdaptiveHighEffort(t, out)
+		})
+	}
+}
+
+func assertAdaptiveHighEffort(t *testing.T, out *anthropicRequest) {
+	t.Helper()
+	if out.Thinking == nil || out.Thinking.Type != "adaptive" || out.Thinking.BudgetTokens != 0 {
+		t.Fatalf("Thinking = %+v, want adaptive without budget_tokens", out.Thinking)
+	}
+	if out.OutputConfig == nil || out.OutputConfig.Effort != "high" {
+		t.Fatalf("OutputConfig = %+v, want effort high", out.OutputConfig)
+	}
+}
+
+// chatStreamDeltas converts an Anthropic SSE stream and returns the delta
+// object of every emitted chat chunk.
+func chatStreamDeltas(t *testing.T, anthropicSSE string) []map[string]any {
+	t.Helper()
+	conv := newStreamConverter(io.NopCloser(strings.NewReader(anthropicSSE)), "claude-sonnet-4-5")
+	defer conv.Close() //nolint:errcheck
+
+	out, err := io.ReadAll(conv)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	deltas := []map[string]any{}
+	for line := range strings.SplitSeq(string(out), "\n") {
+		data, ok := strings.CutPrefix(strings.TrimSpace(line), "data: ")
+		if !ok || data == "[DONE]" {
+			continue
+		}
+		var chunk struct {
+			Choices []struct {
+				Delta map[string]any `json:"delta"`
+			} `json:"choices"`
+		}
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			t.Fatalf("unmarshal chunk %q: %v", data, err)
+		}
+		for _, choice := range chunk.Choices {
+			deltas = append(deltas, choice.Delta)
+		}
+	}
+	return deltas
+}
+
+// lastExtraContent returns the last extra_content value seen on a delta, which
+// is the authoritative cumulative value for a client that keeps only the most
+// recent one. Decoding through map[string]any sorts the members, so the
+// expected values below are in key order rather than wire order.
+func lastExtraContent(deltas []map[string]any) string {
+	for _, delta := range slices.Backward(deltas) {
+		if extra, ok := delta[core.ExtraContentField]; ok {
+			encoded, _ := json.Marshal(extra)
+			return string(encoded)
+		}
+	}
+	return ""
+}
+
+// A streamed thinking block carries its signature in a signature_delta that
+// arrives after the thinking text. Dropping it leaves the client with a
+// thinking block Anthropic will refuse on the next turn, so the converter must
+// surface it as replay state.
+func TestStreamChatCompletion_ThinkingSignatureSurfaced(t *testing.T) {
+	sse := `event: message_start
+data: {"type":"message_start","message":{"id":"msg_sig","type":"message","role":"assistant","model":"claude-sonnet-4-5","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"Let me "}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"think."}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"sig-1"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: content_block_start
+data: {"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Done."}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":1}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":9}}
+
+event: message_stop
+data: {"type":"message_stop"}
+`
+	deltas := chatStreamDeltas(t, sse)
+	want := `{"anthropic":{"thinking_blocks":[{"signature":"sig-1","thinking":"Let me think.","type":"thinking"}]}}`
+	if got := lastExtraContent(deltas); got != want {
+		t.Fatalf("extra_content = %s, want %s", got, want)
+	}
+
+	// The signature must not arrive after the text has been streamed: a client
+	// closing the thinking block on the first text delta would drop it.
+	extraAt, textAt := -1, -1
+	for i, delta := range deltas {
+		if _, ok := delta[core.ExtraContentField]; ok && extraAt < 0 {
+			extraAt = i
+		}
+		if _, ok := delta["content"]; ok && textAt < 0 {
+			textAt = i
+		}
+	}
+	if extraAt < 0 || textAt < 0 || extraAt > textAt {
+		t.Errorf("extra_content at %d, first content at %d; want the thinking block completed first", extraAt, textAt)
+	}
+}
+
+// A redacted thinking block arrives whole on content_block_start and has no
+// readable text, so nothing but extra_content can carry it.
+func TestStreamChatCompletion_RedactedThinkingSurfaced(t *testing.T) {
+	sse := `event: message_start
+data: {"type":"message_start","message":{"id":"msg_red","type":"message","role":"assistant","model":"claude-sonnet-4-5","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"redacted_thinking","data":"opaque"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":3}}
+
+event: message_stop
+data: {"type":"message_stop"}
+`
+	want := `{"anthropic":{"thinking_blocks":[{"data":"opaque","type":"redacted_thinking"}]}}`
+	if got := lastExtraContent(chatStreamDeltas(t, sse)); got != want {
+		t.Fatalf("extra_content = %s, want %s", got, want)
+	}
+}
+
+// A stream without thinking must stay byte-identical to what it was before:
+// no empty extra_content member on any delta.
+func TestStreamChatCompletion_NoThinkingNoExtraContent(t *testing.T) {
+	sse := `event: message_start
+data: {"type":"message_start","message":{"id":"msg_plain","type":"message","role":"assistant","model":"claude-sonnet-4-5","content":[],"stop_reason":null,"usage":{"input_tokens":4,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hi"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":1}}
+
+event: message_stop
+data: {"type":"message_stop"}
+`
+	if got := lastExtraContent(chatStreamDeltas(t, sse)); got != "" {
+		t.Fatalf("extra_content = %s, want none for a stream with no thinking", got)
+	}
+}
+
+// responsesStreamEvents converts an Anthropic SSE stream to the Responses
+// dialect and returns the decoded events.
+func responsesStreamEvents(t *testing.T, anthropicSSE string) []map[string]any {
+	t.Helper()
+	conv := newResponsesStreamConverter(io.NopCloser(strings.NewReader(anthropicSSE)), "claude-sonnet-4-5")
+	defer conv.Close() //nolint:errcheck
+
+	out, err := io.ReadAll(conv)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	events := []map[string]any{}
+	for line := range strings.SplitSeq(string(out), "\n") {
+		data, ok := strings.CutPrefix(strings.TrimSpace(line), "data: ")
+		if !ok || data == "[DONE]" {
+			continue
+		}
+		var event map[string]any
+		if err := json.Unmarshal([]byte(data), &event); err != nil {
+			t.Fatalf("unmarshal event %q: %v", data, err)
+		}
+		events = append(events, event)
+	}
+	return events
+}
+
+const thinkingResponsesSSE = `event: message_start
+data: {"type":"message_start","message":{"id":"msg_rs","type":"message","role":"assistant","model":"claude-sonnet-4-5","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"Let me "}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"think."}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"sig-1"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: content_block_start
+data: {"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Done."}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":1}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":9}}
+
+event: message_stop
+data: {"type":"message_stop"}
+`
+
+// A streamed Responses turn has to expose the same reasoning a non-streamed
+// one does, replay state included; otherwise a thinking conversation cannot be
+// continued on this dialect.
+func TestStreamResponses_ThinkingBecomesReasoningItem(t *testing.T) {
+	events := responsesStreamEvents(t, thinkingResponsesSSE)
+
+	var deltas []string
+	reasoningAdded, messageAdded := -1, -1
+	for i, event := range events {
+		switch event["type"] {
+		case "response.reasoning_text.delta":
+			deltas = append(deltas, event["delta"].(string))
+		case "response.output_item.added":
+			item := event["item"].(map[string]any)
+			if item["type"] == "reasoning" && reasoningAdded < 0 {
+				reasoningAdded = i
+			}
+			if item["type"] == "message" && messageAdded < 0 {
+				messageAdded = i
+			}
+		}
+	}
+	if strings.Join(deltas, "") != "Let me think." {
+		t.Errorf("reasoning deltas = %q, want the thinking text", strings.Join(deltas, ""))
+	}
+	if reasoningAdded < 0 {
+		t.Fatal("no reasoning output item was added")
+	}
+	if messageAdded >= 0 && reasoningAdded > messageAdded {
+		t.Errorf("reasoning item added at %d, message at %d; reasoning must claim the first slot", reasoningAdded, messageAdded)
+	}
+
+	final := events[len(events)-1]
+	output := final["response"].(map[string]any)["output"].([]any)
+	reasoning := output[0].(map[string]any)
+	if reasoning["type"] != "reasoning" {
+		t.Fatalf("final output[0] = %v, want the reasoning item", reasoning["type"])
+	}
+	extra, _ := json.Marshal(reasoning["extra_content"])
+	want := `{"anthropic":{"thinking_blocks":[{"signature":"sig-1","thinking":"Let me think.","type":"thinking"}]}}`
+	if string(extra) != want {
+		t.Errorf("reasoning extra_content = %s, want %s", extra, want)
+	}
+}
+
+// A stream with no thinking must gain no reasoning item.
+func TestStreamResponses_NoThinkingNoReasoningItem(t *testing.T) {
+	sse := `event: message_start
+data: {"type":"message_start","message":{"id":"msg_plain","type":"message","role":"assistant","model":"claude-sonnet-4-5","content":[],"stop_reason":null,"usage":{"input_tokens":4,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hi"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":1}}
+
+event: message_stop
+data: {"type":"message_stop"}
+`
+	for _, event := range responsesStreamEvents(t, sse) {
+		if strings.HasPrefix(event["type"].(string), "response.reasoning") {
+			t.Errorf("unexpected reasoning event %v", event["type"])
+		}
+		if added, ok := event["item"].(map[string]any); ok && added["type"] == "reasoning" {
+			t.Error("a stream without thinking must not produce a reasoning item")
+		}
+	}
+}
+
+// A redacted thinking block has no readable text, so its reasoning item exists
+// only to carry the opaque payload the next turn must replay. It still has to
+// be a well-formed item: opened, closed, and present in the terminal output.
+func TestStreamResponses_RedactedThinkingBecomesReasoningItem(t *testing.T) {
+	sse := `event: message_start
+data: {"type":"message_start","message":{"id":"msg_red","type":"message","role":"assistant","model":"claude-sonnet-4-5","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"redacted_thinking","data":"opaque"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: content_block_start
+data: {"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Done."}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":1}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":4}}
+
+event: message_stop
+data: {"type":"message_stop"}
+`
+	events := responsesStreamEvents(t, sse)
+
+	added, done := false, false
+	for _, event := range events {
+		item, ok := event["item"].(map[string]any)
+		if !ok || item["type"] != "reasoning" {
+			continue
+		}
+		switch event["type"] {
+		case "response.output_item.added":
+			added = true
+		case "response.output_item.done":
+			done = true
+		}
+	}
+	if !added || !done {
+		t.Errorf("reasoning item added=%v done=%v, want both", added, done)
+	}
+
+	final := events[len(events)-1]
+	output := final["response"].(map[string]any)["output"].([]any)
+	reasoning := output[0].(map[string]any)
+	if reasoning["type"] != "reasoning" {
+		t.Fatalf("final output[0] = %v, want the reasoning item", reasoning["type"])
+	}
+	extra, _ := json.Marshal(reasoning["extra_content"])
+	want := `{"anthropic":{"thinking_blocks":[{"data":"opaque","type":"redacted_thinking"}]}}`
+	if string(extra) != want {
+		t.Errorf("reasoning extra_content = %s, want %s", extra, want)
+	}
+	// The message still follows it, and the redacted item contributes no text.
+	if output[1].(map[string]any)["type"] != "message" {
+		t.Errorf("final output[1] = %v, want the assistant message", output[1])
+	}
+}
+
+// A tool_use-only Anthropic turn has no text, so the Responses output must be
+// the function_call alone rather than an empty message item in front of it.
+func TestConvertAnthropicResponseToResponses_ToolUseOnlyHasNoEmptyMessage(t *testing.T) {
+	resp := &anthropicResponse{
+		ID:    "msg_tool",
+		Type:  "message",
+		Role:  "assistant",
+		Model: "claude-sonnet-4-5",
+		Content: []anthropicContent{{
+			Type:  "tool_use",
+			ID:    "toolu_1",
+			Name:  "lookup_weather",
+			Input: json.RawMessage(`{"city":"Warsaw"}`),
+		}},
+		StopReason: "tool_use",
+	}
+	result := convertAnthropicResponseToResponses(resp, "claude-sonnet-4-5")
+	if len(result.Output) != 1 || result.Output[0].Type != "function_call" {
+		t.Fatalf("Output = %+v, want the function_call alone", result.Output)
+	}
+}
+
+// interleavedThinkingSSE is a single message with two thinking blocks: with
+// interleaved thinking the model can think again after it has written text.
+const interleavedThinkingSSE = `event: message_start
+data: {"type":"message_start","message":{"id":"msg_two","type":"message","role":"assistant","model":"claude-sonnet-4-5","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"First."}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"sig-1"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: content_block_start
+data: {"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Checking."}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":1}
+
+event: content_block_start
+data: {"type":"content_block_start","index":2,"content_block":{"type":"thinking","thinking":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":2,"delta":{"type":"thinking_delta","thinking":"Second."}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":2,"delta":{"type":"signature_delta","signature":"sig-2"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":2}
+
+event: content_block_start
+data: {"type":"content_block_start","index":3,"content_block":{"type":"tool_use","id":"toolu_1","name":"lookup_weather","input":{}}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":3,"delta":{"type":"input_json_delta","partial_json":"{\"city\":\"Warsaw\"}"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":3}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":12}}
+
+event: message_stop
+data: {"type":"message_stop"}
+`
+
+// Every thinking block of the turn must reach the client in order, each one
+// published as it closes and the last publication holding the whole turn.
+func TestStreamChatCompletion_TwoThinkingBlocks(t *testing.T) {
+	deltas := chatStreamDeltas(t, interleavedThinkingSSE)
+
+	var published []string
+	for _, delta := range deltas {
+		if raw, ok := delta[core.ExtraContentField]; ok {
+			encoded, _ := json.Marshal(raw)
+			published = append(published, string(encoded))
+		}
+	}
+	want := []string{
+		`{"anthropic":{"thinking_blocks":[{"signature":"sig-1","thinking":"First.","type":"thinking"}]}}`,
+		`{"anthropic":{"thinking_blocks":[{"signature":"sig-1","thinking":"First.","type":"thinking"},{"signature":"sig-2","thinking":"Second.","type":"thinking"}]}}`,
+	}
+	if len(published) != len(want) {
+		t.Fatalf("extra_content published %d times: %v, want %d", len(published), published, len(want))
+	}
+	for i := range want {
+		if published[i] != want[i] {
+			t.Errorf("publication %d = %s, want %s", i, published[i], want[i])
+		}
+	}
+}
+
+// A Responses stream has one reasoning item, and its output_item.done cannot
+// be taken back. Thinking that arrives after text therefore adds no delta to a
+// closed item, but its signature still has to reach the terminal output: the
+// SDK builds the next turn from response.output, and Anthropic rejects the
+// turn if any block of it lacks its signature.
+func TestStreamResponses_ThinkingAfterTextKeepsStreamValid(t *testing.T) {
+	events := responsesStreamEvents(t, interleavedThinkingSSE)
+
+	reasoningDone := false
+	var lateDeltas []string
+	for _, event := range events {
+		switch event["type"] {
+		case "response.output_item.done":
+			if event["item"].(map[string]any)["type"] == "reasoning" {
+				reasoningDone = true
+			}
+		case "response.reasoning_text.delta":
+			if reasoningDone {
+				lateDeltas = append(lateDeltas, event["delta"].(string))
+			}
+		}
+	}
+	if !reasoningDone {
+		t.Fatal("reasoning item was never closed")
+	}
+	if len(lateDeltas) > 0 {
+		t.Errorf("reasoning deltas %v were emitted after the item closed", lateDeltas)
+	}
+
+	final := events[len(events)-1]
+	output := final["response"].(map[string]any)["output"].([]any)
+	reasoning := output[0].(map[string]any)
+	if reasoning["type"] != "reasoning" {
+		t.Fatalf("final output[0] = %v, want the reasoning item", reasoning["type"])
+	}
+	extra, _ := json.Marshal(reasoning["extra_content"])
+	want := `{"anthropic":{"thinking_blocks":[{"signature":"sig-1","thinking":"First.","type":"thinking"},{"signature":"sig-2","thinking":"Second.","type":"thinking"}]}}`
+	if string(extra) != want {
+		t.Errorf("terminal reasoning extra_content = %s, want both blocks", extra)
+	}
+	if got := output[len(output)-1].(map[string]any)["type"]; got != "function_call" {
+		t.Errorf("final output ends with %v, want the function_call", got)
+	}
+}
+
+// A signature is the last delta of a thinking block, so a stream cut between
+// it and content_block_stop still holds a block Anthropic will accept back.
+// The incomplete terminal output must carry it: the client continues from
+// response.output, and losing the signature there loses the turn.
+func TestStreamResponses_InterruptedAfterSignatureKeepsReplayState(t *testing.T) {
+	sse := `event: message_start
+data: {"type":"message_start","message":{"id":"msg_cut","type":"message","role":"assistant","model":"claude-sonnet-4-5","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"Let me think."}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"sig-1"}}
+`
+	events := responsesStreamEvents(t, sse)
+	final := events[len(events)-1]
+	if final["type"] != "response.incomplete" {
+		t.Fatalf("final event = %v, want response.incomplete", final["type"])
+	}
+	output := final["response"].(map[string]any)["output"].([]any)
+	reasoning := output[0].(map[string]any)
+	if reasoning["type"] != "reasoning" {
+		t.Fatalf("final output[0] = %v, want the reasoning item", reasoning["type"])
+	}
+	extra, _ := json.Marshal(reasoning["extra_content"])
+	want := `{"anthropic":{"thinking_blocks":[{"signature":"sig-1","thinking":"Let me think.","type":"thinking"}]}}`
+	if string(extra) != want {
+		t.Errorf("interrupted reasoning extra_content = %s, want the signed block", extra)
+	}
+}
+
+// TestStreamResponses_NormalizedTextStream pins the streamed text lifecycle to
+// the shape OpenAI emits: sequence_number on every event, response.in_progress
+// after response.created, and the content part opened and closed around the
+// item-addressed text deltas.
+func TestStreamResponses_NormalizedTextStream(t *testing.T) {
+	stream := `event: message_start
+data: {"type":"message_start","message":{"id":"msg_123","type":"message","role":"assistant","model":"claude-sonnet-4-5-20250929","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" world"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2}}
+
+event: message_stop
+data: {"type":"message_stop"}
+
+`
+	converter := newResponsesStreamConverter(io.NopCloser(strings.NewReader(stream)), "claude-sonnet-4-5-20250929")
+	raw, err := io.ReadAll(converter)
+	if err != nil {
+		t.Fatalf("failed to read from converter: %v", err)
+	}
+	events := parseTestSSEEvents(t, string(raw))
+
+	want := []string{
+		"response.created",
+		"response.in_progress",
+		"response.output_item.added",
+		"response.content_part.added",
+		"response.output_text.delta",
+		"response.output_text.delta",
+		"response.output_text.done",
+		"response.content_part.done",
+		"response.output_item.done",
+		"response.completed",
+		"[DONE]",
+	}
+	got := make([]string, 0, len(events))
+	next := 0
+	for _, event := range events {
+		if event.Done {
+			got = append(got, "[DONE]")
+			continue
+		}
+		got = append(got, event.Name)
+		seq, ok := event.Payload["sequence_number"].(float64)
+		if !ok || int(seq) != next {
+			t.Fatalf("event %s sequence_number = %#v, want %d", event.Name, event.Payload["sequence_number"], next)
+		}
+		next++
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("event order = %v, want %v", got, want)
+	}
+
+	item, _ := events[2].Payload["item"].(map[string]any)
+	itemID, _ := item["id"].(string)
+	if itemID == "" {
+		t.Fatalf("output_item.added item has no id: %v", item)
+	}
+	for _, event := range events[3:8] {
+		if event.Payload["item_id"] != itemID || event.Payload["output_index"] != float64(0) || event.Payload["content_index"] != float64(0) {
+			t.Fatalf("%s is not addressed to item %q part 0: %v", event.Name, itemID, event.Payload)
+		}
+	}
+	if events[6].Payload["text"] != "Hello world" {
+		t.Fatalf("output_text.done text = %#v, want %q", events[6].Payload["text"], "Hello world")
+	}
+	part, _ := events[7].Payload["part"].(map[string]any)
+	if part["type"] != "output_text" || part["text"] != "Hello world" {
+		t.Fatalf("content_part.done part = %#v, want full output_text", part)
+	}
+	inProgress, _ := events[1].Payload["response"].(map[string]any)
+	if inProgress["status"] != "in_progress" {
+		t.Fatalf("response.in_progress status = %#v", inProgress["status"])
+	}
+	if output, ok := inProgress["output"].([]any); !ok || len(output) != 0 {
+		t.Fatalf("response.in_progress output = %#v, want empty array", inProgress["output"])
+	}
+}
+
+// TestStreamResponses_NormalizedThinkingToolStream keeps the sequence numbers
+// contiguous across a thinking block and a tool call, a turn with no message
+// item and therefore no content part.
+func TestStreamResponses_NormalizedThinkingToolStream(t *testing.T) {
+	stream := `event: message_start
+data: {"type":"message_start","message":{"id":"msg_123","type":"message","role":"assistant","model":"claude-sonnet-4-5-20250929","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"Let me check"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"sig-1"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: content_block_start
+data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_1","name":"lookup_weather","input":{}}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"city\":\"Warsaw\"}"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":1}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":9}}
+
+event: message_stop
+data: {"type":"message_stop"}
+
+`
+	converter := newResponsesStreamConverter(io.NopCloser(strings.NewReader(stream)), "claude-sonnet-4-5-20250929")
+	raw, err := io.ReadAll(converter)
+	if err != nil {
+		t.Fatalf("failed to read from converter: %v", err)
+	}
+	events := parseTestSSEEvents(t, string(raw))
+	if len(events) < 3 || events[0].Name != "response.created" || events[1].Name != "response.in_progress" {
+		t.Fatalf("stream must open with response.created and response.in_progress, got %v", events)
+	}
+	next := 0
+	for _, event := range events {
+		if event.Done {
+			continue
+		}
+		if strings.HasPrefix(event.Name, "response.content_part.") || strings.HasPrefix(event.Name, "response.output_text.") {
+			t.Fatalf("unexpected %s on a turn without a message item", event.Name)
+		}
+		seq, ok := event.Payload["sequence_number"].(float64)
+		if !ok || int(seq) != next {
+			t.Fatalf("event %s sequence_number = %#v, want %d", event.Name, event.Payload["sequence_number"], next)
+		}
+		next++
+	}
+	if last := events[len(events)-2]; last.Name != "response.completed" {
+		t.Fatalf("terminal event = %s, want response.completed", last.Name)
+	}
+}
+
+// TestStreamResponses_CutBeforeMessageStartStillOpens covers an upstream body
+// that ends before message_start: the stream must still open with
+// response.created and response.in_progress before response.incomplete, so
+// stream helpers that snapshot the created response can finish cleanly.
+func TestStreamResponses_CutBeforeMessageStartStillOpens(t *testing.T) {
+	converter := newResponsesStreamConverter(io.NopCloser(strings.NewReader("")), "claude-sonnet-4-5-20250929")
+	raw, err := io.ReadAll(converter)
+	if err != nil {
+		t.Fatalf("failed to read from converter: %v", err)
+	}
+	events := parseTestSSEEvents(t, string(raw))
+	want := []string{"response.created", "response.in_progress", "response.incomplete", "[DONE]"}
+	got := make([]string, 0, len(events))
+	for i, event := range events {
+		if event.Done {
+			got = append(got, "[DONE]")
+			continue
+		}
+		got = append(got, event.Name)
+		if seq, ok := event.Payload["sequence_number"].(float64); !ok || int(seq) != i {
+			t.Fatalf("event %s sequence_number = %#v, want %d", event.Name, event.Payload["sequence_number"], i)
+		}
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("event order = %v, want %v", got, want)
+	}
+}

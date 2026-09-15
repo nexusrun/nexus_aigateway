@@ -1,0 +1,74 @@
+# Contributing to GoModel
+
+Thank you for contributing!
+
+Please note that this is currently a one-person venture, so reviews and replies may take some time. Sorry for any delays, and thank you for your patience.
+
+## Guidelines
+
+We use AI tools to speed up development and code review. Because of that, you may see many comments from tools such as Greptile, CodeRabbit, or similar reviewers.
+
+You do not need to fix every AI-generated comment. Sometimes these tools miss the project context or are not aligned with the project vision. Please use your judgment, but try to review at least the comments marked as high priority - P1, critical, major etc.
+
+You may also find helpful this short note about our technical philosophy:
+
+https://aigateway.nexusai.run/docs/about/technical-philosophy
+
+## Commit Messages
+
+Please use Conventional Commits for commit subjects and PR titles:
+
+`type(scope): short summary`
+
+Allowed types are `feat`, `fix`, `perf`, `docs`, `refactor`, `test`, `build`, `ci`, `chore`, and `revert`.
+
+## Agent instruction files
+
+`AGENTS.md` holds the agent instructions that agent harnesses read; `CLAUDE.md` imports it for Claude Code. Make agent-instruction changes in `AGENTS.md`; harness-specific behavior belongs in that harness's file, such as `CLAUDE.md` for Claude Code.
+
+## Dashboard frontend
+
+The admin dashboard is a Svelte 5 single-page app in `web/dashboard/`. Vite
+builds it into `internal/admin/dashboard/static/dist/`, which the Go binary
+embeds. The build output is not committed — CI builds it in a secretless job
+and feeds the result to the tests and release builds (see
+[ADR-0010](docs/adr/0010-dashboard-built-in-ci.md)). On a fresh clone, run
+`make frontend` once (requires Node 22+) before `make test` or starting the
+gateway with the UI enabled; `make build` does this for you, and the test
+targets stop with a hint if the build is missing.
+
+Dashboard translations are welcome; see the
+[translation guide](web/dashboard/src/lib/i18n/README.md).
+
+When you change dashboard sources:
+
+```sh
+make frontend        # npm ci + vite build (requires Node 22+)
+make test-dashboard  # frontend unit tests
+```
+
+Commit only the sources. Changes to `web/dashboard/package-lock.json` are
+part of the build's trust chain and get the same review as `go.sum`. For
+live-reload development, run the gateway on :8080 and `npm run dev` in
+`web/dashboard/` (the Vite dev server proxies `/admin` and `/v1` API calls to
+the gateway).
+
+## Questions
+
+For questions, ideas, or general discussion, please use GitHub Discussions:
+
+https://github.com/saifelyzal/nexusruntime/discussions
+
+You can also reach out on Discord. If something is urgent, feel free to ping me: `SantiagoDePL`.
+
+## License
+
+The project is currently licensed under the MIT License.
+
+If you want to understand our perspective on the future of the license, please read:
+
+https://aigateway.nexusai.run/docs/about/license
+
+By submitting a contribution, you confirm that you have the right to submit it.
+
+You also grant the project maintainers permission to use, sublicense, and relicense your contribution as part of the project under the current or future project licenses.

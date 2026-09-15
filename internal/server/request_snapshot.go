@@ -1,0 +1,304 @@
+package server
+
+import (
+	"bytes"
+	"io"
+	"net/http"
+	"strings"
+
+	"github.com/google/uuid"
+	"github.com/labstack/echo/v5"
+
+	"github.com/enterpilot/gomodel/internal/auditlog"
+	"github.com/enterpilot/gomodel/internal/core"
+)
+
+const requestSnapshotInlineBodyLimit int64 = 64 * 1024
+
+// RequestSnapshotCapture captures immutable transport-level request data for
+// model-facing endpoints. Known-small JSON bodies are captured once for the
+// hot path; larger or unknown-size bodies only get a bounded selector peek and
+// stay on the live request stream until the handler actually decodes them.
+func RequestSnapshotCapture(userPathHeader ...string) echo.MiddlewareFunc {
+	userPathHeaderName := configuredUserPathHeaderName(userPathHeader...)
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c *echo.Context) error {
+			req, requestID := ensureRequestID(c.Request())
+			c.Response().Header().Set(core.RequestIDHeader, requestID)
+			desc := core.DescribeEndpoint(req.Method, req.URL.Path)
+			if !desc.IngressManaged {
+				// The configured header name must reach every handler that
+				// reads the user path itself (GET /v1/models), not only the
+				// model-interaction endpoints below.
+				req = req.WithContext(core.WithUserPathHeaderName(req.Context(), userPathHeaderName))
+				// Model endpoints that own their transport (MCP, realtime,
+				// audio) take no snapshot, but their identity must still reach
+				// the context: rate limits, budgets, session binding, and
+				// usage attribution all read core.UserPathFromContext. A
+				// managed key's bound path still wins — auth middleware runs
+				// later and its context value shadows this one.
+				if desc.ModelInteraction {
+					userPath, err := core.NormalizeUserPath(req.Header.Get(userPathHeaderName))
+					if err != nil {
+						return handleError(c, core.NewInvalidRequestError("invalid "+userPathHeaderName+" header", err))
+					}
+					if userPath != "" {
+						req.Header.Set(userPathHeaderName, userPath)
+						req = req.WithContext(core.WithEffectiveUserPath(req.Context(), userPath))
+					}
+				}
+				c.SetRequest(req)
+				return next(c)
+			}
+
+			userPath, err := core.NormalizeUserPath(req.Header.Get(userPathHeaderName))
+			if err != nil {
+				return handleError(c, core.NewInvalidRequestError("invalid "+userPathHeaderName+" header", err))
+			}
+			if userPath != "" {
+				req.Header.Set(userPathHeaderName, userPath)
+			}
+
+			bodyBytes, bodyNotCaptured, bodyCaptured, err := captureSmallRequestBodyForSnapshot(req, desc.BodyMode)
+			if err != nil {
+				return handleError(c, core.NewInvalidRequestError("failed to read request body", err))
+			}
+
+			// Query/route/trace maps are freshly built here, so the snapshot can
+			// own them directly; only req.Header is live and gets cloned.
+			snapshot := core.NewRequestSnapshotWithOwnedMaps(
+				req.Method,
+				req.URL.Path,
+				snapshotRouteParams(req.URL.Path, routeParamsMap(c.PathValues())),
+				req.URL.Query(),
+				req.Header,
+				req.Header.Get("Content-Type"),
+				bodyBytes,
+				bodyNotCaptured,
+				requestID,
+				extractTraceMetadata(req.Header),
+				userPath,
+			)
+
+			ctx := core.WithUserPathHeaderName(req.Context(), userPathHeaderName)
+			ctx = core.WithRequestSnapshot(ctx, snapshot)
+			if semantics := core.DeriveWhiteBoxPrompt(snapshot); semantics != nil {
+				if !bodyCaptured {
+					seedRequestBodySelectorHints(req, desc.BodyMode, semantics)
+				}
+				ctx = core.WithWhiteBoxPrompt(ctx, semantics)
+			}
+			c.SetRequest(req.WithContext(ctx))
+
+			return next(c)
+		}
+	}
+}
+
+func configuredUserPathHeaderName(headerNames ...string) string {
+	if len(headerNames) == 0 {
+		return core.UserPathHeader
+	}
+	return core.UserPathHeaderName(headerNames[0])
+}
+
+func ensureRequestID(req *http.Request) (*http.Request, string) {
+	if req.Header == nil {
+		req.Header = make(http.Header)
+	}
+	requestID := strings.TrimSpace(core.GetRequestID(req.Context()))
+	if requestID == "" {
+		requestID = clientRequestID(req.Header)
+	}
+	if requestID == "" {
+		requestID = uuid.NewString()
+	}
+
+	req.Header.Set(core.RequestIDHeader, requestID)
+	if current := strings.TrimSpace(core.GetRequestID(req.Context())); current != requestID {
+		req = req.WithContext(core.WithRequestID(req.Context(), requestID))
+	}
+	return req, requestID
+}
+
+func snapshotRouteParams(path string, params map[string]string) map[string]string {
+	if provider, endpoint, ok := core.ParseProviderPassthroughPath(path); ok {
+		if params == nil {
+			params = make(map[string]string, 2)
+		}
+		if params["provider"] == "" {
+			params["provider"] = provider
+		}
+		if params["endpoint"] == "" && endpoint != "" {
+			params["endpoint"] = endpoint
+		}
+	}
+	return params
+}
+
+func extractTraceMetadata(headers map[string][]string) map[string]string {
+	traceHeaders := []string{"Traceparent", "Tracestate", "Baggage"}
+	metadata := make(map[string]string, len(traceHeaders))
+	for _, key := range traceHeaders {
+		if values, ok := headers[key]; ok && len(values) > 0 {
+			joined := strings.TrimSpace(strings.Join(values, ","))
+			if joined != "" {
+				metadata[key] = joined
+			}
+		}
+	}
+	if len(metadata) == 0 {
+		return nil
+	}
+	return metadata
+}
+
+func captureSmallRequestBodyForSnapshot(req *http.Request, bodyMode core.BodyMode) ([]byte, bool, bool, error) {
+	if !shouldCaptureSmallRequestBody(req, bodyMode) {
+		return nil, snapshotBodyNotCaptured(req, bodyMode), false, nil
+	}
+
+	originalBody := req.Body
+	limitedReader := io.LimitReader(originalBody, requestSnapshotInlineBodyLimit+1)
+	bodyBytes, err := io.ReadAll(limitedReader)
+	if err != nil {
+		return nil, false, false, err
+	}
+	if int64(len(bodyBytes)) > requestSnapshotInlineBodyLimit {
+		req.Body = &combinedReadCloser{
+			Reader: io.MultiReader(bytes.NewReader(bodyBytes), originalBody),
+			rc:     originalBody,
+		}
+		return nil, snapshotBodyNotCaptured(req, bodyMode), false, nil
+	}
+
+	if bodyBytes == nil {
+		bodyBytes = []byte{}
+	}
+	req.Body = newBytesReadCloser(bodyBytes)
+	return bodyBytes, false, true, nil
+}
+
+// bytesReadCloser is io.NopCloser(bytes.NewReader(b)) in one allocation
+// instead of two; it keeps bytes.Reader's WriteTo for efficient copies and
+// remembers its buffer so a handler can take the bytes without re-reading.
+type bytesReadCloser struct {
+	bytes.Reader
+	body []byte
+}
+
+func newBytesReadCloser(body []byte) *bytesReadCloser {
+	b := &bytesReadCloser{body: body}
+	b.Reset(body)
+	return b
+}
+
+func (*bytesReadCloser) Close() error { return nil }
+
+// unread returns the whole buffer while nothing has been read from it yet.
+func (b *bytesReadCloser) unread() ([]byte, bool) {
+	if b == nil || b.Len() != len(b.body) {
+		return nil, false
+	}
+	return b.body, true
+}
+
+func shouldCaptureSmallRequestBody(req *http.Request, bodyMode core.BodyMode) bool {
+	if req == nil || req.Body == nil {
+		return false
+	}
+	switch bodyMode {
+	case core.BodyModeJSON, core.BodyModeOpaque:
+	default:
+		return false
+	}
+	return req.ContentLength >= 0 && req.ContentLength <= requestSnapshotInlineBodyLimit
+}
+
+func snapshotBodyNotCaptured(req *http.Request, bodyMode core.BodyMode) bool {
+	if req == nil {
+		return false
+	}
+	switch bodyMode {
+	case core.BodyModeJSON, core.BodyModeOpaque:
+		return req.ContentLength > auditlog.MaxBodyCapture
+	default:
+		return false
+	}
+}
+
+type combinedReadCloser struct {
+	io.Reader
+	rc io.ReadCloser
+}
+
+func (c *combinedReadCloser) Close() error {
+	return c.rc.Close()
+}
+
+func requestBodyBytes(c *echo.Context) ([]byte, error) {
+	if snapshot := core.GetRequestSnapshot(c.Request().Context()); snapshot != nil {
+		if body := snapshot.CapturedBodyView(); body != nil {
+			return body, nil
+		}
+	}
+
+	req := c.Request()
+	if req.Body == nil {
+		return []byte{}, nil
+	}
+
+	// A body the session middleware materialized past the audit capture limit
+	// is replayed from memory; hand that buffer out instead of copying it.
+	if replay, ok := req.Body.(*bytesReadCloser); ok {
+		if body, ok := replay.unread(); ok {
+			return body, nil
+		}
+	}
+
+	bodyBytes, err := io.ReadAll(req.Body)
+	if err != nil {
+		return nil, err
+	}
+	if bodyBytes == nil {
+		bodyBytes = []byte{}
+	}
+	req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	storeRequestBodySnapshot(c, bodyBytes)
+	return bodyBytes, nil
+}
+
+// storeRequestBodySnapshot records the fully read body on the request snapshot
+// and refreshes the white-box prompt semantics from it. The audit capture on
+// the shared snapshot stops at MaxBodyCapture; the returned snapshot always
+// carries the complete body so callers such as session detection can read an
+// oversized one. It returns nil when the request has no snapshot.
+func storeRequestBodySnapshot(c *echo.Context, bodyBytes []byte) *core.RequestSnapshot {
+	if c == nil {
+		return nil
+	}
+	req := c.Request()
+	snapshot := core.GetRequestSnapshot(req.Context())
+	if snapshot == nil {
+		return nil
+	}
+
+	bodyNotCaptured := int64(len(bodyBytes)) > auditlog.MaxBodyCapture
+	capturedBody := bodyBytes
+	if bodyNotCaptured {
+		capturedBody = nil
+	}
+
+	updated := snapshot.WithOwnedCapturedBody(capturedBody, bodyNotCaptured)
+	ctx := core.WithRequestSnapshot(req.Context(), updated)
+	previous := core.GetWhiteBoxPrompt(req.Context())
+	complete := updated
+	if bodyNotCaptured {
+		complete = snapshot.WithOwnedCapturedBody(bodyBytes, false)
+	}
+	if semantics := core.RefreshWhiteBoxPrompt(complete, previous); semantics != nil {
+		ctx = core.WithWhiteBoxPrompt(ctx, semantics)
+	}
+	c.SetRequest(req.WithContext(ctx))
+	return complete
+}

@@ -1,0 +1,398 @@
+package core
+
+import "context"
+
+// contextKey is a custom type for context keys to avoid collisions.
+type contextKey string
+
+const (
+	// RequestIDKey is the context key for the request ID.
+	requestIDKey contextKey = "request-id"
+	// requestSnapshotKey stores the immutable transport snapshot for the request.
+	requestSnapshotKey contextKey = "request-snapshot"
+	// whiteBoxPromptKey stores the best-effort semantic extraction for the request.
+	whiteBoxPromptKey contextKey = "white-box-prompt"
+	// workflowKey stores the request-scoped workflow chosen for handling.
+	workflowKey contextKey = "workflow"
+	// authKeyIDKey stores the internal managed auth key id for the request.
+	authKeyIDKey contextKey = "auth-key-id"
+	// effectiveUserPathKey stores a request-scoped user path override applied
+	// after ingress capture, for example from a managed auth key.
+	effectiveUserPathKey contextKey = "effective-user-path"
+	// userPathHeaderNameKey stores the configured request header that carries
+	// the user path at the HTTP boundary.
+	userPathHeaderNameKey contextKey = "user-path-header-name"
+	// batchPreparationMetadataKey stores request-scoped batch preprocessing metadata.
+	batchPreparationMetadataKey contextKey = "batch-preparation-metadata"
+
+	// requestLabelsKey stores labels extracted from configured tagging headers.
+	requestLabelsKey contextKey = "request-labels"
+	// sessionIDKey stores the client session id detected for the request.
+	sessionIDKey contextKey = "session-id"
+	// requestDialectKey stores the external API dialect translated into a
+	// canonical request. Post-routing adapters use it to keep provider-specific
+	// metadata from leaking to incompatible upstream APIs.
+	requestDialectKey contextKey = "request-dialect"
+	// taggingStripHeadersKey stores canonical tagging header names that must not
+	// be forwarded to upstream providers.
+	taggingStripHeadersKey contextKey = "tagging-strip-headers"
+
+	// enforceReturningUsageDataKey stores whether streaming requests should ask providers
+	// to include usage when the provider supports it.
+	enforceReturningUsageDataKey contextKey = "enforce-returning-usage-data"
+
+	// primaryRouteSaturatedKey stores the rate-limit rejection for the
+	// resolved primary route when failover targets exist: dispatch skips the
+	// primary provider and sweeps failover instead of returning 429 outright.
+	primaryRouteSaturatedKey contextKey = "primary-route-saturated"
+
+	// guardrailsHashKey stores the SHA-256 hash of the applied guardrail rules
+	// for the current request. Set by the translated inference handlers after
+	// PatchChatRequest; consumed by the semantic cache to build params_hash.
+	guardrailsHashKey contextKey = "guardrails-hash"
+
+	// failoverUsedKey stores whether the translated execution path successfully
+	// served the request from a failover model rather than the primary selector.
+	// Response cache writers use this to avoid storing failover responses under
+	// the primary request key.
+	failoverUsedKey contextKey = "failover-used"
+
+	// requestOriginKey stores the logical request origin for internal execution
+	// flows that still reuse the translated request pipeline.
+	requestOriginKey contextKey = "request-origin"
+
+	// rewriteTokensSavedKey stores the total prompt tokens that applied
+	// request rewriters estimate they removed from the request body. Usage
+	// recording folds it into the request's usage entry as rewrite savings.
+	rewriteTokensSavedKey contextKey = "rewrite-tokens-saved"
+
+	// credentialAllowedModelsKey stores the model allowlist bound to the
+	// authenticated credential (a managed auth key). Empty means unrestricted.
+	credentialAllowedModelsKey contextKey = "credential-allowed-models"
+)
+
+// RequestOrigin identifies whether a request came from an external caller or an
+// internal gateway-owned workflow.
+type RequestOrigin string
+
+// RequestDialect identifies the external request shape translated at ingress.
+type RequestDialect string
+
+const (
+	RequestOriginExternal  RequestOrigin = "external"
+	RequestOriginGuardrail RequestOrigin = "guardrail"
+	// RequestOriginPlugin marks gateway-internal inference issued by a plugin
+	// instance through its Host (for example an LLM-based guardrail).
+	RequestOriginPlugin RequestOrigin = "plugin"
+
+	RequestDialectAnthropicMessages RequestDialect = "anthropic_messages"
+)
+
+// WithRequestID returns a new context with the request ID attached.
+func WithRequestID(ctx context.Context, requestID string) context.Context {
+	return context.WithValue(ctx, requestIDKey, requestID)
+}
+
+// RequestIDHeader is the request/response header carrying the gateway request
+// id, spelled in canonical textproto form ("X-Request-Id") so Header.Get/Set
+// need not canonicalize (and copy) the key on every call. Clients may send it
+// in any case; lookups are case-insensitive.
+const RequestIDHeader = "X-Request-Id"
+
+// GetRequestID retrieves the request ID from the context.
+// Returns empty string if not found.
+func GetRequestID(ctx context.Context) string {
+	if v := ctx.Value(requestIDKey); v != nil {
+		if id, ok := v.(string); ok {
+			return id
+		}
+	}
+	return ""
+}
+
+// WithRequestSnapshot returns a new context with the request snapshot attached.
+func WithRequestSnapshot(ctx context.Context, snapshot *RequestSnapshot) context.Context {
+	return context.WithValue(ctx, requestSnapshotKey, snapshot)
+}
+
+// GetRequestSnapshot retrieves the request snapshot from the context.
+func GetRequestSnapshot(ctx context.Context) *RequestSnapshot {
+	if v := ctx.Value(requestSnapshotKey); v != nil {
+		if snapshot, ok := v.(*RequestSnapshot); ok {
+			return snapshot
+		}
+	}
+	return nil
+}
+
+// WithWhiteBoxPrompt returns a new context with the white-box prompt attached.
+func WithWhiteBoxPrompt(ctx context.Context, prompt *WhiteBoxPrompt) context.Context {
+	return context.WithValue(ctx, whiteBoxPromptKey, prompt)
+}
+
+// GetWhiteBoxPrompt retrieves the white-box prompt from the context.
+func GetWhiteBoxPrompt(ctx context.Context) *WhiteBoxPrompt {
+	if v := ctx.Value(whiteBoxPromptKey); v != nil {
+		if prompt, ok := v.(*WhiteBoxPrompt); ok {
+			return prompt
+		}
+	}
+	return nil
+}
+
+// WithWorkflow returns a new context with the workflow attached.
+func WithWorkflow(ctx context.Context, workflow *Workflow) context.Context {
+	// Idempotent: resolution, preparation and cache setup each attach the
+	// same workflow, so re-wrapping would only add context layers.
+	if GetWorkflow(ctx) == workflow {
+		return ctx
+	}
+	return context.WithValue(ctx, workflowKey, workflow)
+}
+
+// GetWorkflow retrieves the workflow from the context.
+func GetWorkflow(ctx context.Context) *Workflow {
+	if v := ctx.Value(workflowKey); v != nil {
+		if workflow, ok := v.(*Workflow); ok {
+			return workflow
+		}
+	}
+	return nil
+}
+
+// WithSessionID returns a new context with the detected client session id attached.
+func WithSessionID(ctx context.Context, sessionID string) context.Context {
+	if sessionID == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, sessionIDKey, sessionID)
+}
+
+// SessionIDFromContext retrieves the detected client session id, or "" when
+// the request carries no session signal.
+func SessionIDFromContext(ctx context.Context) string {
+	if v := ctx.Value(sessionIDKey); v != nil {
+		if id, ok := v.(string); ok {
+			return id
+		}
+	}
+	return ""
+}
+
+// WithRequestDialect returns a context carrying the translated ingress dialect.
+func WithRequestDialect(ctx context.Context, dialect RequestDialect) context.Context {
+	if dialect == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, requestDialectKey, dialect)
+}
+
+// RequestDialectFromContext returns the translated ingress dialect, if any.
+func RequestDialectFromContext(ctx context.Context) RequestDialect {
+	if dialect, ok := ctx.Value(requestDialectKey).(RequestDialect); ok {
+		return dialect
+	}
+	return ""
+}
+
+// WithAuthKeyID returns a new context with the authenticated managed auth key id attached.
+func WithAuthKeyID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, authKeyIDKey, id)
+}
+
+// GetAuthKeyID retrieves the managed auth key id from the context.
+func GetAuthKeyID(ctx context.Context) string {
+	if v := ctx.Value(authKeyIDKey); v != nil {
+		if id, ok := v.(string); ok {
+			return id
+		}
+	}
+	return ""
+}
+
+// WithCredentialAllowedModels returns a new context carrying the model
+// allowlist bound to the authenticated credential. An empty list clears it.
+func WithCredentialAllowedModels(ctx context.Context, allowed []string) context.Context {
+	if len(allowed) == 0 {
+		return context.WithValue(ctx, credentialAllowedModelsKey, []string(nil))
+	}
+	return context.WithValue(ctx, credentialAllowedModelsKey, allowed)
+}
+
+// GetCredentialAllowedModels retrieves the credential-bound model allowlist.
+// Nil means the credential does not restrict models.
+func GetCredentialAllowedModels(ctx context.Context) []string {
+	if v := ctx.Value(credentialAllowedModelsKey); v != nil {
+		if allowed, ok := v.([]string); ok {
+			return allowed
+		}
+	}
+	return nil
+}
+
+// WithEffectiveUserPath returns a new context with an effective user path override attached.
+func WithEffectiveUserPath(ctx context.Context, userPath string) context.Context {
+	return context.WithValue(ctx, effectiveUserPathKey, userPath)
+}
+
+// GetEffectiveUserPath retrieves the effective user path override from context.
+func GetEffectiveUserPath(ctx context.Context) string {
+	if v := ctx.Value(effectiveUserPathKey); v != nil {
+		if userPath, ok := v.(string); ok {
+			return userPath
+		}
+	}
+	return ""
+}
+
+// WithUserPathHeaderName returns a new context with a non-default configured
+// user-path request header name attached. The default header is intentionally a
+// no-op and does not clear an existing value.
+func WithUserPathHeaderName(ctx context.Context, headerName string) context.Context {
+	headerName = UserPathHeaderName(headerName)
+	if headerName == UserPathHeader {
+		return ctx
+	}
+	return context.WithValue(ctx, userPathHeaderNameKey, headerName)
+}
+
+// WithBatchPreparationMetadata returns a new context with batch preprocessing metadata attached.
+func WithBatchPreparationMetadata(ctx context.Context, metadata *BatchPreparationMetadata) context.Context {
+	return context.WithValue(ctx, batchPreparationMetadataKey, metadata)
+}
+
+// GetBatchPreparationMetadata retrieves batch preprocessing metadata from the context.
+func GetBatchPreparationMetadata(ctx context.Context) *BatchPreparationMetadata {
+	if v := ctx.Value(batchPreparationMetadataKey); v != nil {
+		if metadata, ok := v.(*BatchPreparationMetadata); ok {
+			return metadata
+		}
+	}
+	return nil
+}
+
+// WithEnforceReturningUsageData returns a new context with the streaming usage policy attached.
+func WithEnforceReturningUsageData(ctx context.Context, enforce bool) context.Context {
+	return context.WithValue(ctx, enforceReturningUsageDataKey, enforce)
+}
+
+// GetEnforceReturningUsageData reports whether the request should ask providers
+// to include usage in streaming responses when possible.
+func GetEnforceReturningUsageData(ctx context.Context) bool {
+	if v := ctx.Value(enforceReturningUsageDataKey); v != nil {
+		if enforce, ok := v.(bool); ok {
+			return enforce
+		}
+	}
+	return false
+}
+
+// WithPrimaryRouteSaturated marks the resolved primary route as rate-saturated.
+// The stored error is the 429 the client would have received; dispatch uses it
+// as the synthetic primary failure that triggers the failover sweep, and it
+// surfaces unchanged when no failover target can take the request.
+func WithPrimaryRouteSaturated(ctx context.Context, err error) context.Context {
+	if err == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, primaryRouteSaturatedKey, err)
+}
+
+// PrimaryRouteSaturated returns the rate-limit rejection recorded for the
+// resolved primary route, or nil when the route has capacity.
+func PrimaryRouteSaturated(ctx context.Context) error {
+	if v := ctx.Value(primaryRouteSaturatedKey); v != nil {
+		if err, ok := v.(error); ok {
+			return err
+		}
+	}
+	return nil
+}
+
+// WithGuardrailsHash returns a new context with the guardrails hash attached.
+// The hash is the SHA-256 of all applied guardrail rule IDs and their versions,
+// computed post-patch in the translated inference handlers.
+func WithGuardrailsHash(ctx context.Context, hash string) context.Context {
+	return context.WithValue(ctx, guardrailsHashKey, hash)
+}
+
+// GetGuardrailsHash retrieves the guardrails hash from the context.
+// Returns empty string when no guardrails are active or the hash has not been set.
+func GetGuardrailsHash(ctx context.Context) string {
+	if v := ctx.Value(guardrailsHashKey); v != nil {
+		if h, ok := v.(string); ok {
+			return h
+		}
+	}
+	return ""
+}
+
+// ResponseCacheVeto is implemented by the per-request plugin state
+// (Workflow.PluginState) so the response cache can ask whether a plugin
+// decision asked for the response not to be stored.
+type ResponseCacheVeto interface {
+	NoStore() bool
+}
+
+// PluginNoStore reports whether a plugin that ran for the request asked for
+// its response not to be stored in the response cache.
+func PluginNoStore(ctx context.Context) bool {
+	workflow := GetWorkflow(ctx)
+	if workflow == nil {
+		return false
+	}
+	veto, ok := workflow.PluginState.(ResponseCacheVeto)
+	return ok && veto.NoStore()
+}
+
+// WithFailoverUsed returns a new context marked as having used a failover model.
+func WithFailoverUsed(ctx context.Context) context.Context {
+	return context.WithValue(ctx, failoverUsedKey, true)
+}
+
+// GetFailoverUsed reports whether the request was served by a failover model.
+func GetFailoverUsed(ctx context.Context) bool {
+	if v := ctx.Value(failoverUsedKey); v != nil {
+		if used, ok := v.(bool); ok {
+			return used
+		}
+	}
+	return false
+}
+
+// WithRewriteTokensSaved returns a new context carrying the total prompt
+// tokens that applied request rewriters estimate they removed. Non-positive
+// totals leave the context unchanged.
+func WithRewriteTokensSaved(ctx context.Context, tokensSaved int) context.Context {
+	if tokensSaved <= 0 {
+		return ctx
+	}
+	return context.WithValue(ctx, rewriteTokensSavedKey, tokensSaved)
+}
+
+// RewriteTokensSavedFromContext retrieves the request's rewrite savings
+// estimate, or zero when no rewriter reported savings.
+func RewriteTokensSavedFromContext(ctx context.Context) int {
+	if v := ctx.Value(rewriteTokensSavedKey); v != nil {
+		if saved, ok := v.(int); ok && saved > 0 {
+			return saved
+		}
+	}
+	return 0
+}
+
+// WithRequestOrigin returns a new context with the logical request origin attached.
+func WithRequestOrigin(ctx context.Context, origin RequestOrigin) context.Context {
+	return context.WithValue(ctx, requestOriginKey, origin)
+}
+
+// GetRequestOrigin retrieves the request origin from context.
+// When unset, external traffic is assumed.
+func GetRequestOrigin(ctx context.Context) RequestOrigin {
+	if v := ctx.Value(requestOriginKey); v != nil {
+		if origin, ok := v.(RequestOrigin); ok && origin != "" {
+			return origin
+		}
+	}
+	return RequestOriginExternal
+}

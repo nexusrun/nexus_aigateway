@@ -1,0 +1,77 @@
+---
+title: "xAI (Grok)"
+description: "Configure xAI Grok models in GoModel and understand how reasoning effort and prompt-cache affinity are handled."
+icon: "x"
+keywords: ["xAI", "Grok", "reasoning effort", "prompt cache", "provider setup"]
+---
+
+xAI's API is OpenAI-compatible, including a native Responses API. Models such
+as `grok-4.6` are discovered automatically from xAI's `/models` endpoint — no
+configuration beyond the API key is needed.
+
+## Configure
+
+```bash
+XAI_API_KEY=...
+```
+
+Or in `config.yaml`:
+
+```yaml
+providers:
+  xai:
+    type: xai
+    base_url: "https://api.x.ai/v1"
+    api_key: "${XAI_API_KEY}"
+```
+
+<Note>
+  Voice models (e.g. `grok-voice-latest`) are not listed by xAI's `/models`
+  endpoint. To route realtime sessions to them, add them explicitly via
+  `XAI_MODELS=grok-voice-latest` or a configured model list.
+</Note>
+
+Image models such as `grok-2-image` are served through the
+[Images API](/advanced/images-api) (`POST /v1/images/generations`). xAI bills
+them per image; set a `per_image` price for the model if the catalog has none.
+
+## Reasoning effort mapping
+
+Grok reasoning models (e.g. `grok-4.6`, defaulting to `high`) accept
+`reasoning_effort` as a top-level string on Chat Completions. GoModel rewrites
+the OpenAI-shaped `"reasoning": {"effort": "..."}` into that flat field — no
+client change required. On the Responses API the nested shape is xAI-native
+and passes through unchanged.
+
+| Client sends | xAI receives |
+| ------------ | ------------ |
+| `none` / `low` / `medium` / `high` | unchanged |
+| `xhigh` / `max` | `xhigh` on `grok-4.6` and later, and on the multi-agent Grok family (where it selects the agent count); `high` on older models, including the experimental `grok-4.20` family |
+| anything else | passed through for xAI to judge |
+
+Models that do not take a configurable effort answer `400 ... does not support
+parameter reasoningEffort`. GoModel drops the field for them instead of
+forwarding it, so the same request works across the catalog: the
+`-non-reasoning` Grok variants, the `grok-build` coding family, `grok-2`, and
+`grok-3` (only `grok-3-mini` takes an effort). Unknown model IDs keep the
+field, so a new reasoning model works before GoModel learns about it.
+
+## Prompt-cache affinity
+
+xAI routes a conversation's requests to the same server via the
+`x-grok-conv-id` header; without it, cache hits are unreliable and input
+tokens are often billed at the uncached price.
+
+- **Chat Completions:** GoModel forwards a client-supplied `X-Grok-Conv-Id`
+  header, and otherwise derives a stable one from the conversation's opening
+  messages — cache affinity works with no client change.
+- **Responses API:** pass `prompt_cache_key` in the request body; GoModel
+  forwards it verbatim.
+
+## `metadata` on the Responses API
+
+xAI's native `/responses` endpoint rejects the standard OpenAI `metadata`
+member with `400 "Argument not supported: metadata"`. GoModel drops it from
+the outbound request (logging that it did) instead of relaying the error, so
+clients that tag every request with metadata keep working. The member is only
+removed on the way to xAI; nothing else about the request changes.

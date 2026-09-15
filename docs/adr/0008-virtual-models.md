@@ -1,0 +1,160 @@
+# ADR-0008: Virtual Models (unify aliases and access overrides)
+
+## Context
+
+GoModel exposes two operator-defined ways to shape model routing:
+
+- **Aliases** map a new, addressable name to one real model (`fast` ->
+  `openai/gpt-4o`). They are resolved early, as a rewrite.
+- **Access overrides** gate an existing, scoped selector (`/`, `provider/`,
+  `model`, `provider/model`) by `user_paths`. They are enforced late, as an
+  authorization decision on the already-resolved model.
+
+These are stored in separate tables, served by separate services, and surfaced
+by separate admin endpoints, yet they are the same operator concept: a model
+the operator defines rather than one a provider advertises. The split
+duplicated `user_path` scoping and the database-migration handling, which caused
+real bugs (an alias `user_paths` feature that re-implemented matching the
+overrides already had, and shipped without a migration, breaking existing
+databases).
+
+We also want **load balancing** — one name resolving to several real models,
+chosen per request — and there is no home for it today.
+
+## Decision
+
+Introduce one entity, the **virtual model**, persisted in `virtual_models` and
+keyed uniquely by `source`.
+
+- A row with `targets` is a **redirect**: `source` is a new name that rewrites
+  to a real model. One target is an alias; many targets are load balancing,
+  distributed by `strategy` (`round_robin`, honoring per-target `weight`, or
+  `cost`). This was implemented as the additive follow-up the staging enabled —
+  the `targets`, `strategy`, and `weight` columns were already persisted.
+- A row without `targets` is an **access policy**: `source` is a scoped
+  selector over existing models, gated by `user_paths`.
+
+Behavior is **derived from the presence of `targets`** — there is no `role`
+column. Storage, the service object, the admin API, and the dashboard are
+unified, but resolution stays **staged**: redirect runs early, the access gate
+runs late, exactly as before.
+
+Pricing overrides remain a separate subsystem.
+
+Version 1 preserves today's behavior exactly. The fields that enable load
+balancing (`targets` beyond one, `strategy`, per-target `weight`) and scoped
+redirects (`user_paths` on a redirect row) are stored but inert; they are
+turned on by later changes that need no migration.
+
+## Resolution Rule
+
+1. **Resolver (early).** If the requested model exactly matches a redirect
+   row's `source`, rewrite it to that row's single target.
+2. **Authorizer (late).** Scope-match the resolved selector against the policy
+   rows and enforce `user_paths`.
+
+Redirect and policy rows never cross stages: a redirect `source` is a new name
+that does not scope-match a real model, and a policy row has no target, so the
+resolver ignores it.
+
+## Migration
+
+A one-time, idempotent seed copied existing `aliases` rows (as redirects) and
+`model_overrides` rows (as policies) into `virtual_models` on first start when
+the table was empty. The seed shipped in v0.1.44 and was removed in v0.1.81;
+upgrading from a release older than v0.1.44 must pass through a version in that
+range so the seed runs once; a later release refuses to start while those
+tables still hold rows and `virtual_models` is empty, rather than silently
+dropping the access policies they expressed. The legacy `aliases` and
+`model_overrides` tables/collections are otherwise never read or written and
+are left in place; operators may drop them once the migration has completed
+and rollback to a release that reads them is no longer needed.
+
+## Consequences
+
+### Positive
+
+- One `user_path` scope, one migration path, one admin surface, one UI.
+- Load balancing becomes an additive change (data + a picker), not a third
+  subsystem.
+- Less duplicated code; the class of bug from divergent re-implementations is
+  removed.
+
+### Negative
+
+- One table feeds two pipeline stages, mitigated by two independent in-memory
+  indexes and by porting the existing, tested matching logic verbatim.
+- `source` is a single namespace, so a redirect and a policy cannot share a
+  name. This is structurally rare (aliases already forbid masking real models)
+  and is accepted.
+- Rollback is lossless only before the first virtual-model edit, because new
+  writes go only to `virtual_models`.
+
+## Update — single native engine, authoritative `Enabled`, scoped redirects, unified UI
+
+A follow-up change completed the unification the first version staged:
+
+- **One native engine.** The composition over the legacy `aliases` and
+  `modeloverrides` services was replaced by native redirect + policy matching
+  inside `virtualmodels`, operating directly on `VirtualModel` rows behind a
+  single in-memory snapshot. The `internal/aliases` and `internal/modeloverrides`
+  packages were removed; their tested matching logic was ported.
+- **`Enabled` is authoritative.** A policy row's `Enabled` now governs access: a
+  disabled policy turns its selector off for everyone, an enabled policy with
+  `user_paths` restricts, and a selector with no row follows
+  `MODELS_ENABLED_BY_DEFAULT`. This makes "disable a single model" expressible
+  for the first time and lets the dashboard toggle any model on/off.
+- **Scoped redirects are enforced.** `user_paths` on a redirect row are no longer
+  inert: resolution consults the effective request `user_path` via the optional
+  `gateway.UserPathModelResolver` (`ResolveModelForUserPath`). A redirect applies
+  only for matching callers and falls through to the literal model name
+  otherwise (the use case from the closed upstream PR #387). Exposure at
+  `/v1/models` remains unscoped for redirects.
+- **One admin surface and UI.** A single `GET/PUT/DELETE /admin/virtual-models`
+  endpoint replaces `/admin/aliases` and `/admin/model-overrides`, and the
+  dashboard collapses the separate alias and access-override modals into one
+  virtual-model editor (Source — locked when editing an existing model — an
+  always-present target field, `user_paths`, `enabled`, description) plus a
+  per-row enable/disable toggle and alias-like styling for any model that carries
+  a virtual model.
+
+## Update — chained virtual models
+
+A redirect target may name another virtual model's `source`, turning the
+redirect graph from a star into a DAG without adding an entity:
+
+- **Lazy, level-by-level resolution.** A chained target is one leg of the outer
+  strategy (weight included). Only once chosen does the inner virtual model
+  apply its own strategy, so inner load-balancing state advances only for
+  requests that actually reach it, and session keeping pins at each level.
+- **Validation is a graph property.** `buildSnapshot` rejects cycles (spelling
+  out the offending chain) and chains deeper than `MaxChainDepth` (8). Because
+  every admin write and the initial config refresh build a candidate snapshot,
+  the check covers both without consulting the provider catalog. Removing or
+  renaming a virtual model that others chain through is refused.
+- **Projections descend chains.** `Supports`, `/v1/models` exposure, and the
+  admin view resolve to the first available concrete leaf; a disabled inner
+  virtual model makes its leg unavailable. Only the outer redirect's
+  `user_paths` and `slowdown` apply to a request.
+
+## Update — failover is a load-balancing behaviour of redirects
+
+The standalone failover feature (per-model `failover_rules` rows, the
+`/admin/failover` endpoints, the `failover.rules` configuration and the
+dashboard's shuffle icon) is folded into virtual models (#530, #560):
+
+- **Every multi-target redirect fails over.** The strategy picks the target a
+  request is sent to first; `Service.ResolveFailovers` returns the redirect's
+  remaining available targets (descending chains) as the gateway's failover
+  chain. The gateway sweep, attempt recording and the workflow/`FAILOVER_ENABLED`
+  gates are unchanged — only the source of the chain moved.
+- **`failover` strategy.** A priority list: always the first available target,
+  no weights, no session pinning.
+- **Self target = shadowed model.** A redirect may list its own source as a
+  target, meaning the concrete model it shadows. That is how failover for a real
+  model is expressed (`gpt-4o -> [gpt-4o, azure/gpt-4o]`); a redirect may not
+  consist of its own source alone.
+- **Migration.** Dashboard-managed `failover_rules` rows are converted once at
+  startup into store-backed failover-strategy redirects and the table is
+  dropped; the deprecated `failover.rules` configuration is translated into
+  managed redirects on every start. The `internal/failover` package is removed.

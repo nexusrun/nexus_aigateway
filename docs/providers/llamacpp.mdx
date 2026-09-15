@@ -1,0 +1,129 @@
+---
+title: "llama.cpp"
+description: "Route OpenAI-compatible GoModel requests to a llama.cpp llama-server instance (the same provider type works for LM Studio)."
+icon: "server"
+keywords: ["llama.cpp", "llama-server", "LM Studio", "local models", "self-hosted", "OpenAI-compatible server"]
+---
+
+llama.cpp's `llama-server` speaks the OpenAI API directly, and GoModel has a
+dedicated `llamacpp` provider type for it: the API key is optional
+(llama-server usually runs keyless), and provider-native endpoints such as
+`/health` and `/rerank` are reachable through passthrough. Do **not** register
+llama.cpp as an `ollama` provider: that type speaks Ollama's native API, which
+llama.cpp does not implement.
+
+The same provider type fits LM Studio and any other plain OpenAI-compatible
+local server.
+
+Start llama-server first. Without `--alias`, the model ID in `/v1/models` is
+the model file's path — set an alias so requests can use a clean name:
+
+```bash
+llama-server -hf ggml-org/gemma-3-4b-it-GGUF --alias gemma-3-4b-it --port 8081
+# add --api-key token-abc123 if you want llama-server to require bearer auth
+```
+
+## Configure
+
+The base URL is required and registers the provider — llama-server's default
+port (8080) collides with GoModel's own, so there is no default:
+
+```bash
+LLAMACPP_BASE_URL=http://host.docker.internal:8081/v1   # include /v1
+# LLAMACPP_API_KEY=token-abc123                         # only if llama-server was started with --api-key
+GOMODEL_MASTER_KEY=change-me
+```
+
+<Note>
+  These examples assume GoModel runs in Docker and llama-server is on the host
+  at `localhost:8081` — hence `host.docker.internal`. If GoModel runs on the
+  host directly, use `http://localhost:8081/v1`. Running several llama-server
+  instances? Register each under a suffixed name:
+  `LLAMACPP_STUDIO_BASE_URL=...` creates provider `llamacpp-studio`.
+</Note>
+
+## Verify
+
+```bash
+curl -s http://localhost:8080/v1/chat/completions \
+  -H "Authorization: Bearer change-me" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "llamacpp/gemma-3-4b-it",
+    "messages": [{"role": "user", "content": "Reply with exactly ok."}]
+  }'
+```
+
+`GET /v1/models` returns llama-server's model IDs prefixed by provider name.
+
+## Embeddings
+
+`/v1/embeddings` works through GoModel as long as llama-server can serve it:
+the loaded model must use a pooling type other than `none`. Dedicated embedding
+GGUFs usually declare pooling in their metadata; otherwise pass `--pooling mean`
+(or `cls`/`last`). The `--embeddings` flag is optional — it restricts the
+server to embeddings only:
+
+```bash
+llama-server -hf nomic-ai/nomic-embed-text-v1.5-GGUF --embeddings --alias nomic-embed-text-v1.5 --port 8081
+```
+
+```bash
+curl -s http://localhost:8080/v1/embeddings \
+  -H "Authorization: Bearer change-me" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "llamacpp/nomic-embed-text-v1.5", "input": "hello"}'
+```
+
+## Model metadata
+
+Local GGUFs are not in the upstream model catalog, so GoModel reads what it can
+from llama-server itself and reports it on `GET /v1/models`:
+
+- **Context window** — the per-slot `n_ctx` llama-server reports for the model,
+  which is the context it is *running* with (`--ctx-size`, divided across
+  `--parallel` slots) rather than the one the GGUF was trained for. Recent
+  builds report it as `meta.n_ctx` in the listing itself; older ones are asked
+  for it via `/props`. If neither answers — LM Studio, or a proxy that hides
+  `/props` — the model's trained `n_ctx_train` is used instead, which is only an
+  upper bound and may exceed what the server will accept.
+- **Modalities** — a multimodal server (started with `--mmproj`) reports
+  `vision`, `video`, and `audio` on `/props`; the supported ones become model
+  capabilities.
+
+`/props` describes the one model the server has loaded, so it is only consulted
+for a single-entry listing. In [router
+mode](https://github.com/ggml-org/llama.cpp/tree/master/tools/server), where one
+process serves several models, each model carries its own `meta.n_ctx` and needs
+no `/props` at all.
+
+Both are defaults, not decisions: anything you declare under the provider's
+model metadata wins — see [Model metadata](/advanced/model-metadata).
+
+## Model classification
+
+llama-server reports nothing that separates a chat model from an embedding one,
+so GoModel classifies its models by ID: names containing `embed` or matching
+well-known embedding families (`bge`, `e5`, `gte`, `minilm`) are categorized as
+embedding models, and names containing `rerank` as reranking models — namespaced
+IDs are checked by their final path segment. For anything that stays
+unclassified, declare `modes` under the provider's model metadata. Categories
+only affect dashboard grouping; `/v1/embeddings` routes
+to any model the provider serves regardless of category.
+
+## Beyond chat and embeddings
+
+- **Multimodal input** — image and audio *input* in chat messages works with
+  multimodal models when llama-server is started with a projector
+  (`--mmproj`, auto-loaded with `-hf` when available). These requests flow
+  through `/v1/chat/completions` normally.
+- **Native endpoints** — llama-server's provider-native routes are reachable
+  through [passthrough](/features/passthrough-api) at `/p/llamacpp/...`:
+  OpenAI-shaped paths (`chat/completions`, `embeddings`, ...) are served from
+  the `/v1` base, everything else (`/health`, `/props`, `/tokenize`,
+  `/infill`, ...) from the server root. For a suffixed setup use the instance
+  name, e.g. `/p/llamacpp-studio/health`.
+- **Reranking** — llama-server serves reranking (start with a reranker model
+  and `--rerank --embedding --pooling rank`), but GoModel has no rerank
+  endpoint; reach it through passthrough: `POST /p/llamacpp/rerank` (or
+  `/p/llamacpp/v1/rerank`).

@@ -1,0 +1,329 @@
+<script>
+  // Request log: paginated per-request usage entries following the page's
+  // window and facet filters.
+  import Icon from "$lib/components/atoms/Icon.svelte";
+  import NoDataIllustration from "$lib/components/atoms/NoDataIllustration.svelte";
+  import LoadingState from "$lib/components/molecules/LoadingState.svelte";
+  import FilterInput from "$lib/components/molecules/FilterInput.svelte";
+  import { debounced } from "$lib/utils/debounce.js";
+  import Pagination from "$lib/components/molecules/Pagination.svelte";
+  import { timezone } from "$lib/stores/timezone.svelte.js";
+  import {
+    formatCost,
+    formatNumber,
+    formatTimestampUTC,
+    providerDisplayValue,
+  } from "$lib/utils/format.js";
+  import { usagePage } from "./usage.svelte.js";
+  import SessionIDChip from "./SessionIDChip.svelte";
+  import {
+    cachedCostTitle,
+    costSourceTooltip,
+    entryLabels,
+    formatCostTooltip,
+    hasProviderCache,
+    labelColor,
+    providerCacheLabel,
+    providerCacheTitle,
+    usageEntryCacheLabel,
+    usageEntryCached,
+    usageLogHasLabels,
+    usesResponseCostPricing,
+  } from "./usage-helpers.js";
+  import { CircleDollarSign, DatabaseZap } from "lucide";
+  import * as m from "$lib/paraglide/messages.js";
+
+  const costsMode = $derived(usagePage.usageMode === "costs");
+  const hasLabels = $derived(
+    usageLogHasLabels(
+      usagePage.labelUsage,
+      usagePage.usageFilterLabel,
+      usagePage.usageLog.entries,
+    ),
+  );
+
+  const onSearchInput = debounced(() => usagePage.fetchUsageLog(true));
+  $effect(() => onSearchInput.cancel);
+</script>
+
+{#snippet labelChips(entry)}
+  {#if entryLabels(entry).length > 0}
+    <div class="usage-label-chips">
+      {#each entryLabels(entry) as label (label)}
+        <button
+          type="button"
+          class="usage-label-chip"
+          class:active={usagePage.usageFilterLabel === label}
+          style="--label-color: {labelColor(label)}"
+          title={usagePage.usageLabelChipTitle(label)}
+          onclick={() => usagePage.toggleUsageLabelFilter(label)}
+        >{label}</button>
+      {/each}
+    </div>
+  {:else}
+    <span>-</span>
+  {/if}
+{/snippet}
+
+<div class="usage-log-section">
+  <h3>{m.usage_request_log()}</h3>
+  <div class="usage-log-toolbar">
+    <div class="usage-filter-row usage-filter-row-search">
+      <FilterInput
+        placeholder={m.usage_search_placeholder()}
+        label={m.usage_search_label()}
+        bind:value={usagePage.usageLogSearch}
+        oninput={onSearchInput}
+        loading={usagePage.usageLogLoading}
+      />
+    </div>
+    <div class="usage-filter-row usage-filter-row-options">
+      <label class="usage-log-checkbox">
+        <input
+          type="checkbox"
+          bind:checked={usagePage.usageLogHideCached}
+          onchange={() => usagePage.fetchUsageLog(true)}
+        />
+        <span>{m.usage_hide_cached()}</span>
+      </label>
+    </div>
+  </div>
+  {#if usagePage.usageLog.entries.length > 0}
+    <div class="table-wrapper">
+      <table class="data-table usage-log-table">
+        <thead>
+          <tr>
+            <th>{m.usage_column_timestamp()}</th>
+            <th>{m.usage_column_provider()}</th>
+            <th>{m.usage_column_model()}</th>
+            <th>{m.usage_column_user_path()}</th>
+            <th>{m.usage_column_session()}</th>
+            {#if hasLabels}
+              <th>{m.usage_column_labels()}</th>
+            {/if}
+            <th>{m.usage_column_cache()}</th>
+            <th title={m.usage_provider_cache_help()}>{m.usage_column_provider_cache()}</th>
+            <th class="col-price">{costsMode ? m.usage_column_input_cost() : m.usage_column_input()}</th>
+            <th class="col-price">{costsMode ? m.usage_column_output_cost() : m.usage_column_output()}</th>
+            <th class="col-price">{costsMode ? m.usage_column_total_cost() : m.usage_column_total()}</th>
+            {#if !costsMode}
+              <th class="col-price">{m.usage_column_cost()}</th>
+            {/if}
+          </tr>
+        </thead>
+        <tbody>
+          {#each usagePage.usageLog.entries as entry (entry.id)}
+            <tr class:usage-log-row-cached={usageEntryCached(entry)}>
+              <td class="mono usage-ts" title={formatTimestampUTC(entry.timestamp)}
+                >{timezone.formatTimestamp(entry.timestamp)}</td
+              >
+              <td>
+                <span class="provider-badge">{providerDisplayValue(entry) || "-"}</span>
+              </td>
+              <td class="mono font-size-md">{entry.model}</td>
+              <td class="mono font-size-md">{entry.user_path || "-"}</td>
+              <td>
+                {#if entry.session_id}
+                  <SessionIDChip
+                    sessionID={entry.session_id}
+                    active={usagePage.usageFilterSession === entry.session_id}
+                    compact
+                    onfilter={(sessionID) => usagePage.filterBySession(sessionID, entry.user_path)}
+                  />
+                {:else}
+                  <span>-</span>
+                {/if}
+              </td>
+              {#if hasLabels}
+                <td class="usage-log-labels-cell">
+                  {@render labelChips(entry)}
+                </td>
+              {/if}
+              <td class="usage-log-cache-cell">{usageEntryCacheLabel(entry)}</td>
+              <td class="usage-log-provider-cache-cell" title={providerCacheTitle(entry)}>
+                {#if hasProviderCache(entry)}
+                  <span class="audit-prompt-cache-pill mono">{providerCacheLabel(entry)}</span>
+                {:else}
+                  <span>-</span>
+                {/if}
+              </td>
+              <td
+                class="col-price"
+                title={costsMode ? m.usage_tokens_count({ count: formatNumber(entry.input_tokens) }) : ""}
+                >{costsMode ? formatCost(entry.input_cost) : formatNumber(entry.input_tokens)}</td
+              >
+              <td
+                class="col-price"
+                title={costsMode ? m.usage_tokens_count({ count: formatNumber(entry.output_tokens) }) : ""}
+                >{costsMode ? formatCost(entry.output_cost) : formatNumber(entry.output_tokens)}</td
+              >
+              <td class="col-price" title={costsMode ? cachedCostTitle(entry, "") : ""}>
+                <span
+                  title={costsMode
+                    ? cachedCostTitle(
+                        entry,
+                        m.usage_tokens_count({ count: formatNumber(entry.total_tokens) }) + "\n" + formatCostTooltip(entry),
+                      )
+                    : ""}
+                  >{costsMode
+                    ? formatCost(entry.total_cost)
+                    : formatNumber(entry.total_tokens)}</span
+                >
+                {#if costsMode && usesResponseCostPricing(entry)}
+                  <Icon
+                    icon={CircleDollarSign}
+                    class="cost-source-icon"
+                    title={costSourceTooltip(entry)}
+                  />
+                {/if}
+                {#if costsMode && usageEntryCached(entry)}
+                  <Icon icon={DatabaseZap} class="cache-savings-icon" />
+                {/if}
+                {#if costsMode && entry.costs_calculation_caveat}
+                  <span class="caveat-icon" title={entry.costs_calculation_caveat}>&#9888;</span>
+                {/if}
+              </td>
+              {#if !costsMode}
+                <td class="col-price" title={cachedCostTitle(entry, formatCostTooltip(entry))}>
+                  <span>{formatCost(entry.total_cost)}</span>
+                  {#if usesResponseCostPricing(entry)}
+                    <Icon
+                      icon={CircleDollarSign}
+                      class="cost-source-icon"
+                      title={costSourceTooltip(entry)}
+                    />
+                  {/if}
+                  {#if usageEntryCached(entry)}
+                    <Icon icon={DatabaseZap} class="cache-savings-icon" />
+                  {/if}
+                  {#if entry.costs_calculation_caveat}
+                    <span class="caveat-icon" title={entry.costs_calculation_caveat}>&#9888;</span>
+                  {/if}
+                </td>
+              {/if}
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+  {:else if usagePage.usageLogLoading}
+    <LoadingState label={m.usage_loading_log()} class="usage-log-loading" />
+  {:else}
+    <div class="empty-state">
+      <NoDataIllustration />
+    </div>
+  {/if}
+  <Pagination
+    total={usagePage.usageLog.total}
+    offset={usagePage.usageLog.offset}
+    limit={usagePage.usageLog.limit}
+    onprev={() => usagePage.usageLogPrevPage()}
+    onnext={() => usagePage.usageLogNextPage()}
+  />
+</div>
+
+<style>
+/* Match the empty-state block's height so the section doesn't jump when the
+   fetch settles. The class lands in LoadingState's markup, so :global. */
+.usage-log-section :global(.usage-log-loading) {
+  --loading-state-min-height: 120px;
+}
+
+.usage-log-section {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-block);
+}
+
+.usage-log-section :global(h3) {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+/* The request log carries many columns (labels included); scroll sideways on
+   narrow windows instead of clipping the trailing cost columns. */
+.usage-log-section :global(.table-wrapper) {
+  overflow-x: auto;
+}
+
+.usage-log-toolbar {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.usage-filter-row {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 12px;
+  align-items: center;
+}
+
+.usage-filter-row-search :global(.filter-input-wrap) {
+  grid-column: 1 / -1;
+}
+
+.usage-filter-row-options {
+  grid-template-columns: 1fr;
+}
+
+.usage-log-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.usage-log-checkbox :global(input) {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.usage-ts {
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.usage-log-row-cached :global(td) {
+  opacity: 0.75;
+  font-style: italic;
+}
+
+.usage-log-row-cached .usage-log-cache-cell {
+  font-weight: 700;
+}
+
+/* Caveat warning icon */
+.caveat-icon {
+  color: var(--warning);
+  cursor: help;
+  font-size: 14px;
+  margin-left: 4px;
+}
+
+@media (max-width: 768px) {
+  /* Usage page mobile */
+  .usage-log-toolbar {
+        gap: 10px;
+      }
+
+  .usage-filter-row {
+        grid-template-columns: 1fr;
+      }
+
+  .usage-filter-row-search :global(.filter-input-wrap) {
+        grid-column: 1;
+      }
+
+  .usage-log-table {
+        display: block;
+        overflow-x: auto;
+      }
+}
+</style>

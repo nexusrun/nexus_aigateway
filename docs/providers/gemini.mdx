@@ -1,0 +1,156 @@
+---
+title: "Google Gemini"
+description: "Configure Google Gemini via AI Studio in GoModel, choose native or OpenAI-compatible routing, and understand image_url behavior."
+icon: "sparkles"
+keywords: ["Google Gemini", "AI Studio", "native Gemini API", "provider setup"]
+---
+
+This page covers Gemini through **Google AI Studio** API keys. For Gemini on
+Google Cloud's Vertex AI, see the [Google Vertex AI guide](/providers/vertex).
+
+By default, GoModel routes Gemini chat, Responses, embeddings, and
+[image](/advanced/images-api) requests through Gemini's native APIs
+(`generateContent`, `batchEmbedContents`, Imagen `predict`). Switch to the
+OpenAI-compatible endpoint when you need compatibility behavior the native
+adapter does not implement yet (notably remote `image_url` values).
+
+## Configure
+
+```bash
+GEMINI_API_KEY=...
+GEMINI_API_MODE=native        # or openai_compatible
+```
+
+Or in `config.yaml`:
+
+```yaml
+providers:
+  gemini:
+    type: gemini
+    api_key: "${GEMINI_API_KEY}"
+    api_mode: native
+```
+
+<Note>
+  `USE_GOOGLE_GEMINI_NATIVE_API` is still honored as a legacy global toggle
+  when per-provider `GEMINI_API_MODE` is unset. Prefer `GEMINI_API_MODE`.
+</Note>
+
+Native AI Studio mode can also materialize GoModel's post-routing prompt-cache
+plans as five-minute Gemini cached-content objects. Reuse is scoped to the API
+key selected for the session; sessionless traffic with rotating keys skips
+object creation so a resource is never reused under the wrong credential.
+Vertex currently receives the original request without cached-content objects.
+
+## Base URLs
+
+GoModel keeps separate internal bases for native Gemini and the
+OpenAI-compatible API:
+
+- native chat/models: `https://generativelanguage.googleapis.com/v1beta`
+- OpenAI-compatible: `https://generativelanguage.googleapis.com/v1beta/openai`
+
+`GEMINI_BASE_URL` overrides them. When the value ends in `/openai`, GoModel
+uses it for the OpenAI-compatible client and derives the native base by
+stripping `/openai`. Files and batches always use the OpenAI-compatible
+surface; chat, embeddings, and images follow the API mode.
+
+## Embeddings
+
+In native mode, embeddings are served through `models/{model}:batchEmbedContents`.
+`dimensions` maps to `outputDimensionality` and `encoding_format: "base64"` is
+honored. Gemini reports no embedding token usage on either API surface, so
+embedding responses carry zero token counts and the usage row is flagged with
+a cost-calculation caveat.
+
+## Image generation and edits
+
+In native mode the [OpenAI-compatible image endpoints](/advanced/images-api)
+work with Gemini image models (`gemini-2.5-flash-image`, ..., via
+`generateContent`). Google retired Imagen from the AI Studio API in August
+2026; Imagen is still served on [Vertex AI](/providers/vertex). Image edits
+require native mode and a Gemini image model; masks are not supported. See the
+[Images API provider notes](/advanced/images-api#google-gemini) for parameter
+mapping and pricing details.
+
+## Reasoning effort
+
+In native mode, `reasoning_effort` (or `reasoning.effort`) is translated to
+Gemini's `thinkingConfig`:
+
+| Model family | `none` / `minimal` | `low` / `medium` / `high` |
+| ------------ | ------------------ | ------------------------- |
+| Gemini 2.5 | `thinkingBudget` 0 / 1024 | `thinkingBudget` 1024 / 8192 / 24576 |
+| Gemini 3 Flash, 3.5, 3.6 | `thinkingLevel: minimal` | `thinkingLevel` as given |
+| Gemini 3 Pro, 3.1 Pro, 3.7 Flash, 3.8 Flash | `thinkingLevel: low` | `thinkingLevel` as given |
+
+Thinking cannot be turned off on Gemini 3, and Pro models plus 3.7 and 3.8
+Flash reject `minimal`, so GoModel sends the lowest level those models accept
+instead of surfacing Google's 400. An explicit
+`extra_body.google.thinking_config` is always forwarded unchanged.
+
+## Sampling parameters on Gemini 3
+
+Google's Gemini 3 migration guides say to remove `temperature`, `top_p` and
+`top_k` from every request because the models are tuned for their defaults,
+and list `candidate_count` as unsupported on Gemini 3.x. In native mode GoModel
+therefore drops those four fields for Gemini 3 and later (`gemini-3-*`,
+`gemini-3.5-*`, `gemini-3.8-*`, ...) and still forwards them for Gemini 2.5,
+Gemma and other models. `max_tokens`, `stop`, penalties, `response_format` and
+thinking settings are unaffected.
+
+## Thought signatures
+
+Gemini 3 attaches an encrypted `thoughtSignature` to the function calls it
+emits and rejects a follow-up request (HTTP 400, "Function call is missing a
+thought_signature") when that call comes back in the history without it. In
+native mode GoModel exposes the signature the same way Google's own
+OpenAI-compatible endpoint does, so a client that echoes assistant messages
+back unchanged keeps working:
+
+```json
+{
+  "role": "assistant",
+  "tool_calls": [{
+    "id": "call_1",
+    "type": "function",
+    "function": {"name": "lookup_weather", "arguments": "{\"city\":\"Warsaw\"}"},
+    "extra_content": {"google": {"thought_signature": "EvACCu0CARFNMg..."}}
+  }]
+}
+```
+
+The same `extra_content` member appears on streamed `tool_calls` deltas, on
+Responses API `function_call` output items, on Anthropic Messages API
+`tool_use` blocks, and (for text-only turns) on the assistant message itself.
+Send it back verbatim; only the first call of a parallel batch carries a
+signature. Other providers never see it; see
+[Extra content, thinking blocks, and thought signatures](/advanced/extra-content) for the shared convention. A flat `thought_signature` (or
+`thoughtSignature`) on the tool call or its `function` object is accepted too,
+so clients built against other gateways keep working.
+
+When a Gemini 3 history contains a function call without any signature (the
+conversation started on another model, or the client dropped the field),
+GoModel sends Google's documented `skip_thought_signature_validator`
+placeholder instead of surfacing the 400. Reasoning continuity is reduced for
+that turn, so prefer echoing the real signature.
+
+## Image input
+
+| Mode | OpenAI-style `image_url` |
+| ---- | ----- |
+| `native` (default) | inline `data:` URLs only — remote `https://...` URLs are rejected |
+| `openai_compatible` | OpenAI-style remote URLs pass through to Google's OpenAI-compatible endpoint |
+
+For URL-hosted images in native mode, Google's own examples fetch the URL
+first and send the bytes to `generateContent`.
+
+## Not yet integrated
+
+- Automatic fetching of remote `image_url` values in native mode.
+- Uploading remote images through the Gemini Files API before a chat request.
+
+## References
+
+- [Gemini image understanding](https://ai.google.dev/gemini-api/docs/image-understanding)
+- [Gemini OpenAI compatibility](https://ai.google.dev/gemini-api/docs/openai)

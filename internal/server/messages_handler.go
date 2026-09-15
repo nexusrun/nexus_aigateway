@@ -1,0 +1,319 @@
+package server
+
+import (
+	"context"
+	"errors"
+	"io"
+	"log/slog"
+	"net/http"
+	"strings"
+
+	"github.com/labstack/echo/v5"
+
+	"github.com/enterpilot/gomodel/internal/anthropicapi"
+	"github.com/enterpilot/gomodel/internal/auditlog"
+	"github.com/enterpilot/gomodel/internal/core"
+)
+
+// Messages handles POST /v1/messages.
+//
+// It accepts the Anthropic Messages API request dialect, translates it to the
+// canonical chat request, and runs it through the standard chat-completions
+// pipeline so it routes to any configured provider with full workflow, budget,
+// failover, cache, usage, and audit support. See ADR-0007.
+//
+// @Summary      Create a message (Anthropic Messages API)
+// @Tags         messages
+// @Accept       json
+// @Produce      json
+// @Produce      text/event-stream
+// @Security     BearerAuth
+// @Param        request  body      anthropicapi.MessagesRequest  true  "Anthropic Messages request"
+// @Success      200      {object}  anthropicapi.MessagesResponse  "JSON response or SSE stream when stream=true"
+// @Failure      400      {object}  anthropicapi.ErrorResponse
+// @Failure      401      {object}  anthropicapi.ErrorResponse
+// @Failure      429      {object}  anthropicapi.ErrorResponse
+// @Failure      502      {object}  anthropicapi.ErrorResponse
+// @Router       /v1/messages [post]
+func (h *Handler) Messages(c *echo.Context) error {
+	return h.translatedInference().Messages(c)
+}
+
+// CountMessageTokens handles POST /v1/messages/count_tokens.
+//
+// @Summary      Count message tokens (Anthropic Messages API)
+// @Description  Counts the input tokens of a Messages request. Exact when the provider that owns the model has a token counting endpoint (Anthropic); otherwise a calibrated estimate.
+// @Tags         messages
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        request  body      anthropicapi.MessagesRequest  true  "Anthropic Messages request"
+// @Success      200      {object}  anthropicapi.CountTokensResponse
+// @Failure      400      {object}  anthropicapi.ErrorResponse
+// @Failure      401      {object}  anthropicapi.ErrorResponse
+// @Router       /v1/messages/count_tokens [post]
+func (h *Handler) CountMessageTokens(c *echo.Context) error {
+	return h.translatedInference().CountMessageTokens(c)
+}
+
+// MessagesBatches handles POST /v1/messages/batches.
+//
+// @Summary      Create a message batch (Anthropic Message Batches API)
+// @Tags         messages
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        request  body      anthropicapi.BatchCreateRequest  true  "Anthropic Message Batches create request"
+// @Success      200      {object}  anthropicapi.MessageBatch
+// @Failure      400      {object}  anthropicapi.ErrorResponse
+// @Failure      401      {object}  anthropicapi.ErrorResponse
+// @Failure      429      {object}  anthropicapi.ErrorResponse
+// @Failure      502      {object}  anthropicapi.ErrorResponse
+// @Router       /v1/messages/batches [post]
+func (h *Handler) MessagesBatches(c *echo.Context) error {
+	return h.nativeBatch().CreateMessageBatch(c)
+}
+
+// GetMessagesBatch handles GET /v1/messages/batches/{id}.
+//
+// @Summary      Get a message batch
+// @Tags         messages
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id   path      string  true  "Message batch ID"
+// @Success      200  {object}  anthropicapi.MessageBatch
+// @Failure      401  {object}  anthropicapi.ErrorResponse
+// @Failure      404  {object}  anthropicapi.ErrorResponse
+// @Router       /v1/messages/batches/{id} [get]
+func (h *Handler) GetMessagesBatch(c *echo.Context) error {
+	return h.nativeBatch().GetMessageBatch(c)
+}
+
+// ListMessagesBatches handles GET /v1/messages/batches.
+//
+// @Summary      List message batches
+// @Tags         messages
+// @Produce      json
+// @Security     BearerAuth
+// @Param        after_id  query     string  false  "Pagination cursor"
+// @Param        limit     query     int     false  "Maximum items to return (1-100, default 20)"
+// @Success      200       {object}  anthropicapi.MessageBatchList
+// @Failure      401       {object}  anthropicapi.ErrorResponse
+// @Router       /v1/messages/batches [get]
+func (h *Handler) ListMessagesBatches(c *echo.Context) error {
+	return h.nativeBatch().ListMessageBatches(c)
+}
+
+// CancelMessagesBatch handles POST /v1/messages/batches/{id}/cancel.
+//
+// @Summary      Cancel a message batch
+// @Tags         messages
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id   path      string  true  "Message batch ID"
+// @Success      200  {object}  anthropicapi.MessageBatch
+// @Failure      401  {object}  anthropicapi.ErrorResponse
+// @Failure      404  {object}  anthropicapi.ErrorResponse
+// @Router       /v1/messages/batches/{id}/cancel [post]
+func (h *Handler) CancelMessagesBatch(c *echo.Context) error {
+	return h.nativeBatch().CancelMessageBatch(c)
+}
+
+// DeleteMessagesBatch handles DELETE /v1/messages/batches/{id}.
+//
+// @Summary      Delete an ended message batch
+// @Tags         messages
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id   path      string  true  "Message batch ID"
+// @Success      200  {object}  anthropicapi.DeletedMessageBatch
+// @Failure      400  {object}  anthropicapi.ErrorResponse
+// @Failure      401  {object}  anthropicapi.ErrorResponse
+// @Failure      404  {object}  anthropicapi.ErrorResponse
+// @Router       /v1/messages/batches/{id} [delete]
+func (h *Handler) DeleteMessagesBatch(c *echo.Context) error {
+	return h.nativeBatch().DeleteMessageBatch(c)
+}
+
+// MessagesBatchResults handles GET /v1/messages/batches/{id}/results.
+//
+// @Summary      Get message batch results (JSONL)
+// @Tags         messages
+// @Produce      application/x-jsonl
+// @Security     BearerAuth
+// @Param        id   path      string  true  "Message batch ID"
+// @Success      200  {string}  string  "JSONL stream of batch results"
+// @Failure      401  {object}  anthropicapi.ErrorResponse
+// @Failure      404  {object}  anthropicapi.ErrorResponse
+// @Failure      409  {object}  anthropicapi.ErrorResponse
+// @Router       /v1/messages/batches/{id}/results [get]
+func (h *Handler) MessagesBatchResults(c *echo.Context) error {
+	return h.nativeBatch().MessageBatchResults(c)
+}
+
+// Messages translates an Anthropic Messages request and dispatches it through
+// the shared chat-completions pipeline (workflow resolution, response cache).
+func (s *translatedInferenceService) Messages(c *echo.Context) error {
+	decoded, err := decodeMessagesRequest(c)
+	if err != nil {
+		return handleError(c, err)
+	}
+	req, translateErr := anthropicapi.ToChatRequest(decoded)
+	if translateErr != nil {
+		// Content the canonical translation cannot represent (server-tool
+		// history, container uploads, …) is still fine to forward natively:
+		// the original body reaches Anthropic byte-for-byte. Resolve the
+		// route from a lenient translation and report the strict error only
+		// when the request has to go through the translated pipeline.
+		req, err = anthropicapi.ToChatRequestLenient(decoded)
+		if err != nil {
+			return handleError(c, translateErr)
+		}
+	}
+
+	ctx := core.WithRequestDialect(promptEditCaptureContext(c, s.logger), core.RequestDialectAnthropicMessages)
+	ctx, prepared, workflow, err := prepareChatCompletionRequest(s, ctx, req, translatedRequestMeta(c))
+	if err != nil {
+		if short := shortCircuitOf(err); short != nil {
+			attachPreparedWorkflow(c, prepareContext(c, ctx), workflow)
+			s.recordGuardrailOutcomes(c)
+			recordPromptPluginRevisions(c, s.logger, req, nil)
+			return s.writeChatShortCircuit(c, workflow, req, short, messagesJSON, messagesOuterWrap(req, resolvedModelFromWorkflow(workflow, req.Model)))
+		}
+		// A block or fail-closed outcome still belongs to the resolved
+		// workflow: the audit entry must carry it like every other outcome.
+		attachPreparedWorkflow(c, prepareContext(c, ctx), workflow)
+		s.recordGuardrailOutcomes(c)
+		recordPromptPluginRevisions(c, s.logger, req, nil)
+		return handleError(c, err)
+	}
+	attachPreparedWorkflow(c, ctx, workflow)
+	s.recordGuardrailOutcomes(c)
+	recordPromptPluginRevisions(c, s.logger, req, prepared)
+	applyPluginRequestHeaders(c)
+
+	// An unsigned thinking block is worth leaving the native path for only when
+	// the translated pipeline can actually carry the request: content it cannot
+	// represent (server-tool history, …) still belongs upstream verbatim.
+	unsignedThinking := translateErr == nil && anthropicapi.HasUnsignedThinking(decoded)
+	if s.canForwardMessagesNatively(ctx, workflow, unsignedThinking) {
+		return s.dispatchMessagesNative(c, prepared, workflow)
+	}
+	if translateErr != nil {
+		return handleError(c, translateErr)
+	}
+	return handleWithCache(s, c, prepared, workflow, s.dispatchMessages)
+}
+
+// CountMessageTokens answers a Messages token count. The provider that owns
+// the model counts exactly when it has an endpoint for it (Anthropic does);
+// otherwise, and whenever that call fails, the gateway's estimate answers, so
+// the endpoint works for every model and never depends on an upstream being
+// reachable (ADR-0007, amended).
+func (s *translatedInferenceService) CountMessageTokens(c *echo.Context) error {
+	body, err := requestBodyBytes(c)
+	if err != nil {
+		return handleError(c, core.NewInvalidRequestError("invalid request body: "+err.Error(), err))
+	}
+	req, err := anthropicapi.DecodeMessagesRequest(body)
+	if err != nil {
+		return handleError(c, core.NewInvalidRequestError("invalid request body: "+err.Error(), err))
+	}
+	if strings.TrimSpace(req.Model) == "" {
+		return handleError(c, core.NewInvalidRequestError("model is required", nil).WithParam("model"))
+	}
+	if count, ok := s.countMessageTokensUpstream(c.Request().Context(), req.Model, body); ok {
+		return c.JSON(http.StatusOK, anthropicapi.CountTokensResponse{InputTokens: count})
+	}
+	return c.JSON(http.StatusOK, anthropicapi.CountTokensResponse{
+		InputTokens: anthropicapi.EstimateInputTokens(req),
+	})
+}
+
+// countMessageTokensUpstream asks the route's provider for an exact count.
+// ok is false when no provider can answer: the model does not resolve, the
+// provider has no counting endpoint, or the call failed.
+func (s *translatedInferenceService) countMessageTokensUpstream(ctx context.Context, model string, body []byte) (int, bool) {
+	counter, ok := s.provider.(core.MessagesTokenCounter)
+	if !ok {
+		return 0, false
+	}
+	selector, err := resolveServiceModel(ctx, s.provider, s.modelResolver, model, "")
+	if err != nil {
+		return 0, false
+	}
+	count, err := counter.CountMessagesTokens(ctx, selector.QualifiedModel(), body)
+	if err != nil {
+		if !errors.Is(err, core.ErrMessagesTokenCountUnsupported) {
+			slog.Debug("count_tokens: provider count failed, falling back to the estimate", "model", selector.QualifiedModel(), "error", err)
+		}
+		return 0, false
+	}
+	return count, true
+}
+
+func (s *translatedInferenceService) dispatchMessages(c *echo.Context, req *core.ChatRequest, workflow *core.Workflow) error {
+	s.observeLiveProviderAttempts(c, workflow)
+	ctx := c.Request().Context()
+	requestID := requestIDFromContextOrHeader(c.Request())
+
+	adm, err := enforceAdmission(c, s.rateLimiter, s.budgetChecker,
+		rateLimitRouteFromWorkflow(workflow).withFailovers(len(s.inference().FailoverSelectors(workflow))))
+	if err != nil {
+		return handleError(c, err)
+	}
+	defer adm.release()
+	ctx = adm.dispatchContext(ctx)
+
+	if req.Stream {
+		result, err := s.inference().StreamChatCompletion(ctx, workflow, req)
+		if err != nil {
+			return handleStreamingDispatchError(c, err)
+		}
+		if result.Meta.UsedFailover {
+			markRequestFailoverUsed(c)
+		}
+		stream := s.wrapPluginStream(ctx, workflow, chatStreamDialect(false), chatPromptOf(req), result.Stream)
+		return s.handleStreamingReadCloser(c, workflow, result.Meta, stream, func(stream io.ReadCloser) io.ReadCloser {
+			converted := anthropicapi.NewStreamConverter(stream, result.Meta.Model, anthropicapi.EstimateChatInputTokens(req))
+			return result.WrapDeliveryStream(ctx, converted)
+		})
+	}
+
+	result, err := s.inference().ExecuteChatCompletion(ctx, workflow, req, requestID, "/v1/messages")
+	if err != nil {
+		return handleError(c, err)
+	}
+	enrichAuditEntryWithProviderAttempts(c)
+	result.Response, err = chatResponsePhase.run(s, c, workflow, req, result.Response)
+	if err != nil {
+		return handleError(c, err)
+	}
+	if result.Meta.UsedFailover {
+		markRequestFailoverUsed(c)
+		auditlog.EnrichEntryWithFailover(c, result.Meta.FailoverModel)
+	}
+	auditlog.EnrichEntryWithResolvedRoute(
+		c,
+		qualifyExecutedModel(workflow, result.Response.Model, result.Meta.ProviderName),
+		result.Meta.ProviderType,
+		result.Meta.ProviderName,
+	)
+
+	applyPluginResponseHeaders(c)
+	return c.JSON(http.StatusOK, anthropicapi.FromChatResponse(result.Response))
+}
+
+// decodeMessagesRequest reads and decodes the Anthropic Messages request body
+// without translating it.
+func decodeMessagesRequest(c *echo.Context) (*anthropicapi.MessagesRequest, error) {
+	body, err := requestBodyBytes(c)
+	if err != nil {
+		return nil, core.NewInvalidRequestError("invalid request body: "+err.Error(), err)
+	}
+	req, err := anthropicapi.DecodeMessagesRequest(body)
+	if err != nil {
+		return nil, core.NewInvalidRequestError("invalid request body: "+err.Error(), err)
+	}
+	return req, nil
+}

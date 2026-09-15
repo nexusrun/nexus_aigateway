@@ -1,0 +1,90 @@
+// Package gateway contains transport-independent gateway use cases.
+package gateway
+
+import (
+	"context"
+
+	"github.com/enterpilot/gomodel/internal/core"
+)
+
+// ModelResolver resolves raw request selectors into concrete model selectors
+// before provider execution.
+type ModelResolver interface {
+	ResolveModel(requested core.RequestedModelSelector) (core.ModelSelector, bool, error)
+}
+
+// UserPathModelResolver is an optional ModelResolver that resolves with
+// awareness of the effective request user path, so a redirect (alias) can be
+// scoped to specific user_paths and fall through to the literal model name for
+// callers that do not match. Resolvers that do not implement it are resolved
+// unscoped via ResolveModel.
+type UserPathModelResolver interface {
+	ResolveModelForUserPath(ctx context.Context, requested core.RequestedModelSelector) (core.ModelSelector, bool, error)
+}
+
+// ModelSlowdownResolver optionally resolves an extra-time factor for a
+// requested/resolved model pair. The context carries the effective user path.
+type ModelSlowdownResolver interface {
+	ResolveSlowdown(context.Context, core.RequestedModelSelector, core.ModelSelector) float64
+}
+
+// FailoverResolver resolves alternate concrete model selectors for a translated
+// request after the primary selector has already been resolved.
+type FailoverResolver interface {
+	ResolveFailovers(resolution *core.RequestModelResolution, op core.Operation) []core.ModelSelector
+}
+
+// ModelAuthorizer validates request-scoped access to concrete models.
+type ModelAuthorizer interface {
+	ValidateModelAccess(ctx context.Context, selector core.ModelSelector) error
+	AllowsModel(ctx context.Context, selector core.ModelSelector) bool
+	FilterPublicModels(ctx context.Context, models []core.Model) []core.Model
+}
+
+// WorkflowPolicyResolver matches persisted workflow versions for requests.
+type WorkflowPolicyResolver interface {
+	Match(selector core.WorkflowSelector) (*core.ResolvedWorkflowPolicy, error)
+}
+
+// TranslatedRequestPatcher applies request-level transforms for translated
+// routes after workflow resolution has resolved the concrete execution selector.
+type TranslatedRequestPatcher interface {
+	PatchChatRequest(ctx context.Context, req *core.ChatRequest) (*core.ChatRequest, error)
+	PatchResponsesRequest(ctx context.Context, req *core.ResponsesRequest) (*core.ResponsesRequest, error)
+}
+
+// PromptContentEditor is an optional TranslatedRequestPatcher capability: it
+// reports whether the prompt phase may rewrite the content of this request.
+// Only a rewriting prompt phase (anonymization, redaction) needs the replayed
+// history of a chained request in its input; a patcher that does not implement
+// this interface is assumed to rewrite.
+type PromptContentEditor interface {
+	EditsPromptContent(ctx context.Context) bool
+}
+
+// ResponsesAttemptPatcher adapts a Responses request to the provider one
+// attempt is about to reach, after failover has chosen the target. It runs
+// for the primary attempt and for every failover attempt with that target's
+// provider type, so a field one provider resolves itself (previous_response_id
+// on a native Responses provider) can be rewritten only for targets that
+// cannot.
+type ResponsesAttemptPatcher interface {
+	PatchResponsesAttempt(ctx context.Context, req *core.ResponsesRequest, providerType string) (*core.ResponsesRequest, error)
+}
+
+// ResponsesHistoryResolver expands the history a Responses request refers to
+// (a gateway-managed conversation, a stored previous response) into its
+// input. It runs once the workflow is resolved and before the prompt-phase
+// patch, so guardrails see every message the provider will receive.
+// providerTypes lists the primary target's provider type, then each failover
+// target's. The returned context carries whatever the resolver keeps for the
+// rest of the request.
+type ResponsesHistoryResolver interface {
+	ResolveResponsesHistory(ctx context.Context, req *core.ResponsesRequest, providerTypes []string) (context.Context, *core.ResponsesRequest, error)
+}
+
+// BatchRequestPreparer rewrites a native batch request before provider
+// submission. This keeps batch-specific policy out of provider decorators.
+type BatchRequestPreparer interface {
+	PrepareBatchRequest(ctx context.Context, providerType string, req *core.BatchRequest) (*core.BatchRewriteResult, error)
+}

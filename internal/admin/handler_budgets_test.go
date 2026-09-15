@@ -1,0 +1,659 @@
+package admin
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/labstack/echo/v5"
+
+	"github.com/enterpilot/gomodel/internal/budget"
+)
+
+type adminBudgetStore struct {
+	budgets  []budget.Budget
+	sum      float64
+	settings budget.Settings
+
+	resetScope         budget.Scope
+	resetSubject       string
+	resetPeriodSeconds int64
+	resetAllAt         time.Time
+	deleteErr          error
+	resetErr           error
+}
+
+func (s *adminBudgetStore) ListBudgets(context.Context) ([]budget.Budget, error) {
+	return append([]budget.Budget(nil), s.budgets...), nil
+}
+
+func (s *adminBudgetStore) UpsertBudgets(_ context.Context, budgets []budget.Budget) error {
+	for _, item := range budgets {
+		normalized, err := budget.NormalizeBudget(item)
+		if err != nil {
+			return err
+		}
+		replaced := false
+		for i, existing := range s.budgets {
+			if existing.Scope == normalized.Scope && existing.Subject == normalized.Subject &&
+				existing.PeriodSeconds == normalized.PeriodSeconds {
+				s.budgets[i] = normalized
+				replaced = true
+				break
+			}
+		}
+		if !replaced {
+			s.budgets = append(s.budgets, normalized)
+		}
+	}
+	return nil
+}
+
+func (s *adminBudgetStore) DeleteBudget(_ context.Context, scope budget.Scope, subject string, periodSeconds int64) error {
+	if s.deleteErr != nil {
+		return s.deleteErr
+	}
+	subject, err := budget.NormalizeSubject(scope, subject)
+	if err != nil {
+		return err
+	}
+	for i, existing := range s.budgets {
+		if existing.Scope == scope && existing.Subject == subject && existing.PeriodSeconds == periodSeconds {
+			s.budgets = append(s.budgets[:i], s.budgets[i+1:]...)
+			return nil
+		}
+	}
+	return nil
+}
+
+func (s *adminBudgetStore) ReplaceConfigBudgets(ctx context.Context, budgets []budget.Budget) error {
+	s.budgets = nil
+	return s.UpsertBudgets(ctx, budgets)
+}
+
+func (s *adminBudgetStore) GetSettings(context.Context) (budget.Settings, error) {
+	if s.settings == (budget.Settings{}) {
+		return budget.DefaultSettings(), nil
+	}
+	return s.settings, nil
+}
+
+func (s *adminBudgetStore) SaveSettings(_ context.Context, settings budget.Settings) (budget.Settings, error) {
+	s.settings = settings
+	return settings, nil
+}
+
+func (s *adminBudgetStore) ResetBudget(_ context.Context, scope budget.Scope, subject string, periodSeconds int64, at time.Time) error {
+	if s.resetErr != nil {
+		return s.resetErr
+	}
+	s.resetScope = scope
+	s.resetSubject = subject
+	s.resetPeriodSeconds = periodSeconds
+	for i := range s.budgets {
+		if s.budgets[i].Scope == scope && s.budgets[i].Subject == subject && s.budgets[i].PeriodSeconds == periodSeconds {
+			t := at.UTC()
+			s.budgets[i].LastResetAt = &t
+		}
+	}
+	return nil
+}
+
+func (s *adminBudgetStore) ResetAllBudgets(_ context.Context, at time.Time) error {
+	s.resetAllAt = at.UTC()
+	for i := range s.budgets {
+		t := at.UTC()
+		s.budgets[i].LastResetAt = &t
+	}
+	return nil
+}
+
+func (s *adminBudgetStore) SumSpend(_ context.Context, windows []budget.SpendWindow) ([]budget.Spend, error) {
+	spends := make([]budget.Spend, len(windows))
+	for i := range windows {
+		spends[i] = budget.Spend{Total: s.sum, HasUsage: s.sum > 0}
+	}
+	return spends, nil
+}
+
+func (s *adminBudgetStore) Close() error {
+	return nil
+}
+
+func newBudgetHandler(t *testing.T, store *adminBudgetStore) *Handler {
+	t.Helper()
+	service, err := budget.NewService(context.Background(), store)
+	if err != nil {
+		t.Fatalf("NewService() failed: %v", err)
+	}
+	return NewHandler(nil, nil, WithBudgets(service), WithQuotaTemplatesEnabled(true))
+}
+
+func TestBudgetEndpointsRejectPerChildWithoutEntitlement(t *testing.T) {
+	store := &adminBudgetStore{}
+	service, err := budget.NewService(context.Background(), store)
+	if err != nil {
+		t.Fatalf("NewService() failed: %v", err)
+	}
+	h := NewHandler(nil, nil, WithBudgets(service))
+	e := echo.New()
+	req := httptest.NewRequest(
+		http.MethodPut,
+		"/admin/budgets",
+		strings.NewReader(`{"user_path":"/team","per_child":true,"budget_key":{"period":"daily"},"amount":10}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	if err := h.UpsertBudget(e.NewContext(req, rec)); err != nil {
+		t.Fatalf("UpsertBudget() failed: %v", err)
+	}
+	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "quota_templates_not_entitled") {
+		t.Fatalf("response = %d %s, want quota entitlement error", rec.Code, rec.Body.String())
+	}
+	if len(store.budgets) != 0 {
+		t.Fatalf("stored budgets = %+v, want none", store.budgets)
+	}
+}
+
+func TestBudgetEndpointsListStatuses(t *testing.T) {
+	store := &adminBudgetStore{
+		budgets: []budget.Budget{
+			{Scope: budget.ScopeUserPath, Subject: "/team", PeriodSeconds: budget.PeriodDailySeconds, Amount: 10},
+		},
+		sum: 4,
+	}
+	h := newBudgetHandler(t, store)
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/admin/budgets", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := h.ListBudgets(c); err != nil {
+		t.Fatalf("ListBudgets() failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var body budgetListResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(body.Budgets) != 1 {
+		t.Fatalf("expected 1 budget, got %d", len(body.Budgets))
+	}
+	if got := body.Budgets[0].UsageRatio; got != 0.4 {
+		t.Fatalf("usage_ratio = %v, want 0.4", got)
+	}
+}
+
+func TestBudgetEndpointsUpsertAndResetOneBudget(t *testing.T) {
+	store := &adminBudgetStore{}
+	h := newBudgetHandler(t, store)
+	e := echo.New()
+
+	upsertReq := httptest.NewRequest(
+		http.MethodPut,
+		"/admin/budgets",
+		strings.NewReader(`{"user_path":"/team/beta","per_child":true,"budget_key":{"period":"weekly"},"amount":12.5}`),
+	)
+	upsertReq.Header.Set("Content-Type", "application/json")
+	upsertRec := httptest.NewRecorder()
+	upsertCtx := e.NewContext(upsertReq, upsertRec)
+	if err := h.UpsertBudget(upsertCtx); err != nil {
+		t.Fatalf("UpsertBudget() failed: %v", err)
+	}
+	if upsertRec.Code != http.StatusOK {
+		t.Fatalf("upsert status = %d, want %d body=%s", upsertRec.Code, http.StatusOK, upsertRec.Body.String())
+	}
+	if len(store.budgets) != 1 || store.budgets[0].Subject != "/team/beta" || !store.budgets[0].PerChild || store.budgets[0].PeriodSeconds != budget.PeriodWeeklySeconds {
+		t.Fatalf("stored budgets = %+v", store.budgets)
+	}
+
+	resetReq := httptest.NewRequest(
+		http.MethodPost,
+		"/admin/budgets/reset-one",
+		strings.NewReader(`{"user_path":"/team/beta","period_seconds":604800}`),
+	)
+	resetReq.Header.Set("Content-Type", "application/json")
+	resetRec := httptest.NewRecorder()
+	resetCtx := e.NewContext(resetReq, resetRec)
+	if err := h.ResetBudget(resetCtx); err != nil {
+		t.Fatalf("ResetBudget() failed: %v", err)
+	}
+	if resetRec.Code != http.StatusOK {
+		t.Fatalf("reset status = %d, want %d body=%s", resetRec.Code, http.StatusOK, resetRec.Body.String())
+	}
+	if store.resetScope != budget.ScopeUserPath || store.resetSubject != "/team/beta" ||
+		store.resetPeriodSeconds != budget.PeriodWeeklySeconds {
+		t.Fatalf("reset key = %s %s/%d", store.resetScope, store.resetSubject, store.resetPeriodSeconds)
+	}
+}
+
+func TestBudgetEndpointsUpsertMarksConfigBudgetManual(t *testing.T) {
+	store := &adminBudgetStore{
+		budgets: []budget.Budget{
+			{Scope: budget.ScopeUserPath, Subject: "/team", PeriodSeconds: budget.PeriodDailySeconds, Amount: 10, Source: budget.SourceConfig},
+		},
+	}
+	h := newBudgetHandler(t, store)
+	e := echo.New()
+	req := httptest.NewRequest(
+		http.MethodPut,
+		"/admin/budgets",
+		strings.NewReader(`{"user_path":"/team","budget_key":{"period":"daily"},"amount":12.5}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := h.UpsertBudget(c); err != nil {
+		t.Fatalf("UpsertBudget() failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if len(store.budgets) != 1 {
+		t.Fatalf("stored budgets = %+v, want one budget", store.budgets)
+	}
+	if got := store.budgets[0].Source; got != budget.SourceManual {
+		t.Fatalf("budget source = %q, want %q", got, budget.SourceManual)
+	}
+}
+
+func TestBudgetEndpointsUpsertAcceptsNumericPeriodString(t *testing.T) {
+	store := &adminBudgetStore{}
+	h := newBudgetHandler(t, store)
+	e := echo.New()
+	req := httptest.NewRequest(
+		http.MethodPut,
+		"/admin/budgets",
+		strings.NewReader(`{"user_path":"/team","budget_key":{"period":"604800"},"amount":12.5}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := h.UpsertBudget(c); err != nil {
+		t.Fatalf("UpsertBudget() failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if len(store.budgets) != 1 || store.budgets[0].PeriodSeconds != budget.PeriodWeeklySeconds {
+		t.Fatalf("stored budgets = %+v, want weekly budget", store.budgets)
+	}
+}
+
+func TestBudgetEndpointsRejectInvalidBudgetKey(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		run  func(*Handler, *echo.Context) error
+	}{
+		{
+			name: "missing budget key",
+			body: `{"user_path":"/team","amount":12.5}`,
+			run:  (*Handler).UpsertBudget,
+		},
+		{
+			name: "empty budget key",
+			body: `{"user_path":"/team","budget_key":{},"amount":12.5}`,
+			run:  (*Handler).UpsertBudget,
+		},
+		{
+			name: "ambiguous budget key",
+			body: `{"user_path":"/team","budget_key":{"period":"daily","period_seconds":86400},"amount":12.5}`,
+			run:  (*Handler).UpsertBudget,
+		},
+		{
+			name: "delete missing budget key",
+			body: `{"user_path":"/team"}`,
+			run:  (*Handler).DeleteBudget,
+		},
+		{
+			name: "unknown scope",
+			body: `{"scope":"provider","subject":"openai","budget_key":{"period":"daily"},"amount":12.5}`,
+			run:  (*Handler).UpsertBudget,
+		},
+		{
+			name: "label budget without a subject",
+			body: `{"scope":"label","budget_key":{"period":"daily"},"amount":12.5}`,
+			run:  (*Handler).UpsertBudget,
+		},
+		{
+			name: "label budget naming a user path",
+			body: `{"scope":"label","user_path":"/team","budget_key":{"period":"daily"},"amount":12.5}`,
+			run:  (*Handler).UpsertBudget,
+		},
+		{
+			name: "label budget with both subject and user path",
+			body: `{"scope":"label","subject":"prod","user_path":"/team","budget_key":{"period":"daily"},"amount":12.5}`,
+			run:  (*Handler).UpsertBudget,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := &adminBudgetStore{}
+			h := newBudgetHandler(t, store)
+			e := echo.New()
+			req := httptest.NewRequest(http.MethodPut, "/admin/budgets", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+
+			if err := tt.run(h, c); err != nil {
+				t.Fatalf("handler failed: %v", err)
+			}
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestBudgetEndpointsDeleteBudget(t *testing.T) {
+	store := &adminBudgetStore{
+		budgets: []budget.Budget{
+			{Scope: budget.ScopeUserPath, Subject: "/team/beta", PeriodSeconds: budget.PeriodWeeklySeconds, Amount: 12.5},
+			{Scope: budget.ScopeUserPath, Subject: "/team/beta", PeriodSeconds: budget.PeriodDailySeconds, Amount: 4},
+		},
+	}
+	h := newBudgetHandler(t, store)
+	e := echo.New()
+	req := httptest.NewRequest(
+		http.MethodDelete,
+		"/admin/budgets",
+		strings.NewReader(`{"user_path":"/team/beta","budget_key":{"period_seconds":604800}}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := h.DeleteBudget(c); err != nil {
+		t.Fatalf("DeleteBudget() failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("delete status = %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if len(store.budgets) != 1 || store.budgets[0].PeriodSeconds != budget.PeriodDailySeconds {
+		t.Fatalf("stored budgets after delete = %+v", store.budgets)
+	}
+}
+
+func TestBudgetEndpointsMissingMutationsReturnNotFound(t *testing.T) {
+	tests := []struct {
+		name  string
+		run   func(*Handler, *echo.Echo) *httptest.ResponseRecorder
+		setup func(*adminBudgetStore)
+	}{
+		{
+			name: "delete missing budget",
+			setup: func(store *adminBudgetStore) {
+				store.deleteErr = budget.ErrNotFound
+			},
+			run: func(h *Handler, e *echo.Echo) *httptest.ResponseRecorder {
+				req := httptest.NewRequest(http.MethodDelete, "/admin/budgets", strings.NewReader(`{"user_path":"/team","budget_key":{"period_seconds":86400}}`))
+				req.Header.Set("Content-Type", "application/json")
+				rec := httptest.NewRecorder()
+				c := e.NewContext(req, rec)
+				if err := h.DeleteBudget(c); err != nil {
+					t.Fatalf("DeleteBudget() returned handler error: %v", err)
+				}
+				return rec
+			},
+		},
+		{
+			name: "reset missing budget",
+			setup: func(store *adminBudgetStore) {
+				store.resetErr = budget.ErrNotFound
+			},
+			run: func(h *Handler, e *echo.Echo) *httptest.ResponseRecorder {
+				req := httptest.NewRequest(
+					http.MethodPost,
+					"/admin/budgets/reset-one",
+					strings.NewReader(`{"user_path":"/team","period_seconds":86400}`),
+				)
+				req.Header.Set("Content-Type", "application/json")
+				rec := httptest.NewRecorder()
+				c := e.NewContext(req, rec)
+				if err := h.ResetBudget(c); err != nil {
+					t.Fatalf("ResetBudget() returned handler error: %v", err)
+				}
+				return rec
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := &adminBudgetStore{}
+			tt.setup(store)
+			h := newBudgetHandler(t, store)
+			e := echo.New()
+
+			rec := tt.run(h, e)
+
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusNotFound, rec.Body.String())
+			}
+			if !strings.Contains(rec.Body.String(), `"code":"budget_not_found"`) {
+				t.Fatalf("body = %s, want budget_not_found code", rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestBudgetSettingsEndpoints(t *testing.T) {
+	store := &adminBudgetStore{}
+	h := newBudgetHandler(t, store)
+	e := echo.New()
+
+	getReq := httptest.NewRequest(http.MethodGet, "/admin/budgets/settings", nil)
+	getRec := httptest.NewRecorder()
+	getCtx := e.NewContext(getReq, getRec)
+	if err := h.BudgetSettings(getCtx); err != nil {
+		t.Fatalf("BudgetSettings() failed: %v", err)
+	}
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("settings status = %d, want %d body=%s", getRec.Code, http.StatusOK, getRec.Body.String())
+	}
+	var defaults budget.Settings
+	if err := json.Unmarshal(getRec.Body.Bytes(), &defaults); err != nil {
+		t.Fatalf("decode settings: %v", err)
+	}
+	if defaults.MonthlyResetDay != 1 || defaults.WeeklyResetWeekday != int(time.Monday) {
+		t.Fatalf("default settings = %+v", defaults)
+	}
+
+	updateReq := httptest.NewRequest(
+		http.MethodPut,
+		"/admin/budgets/settings",
+		strings.NewReader(`{"daily_reset_hour":6,"daily_reset_minute":30,"weekly_reset_weekday":2,"weekly_reset_hour":9,"weekly_reset_minute":15,"monthly_reset_day":31,"monthly_reset_hour":2,"monthly_reset_minute":45}`),
+	)
+	updateReq.Header.Set("Content-Type", "application/json")
+	updateRec := httptest.NewRecorder()
+	updateCtx := e.NewContext(updateReq, updateRec)
+	if err := h.UpdateBudgetSettings(updateCtx); err != nil {
+		t.Fatalf("UpdateBudgetSettings() failed: %v", err)
+	}
+	if updateRec.Code != http.StatusOK {
+		t.Fatalf("update settings status = %d, want %d body=%s", updateRec.Code, http.StatusOK, updateRec.Body.String())
+	}
+	if store.settings.DailyResetHour != 6 || store.settings.MonthlyResetDay != 31 {
+		t.Fatalf("stored settings = %+v", store.settings)
+	}
+
+	partialReq := httptest.NewRequest(
+		http.MethodPut,
+		"/admin/budgets/settings",
+		strings.NewReader(`{"daily_reset_hour":8}`),
+	)
+	partialReq.Header.Set("Content-Type", "application/json")
+	partialRec := httptest.NewRecorder()
+	partialCtx := e.NewContext(partialReq, partialRec)
+	if err := h.UpdateBudgetSettings(partialCtx); err != nil {
+		t.Fatalf("partial UpdateBudgetSettings() failed: %v", err)
+	}
+	if partialRec.Code != http.StatusOK {
+		t.Fatalf("partial update status = %d, want %d body=%s", partialRec.Code, http.StatusOK, partialRec.Body.String())
+	}
+	if store.settings.DailyResetHour != 8 || store.settings.DailyResetMinute != 30 || store.settings.MonthlyResetDay != 31 {
+		t.Fatalf("partial settings update = %+v, want existing values preserved", store.settings)
+	}
+
+	invalidReq := httptest.NewRequest(
+		http.MethodPut,
+		"/admin/budgets/settings",
+		strings.NewReader(`{"daily_reset_hour":24,"daily_reset_minute":0,"weekly_reset_weekday":1,"weekly_reset_hour":0,"weekly_reset_minute":0,"monthly_reset_day":1,"monthly_reset_hour":0,"monthly_reset_minute":0}`),
+	)
+	invalidReq.Header.Set("Content-Type", "application/json")
+	invalidRec := httptest.NewRecorder()
+	invalidCtx := e.NewContext(invalidReq, invalidRec)
+	if err := h.UpdateBudgetSettings(invalidCtx); err != nil {
+		t.Fatalf("invalid UpdateBudgetSettings() returned handler error: %v", err)
+	}
+	if invalidRec.Code != http.StatusBadRequest {
+		t.Fatalf("invalid settings status = %d, want %d body=%s", invalidRec.Code, http.StatusBadRequest, invalidRec.Body.String())
+	}
+
+	malformedReq := httptest.NewRequest(
+		http.MethodPut,
+		"/admin/budgets/settings",
+		strings.NewReader(`{"daily_reset_hour":`),
+	)
+	malformedReq.Header.Set("Content-Type", "application/json")
+	malformedRec := httptest.NewRecorder()
+	malformedCtx := e.NewContext(malformedReq, malformedRec)
+	if err := h.UpdateBudgetSettings(malformedCtx); err != nil {
+		t.Fatalf("malformed UpdateBudgetSettings() returned handler error: %v", err)
+	}
+	if malformedRec.Code != http.StatusBadRequest {
+		t.Fatalf("malformed settings status = %d, want %d body=%s", malformedRec.Code, http.StatusBadRequest, malformedRec.Body.String())
+	}
+}
+
+func TestResetBudgetsEndpoint(t *testing.T) {
+	store := &adminBudgetStore{
+		budgets: []budget.Budget{
+			{Scope: budget.ScopeUserPath, Subject: "/team", PeriodSeconds: budget.PeriodDailySeconds, Amount: 10},
+		},
+	}
+	h := newBudgetHandler(t, store)
+	e := echo.New()
+
+	badReq := httptest.NewRequest(http.MethodPost, "/admin/budgets/reset", strings.NewReader(`{"confirm":"no"}`))
+	badReq.Header.Set("Content-Type", "application/json")
+	badRec := httptest.NewRecorder()
+	badCtx := e.NewContext(badReq, badRec)
+	if err := h.ResetBudgets(badCtx); err != nil {
+		t.Fatalf("invalid ResetBudgets() returned handler error: %v", err)
+	}
+	if badRec.Code != http.StatusBadRequest {
+		t.Fatalf("invalid reset status = %d, want %d body=%s", badRec.Code, http.StatusBadRequest, badRec.Body.String())
+	}
+	if !store.resetAllAt.IsZero() {
+		t.Fatalf("resetAllAt = %s, want zero", store.resetAllAt)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/budgets/reset", strings.NewReader(`{"confirm":"reset"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	if err := h.ResetBudgets(c); err != nil {
+		t.Fatalf("ResetBudgets() failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("reset all status = %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if store.resetAllAt.IsZero() {
+		t.Fatal("ResetAllBudgets was not called")
+	}
+	if store.budgets[0].LastResetAt == nil || !store.budgets[0].LastResetAt.Equal(store.resetAllAt) {
+		t.Fatalf("budget reset time = %v, want %s", store.budgets[0].LastResetAt, store.resetAllAt)
+	}
+	var body resetBudgetsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode reset response: %v", err)
+	}
+	if body.Status != "ok" {
+		t.Fatalf("reset status body = %q, want ok", body.Status)
+	}
+}
+
+// The API accepts a label budget and keeps its subject verbatim; the response
+// omits user_path, which only names user-path budgets.
+func TestBudgetEndpointsUpsertLabelBudget(t *testing.T) {
+	store := &adminBudgetStore{}
+	h := newBudgetHandler(t, store)
+	e := echo.New()
+	req := httptest.NewRequest(
+		http.MethodPut,
+		"/admin/budgets",
+		strings.NewReader(`{"scope":"label","subject":"Mobile-App-iOS","budget_key":{"period":"monthly"},"amount":500}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := h.UpsertBudget(c); err != nil {
+		t.Fatalf("UpsertBudget() failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if len(store.budgets) != 1 {
+		t.Fatalf("stored budgets = %+v, want one", store.budgets)
+	}
+	stored := store.budgets[0]
+	if stored.Scope != budget.ScopeLabel || stored.Subject != "Mobile-App-iOS" {
+		t.Fatalf("stored budget = %+v, want the label subject unchanged", stored)
+	}
+
+	var body budgetListResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(body.Budgets) != 1 {
+		t.Fatalf("response budgets = %+v, want one", body.Budgets)
+	}
+	if got := body.Budgets[0]; got.Scope != "label" || got.Subject != "Mobile-App-iOS" || got.UserPath != "" {
+		t.Fatalf("response budget = %+v, want a label budget with no user_path", got)
+	}
+}
+
+// A user path and a label can spell the same subject; deleting one must leave
+// the other in place.
+func TestBudgetEndpointsDeleteDistinguishesScopes(t *testing.T) {
+	store := &adminBudgetStore{
+		budgets: []budget.Budget{
+			{Scope: budget.ScopeUserPath, Subject: "/prod", PeriodSeconds: budget.PeriodDailySeconds, Amount: 10},
+			{Scope: budget.ScopeLabel, Subject: "/prod", PeriodSeconds: budget.PeriodDailySeconds, Amount: 20},
+		},
+	}
+	h := newBudgetHandler(t, store)
+	e := echo.New()
+	req := httptest.NewRequest(
+		http.MethodDelete,
+		"/admin/budgets",
+		strings.NewReader(`{"scope":"label","subject":"/prod","budget_key":{"period":"daily"}}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := h.DeleteBudget(c); err != nil {
+		t.Fatalf("DeleteBudget() failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if len(store.budgets) != 1 || store.budgets[0].Scope != budget.ScopeUserPath {
+		t.Fatalf("stored budgets after delete = %+v, want only the user-path budget", store.budgets)
+	}
+}

@@ -1,0 +1,436 @@
+package core
+
+import (
+	"bytes"
+	"fmt"
+	"math"
+	"reflect"
+	"slices"
+	"sort"
+	"strings"
+
+	"github.com/goccy/go-json"
+
+	"github.com/tidwall/gjson"
+)
+
+// jsonFieldNames returns the JSON member names of v's exported struct fields,
+// honoring `json` tags and skipping "-". Known-field lists are derived from
+// the struct definitions once at package init so they cannot drift: a
+// hand-maintained list that misses a newly added typed field would preserve
+// that field as an unknown extra too, double-emitting it on marshal.
+func jsonFieldNames(v any) []string {
+	t := reflect.TypeOf(v)
+	names := make([]string, 0, t.NumField())
+	for field := range t.Fields() {
+		if !field.IsExported() {
+			continue
+		}
+		if field.Anonymous {
+			names = append(names, jsonFieldNames(reflect.New(field.Type).Elem().Interface())...)
+			continue
+		}
+		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+		if name == "-" {
+			continue
+		}
+		if name == "" {
+			name = field.Name
+		}
+		names = append(names, name)
+	}
+	return names
+}
+
+// UnknownJSONFields stores unknown JSON object members as a single raw object.
+// This avoids allocating a map for every decoded chat-family request while
+// still allowing lookups and round-trip preservation when needed.
+type UnknownJSONFields struct {
+	raw json.RawMessage
+}
+
+// CloneRawJSON returns a detached copy of a raw JSON value.
+// IsJSONNull reports whether trimmed JSON data is empty or the null literal.
+func IsJSONNull(trimmed []byte) bool {
+	return len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null"))
+}
+
+func CloneRawJSON(raw json.RawMessage) json.RawMessage {
+	if len(raw) == 0 {
+		return nil
+	}
+	return append(json.RawMessage(nil), raw...)
+}
+
+// CloneOptionalJSONObject validates and clones an optional raw JSON object.
+// Empty and null values are treated as absent.
+func CloneOptionalJSONObject(raw json.RawMessage) (json.RawMessage, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if IsJSONNull(trimmed) {
+		return nil, nil
+	}
+	if trimmed[0] != '{' || !json.Valid(trimmed) {
+		return nil, fmt.Errorf("JSON value must be an object")
+	}
+	return CloneRawJSON(trimmed), nil
+}
+
+// CloneUnknownJSONFields returns a detached copy of a raw unknown-field object.
+func CloneUnknownJSONFields(fields UnknownJSONFields) UnknownJSONFields {
+	return UnknownJSONFields{raw: CloneRawJSON(fields.raw)}
+}
+
+// UnknownJSONFieldsFromMap converts a raw field map into a compact JSON object.
+func UnknownJSONFieldsFromMap(fields map[string]json.RawMessage) UnknownJSONFields {
+	return unknownJSONFieldsFromMap(fields, true)
+}
+
+func unknownJSONFieldsFromMap(fields map[string]json.RawMessage, cloneValues bool) UnknownJSONFields {
+	if len(fields) == 0 {
+		return UnknownJSONFields{}
+	}
+
+	keys := make([]string, 0, len(fields))
+	for key := range fields {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	buf := bytes.NewBuffer(make([]byte, 0, len(keys)*16))
+	buf.WriteByte('{')
+	for i, key := range keys {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+		keyBody, err := json.Marshal(key)
+		if err != nil {
+			panic(fmt.Sprintf("core: marshal unknown JSON field key %q: %v", key, err))
+		}
+		buf.Write(keyBody)
+		buf.WriteByte(':')
+		rawValue := fields[key]
+		if cloneValues {
+			rawValue = CloneRawJSON(rawValue)
+		}
+		if len(rawValue) == 0 {
+			buf.WriteString("null")
+			continue
+		}
+		buf.Write(rawValue)
+	}
+	buf.WriteByte('}')
+	return UnknownJSONFields{raw: buf.Bytes()}
+}
+
+// MergeUnknownJSONFields returns base with the given raw members added; additions
+// override existing members on key conflict. It lets translation layers inject
+// derived fields (such as a chat response_format mapped from a Responses text
+// format) into a request's passthrough object without a dedicated typed field.
+func MergeUnknownJSONFields(base UnknownJSONFields, additions map[string]json.RawMessage) (UnknownJSONFields, error) {
+	if len(additions) == 0 {
+		return base, nil
+	}
+	additionFields := UnknownJSONFieldsFromMap(additions)
+	if err := validateUnknownJSONObject(additionFields.raw); err != nil {
+		return UnknownJSONFields{}, err
+	}
+	if base.IsEmpty() {
+		return additionFields, nil
+	}
+
+	overrideKeys := make(map[string]struct{}, len(additions))
+	for key := range additions {
+		overrideKeys[key] = struct{}{}
+	}
+
+	merged, err := mergeUnknownJSONFieldsRaw(base.raw, additionFields.raw, overrideKeys)
+	if err != nil {
+		return UnknownJSONFields{}, err
+	}
+	return UnknownJSONFields{raw: merged}, nil
+}
+
+func mergeUnknownJSONFieldsRaw(baseBody, additionBody []byte, overrideKeys map[string]struct{}) ([]byte, error) {
+	baseBody = bytes.TrimSpace(baseBody)
+	additionBody = bytes.TrimSpace(additionBody)
+	if len(additionBody) == 0 || bytes.Equal(additionBody, []byte("{}")) {
+		return CloneRawJSON(baseBody), nil
+	}
+	if len(baseBody) == 0 || bytes.Equal(baseBody, []byte("{}")) {
+		return CloneRawJSON(additionBody), nil
+	}
+
+	totalCap, err := mergedJSONObjectCap(len(baseBody), len(additionBody))
+	if err != nil {
+		return nil, err
+	}
+
+	buf := bytes.NewBuffer(make([]byte, 0, totalCap))
+	buf.WriteByte('{')
+	wrote := false
+	if err := appendUnknownJSONMembers(buf, baseBody, overrideKeys, &wrote); err != nil {
+		return nil, err
+	}
+	if err := appendUnknownJSONMembers(buf, additionBody, nil, &wrote); err != nil {
+		return nil, err
+	}
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
+}
+
+func validateUnknownJSONObject(body []byte) error {
+	body = bytes.TrimSpace(body)
+	if len(body) == 0 || bytes.Equal(body, []byte("{}")) {
+		return nil
+	}
+	if !gjson.ValidBytes(body) {
+		return fmt.Errorf("invalid JSON object")
+	}
+	root := gjson.ParseBytes(body)
+	if !root.IsObject() {
+		return fmt.Errorf("expected JSON object")
+	}
+	return nil
+}
+
+func appendUnknownJSONMembers(buf *bytes.Buffer, body []byte, skip map[string]struct{}, wrote *bool) error {
+	body = bytes.TrimSpace(body)
+	if err := validateUnknownJSONObject(body); err != nil {
+		return err
+	}
+	if len(body) == 0 || bytes.Equal(body, []byte("{}")) {
+		return nil
+	}
+	root := gjson.ParseBytes(body)
+
+	root.ForEach(func(key, value gjson.Result) bool {
+		if _, shouldSkip := skip[key.String()]; shouldSkip {
+			return true
+		}
+		if *wrote {
+			buf.WriteByte(',')
+		}
+		buf.WriteString(key.Raw)
+		buf.WriteByte(':')
+		buf.WriteString(value.Raw)
+		*wrote = true
+		return true
+	})
+	return nil
+}
+
+// Lookup returns the raw JSON value for key or nil when absent.
+// It scans the stored object on demand so single-lookups stay allocation-light,
+// but repeated lookups on the same value are linear in the raw JSON size.
+func (fields UnknownJSONFields) Lookup(key string) json.RawMessage {
+	if len(fields.raw) == 0 {
+		return nil
+	}
+
+	dec := json.NewDecoder(bytes.NewReader(fields.raw))
+	tok, err := dec.Token()
+	if err != nil {
+		return nil
+	}
+	delim, ok := tok.(json.Delim)
+	if !ok || delim != '{' {
+		return nil
+	}
+
+	for dec.More() {
+		keyToken, err := dec.Token()
+		if err != nil {
+			return nil
+		}
+		fieldName, ok := keyToken.(string)
+		if !ok {
+			return nil
+		}
+
+		var value json.RawMessage
+		if err := dec.Decode(&value); err != nil {
+			return nil
+		}
+		if fieldName == key {
+			return CloneRawJSON(value)
+		}
+	}
+
+	return nil
+}
+
+// IsEmpty reports whether the container has no stored fields.
+func (fields UnknownJSONFields) IsEmpty() bool {
+	trimmed := bytes.TrimSpace(fields.raw)
+	return len(trimmed) == 0 || bytes.Equal(trimmed, []byte("{}"))
+}
+
+// Without returns the fields without the named members. Other members,
+// including duplicate unknown keys, retain their original JSON representation.
+func (fields UnknownJSONFields) Without(keys ...string) UnknownJSONFields {
+	if fields.IsEmpty() || len(keys) == 0 {
+		return fields
+	}
+	skip := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		skip[key] = struct{}{}
+	}
+
+	var buf bytes.Buffer
+	buf.Grow(len(fields.raw))
+	buf.WriteByte('{')
+	wrote := false
+	if err := appendUnknownJSONMembers(&buf, fields.raw, skip, &wrote); err != nil {
+		// UnknownJSONFields can only be constructed from validated JSON. Retain the
+		// original value if an impossible malformed internal value reaches here.
+		return fields
+	}
+	buf.WriteByte('}')
+	if !wrote {
+		return UnknownJSONFields{}
+	}
+	return UnknownJSONFields{raw: buf.Bytes()}
+}
+
+// jsonFieldSet answers "is this key a known typed field?" in O(1). Use it via
+// jsonFieldSetOf for the derived struct lists (dozens of fields, checked once
+// per JSON key of every decoded request); the variadic
+// extractUnknownJSONFields stays optimal for the hand-listed callers with a
+// handful of fields, where a linear scan beats a map lookup.
+type jsonFieldSet map[string]struct{}
+
+// jsonFieldSetOf derives the known-field set from v's struct definition, like
+// jsonFieldNames but as a lookup set.
+func jsonFieldSetOf(v any) jsonFieldSet {
+	names := jsonFieldNames(v)
+	set := make(jsonFieldSet, len(names))
+	for _, name := range names {
+		set[name] = struct{}{}
+	}
+	return set
+}
+
+// extractUnknownJSONFields captures the object's keys that are not in
+// knownFields, preserving their raw bytes for passthrough (Postel's Law).
+//
+// Precondition: data must already be valid JSON. Every caller is an
+// UnmarshalJSON method that calls json.Unmarshal on the same bytes first, so a
+// separate gjson.ValidBytes walk here would re-scan the whole document for no
+// benefit. The cheap first-byte and IsObject checks remain to reject non-object
+// JSON explicitly.
+func extractUnknownJSONFields(data []byte, knownFields ...string) (UnknownJSONFields, error) {
+	return extractUnknownJSONFieldsWith(data, func(key string) bool {
+		return slices.Contains(knownFields, key)
+	})
+}
+
+// extractUnknownJSONFieldsSet is extractUnknownJSONFields with a precomputed
+// known-field set, for the struct-derived lists too large to scan per key.
+func extractUnknownJSONFieldsSet(data []byte, known jsonFieldSet) (UnknownJSONFields, error) {
+	return extractUnknownJSONFieldsWith(data, func(key string) bool {
+		_, ok := known[key]
+		return ok
+	})
+}
+
+func extractUnknownJSONFieldsWith(data []byte, isKnown func(string) bool) (UnknownJSONFields, error) {
+	data = bytes.TrimSpace(data)
+	if len(data) == 0 || data[0] != '{' {
+		return UnknownJSONFields{}, fmt.Errorf("expected JSON object")
+	}
+
+	root := gjson.ParseBytes(data)
+	if !root.IsObject() {
+		return UnknownJSONFields{}, fmt.Errorf("expected JSON object")
+	}
+
+	// The buffer is sized on the first unknown member so objects without
+	// extras (the common case) allocate nothing here. It is pre-sized for
+	// typical unknown-field payloads without reserving request-sized
+	// capacity: the result is retained on the decoded request for its whole
+	// lifetime, so a body-sized backing array would pin a full body copy per
+	// decoded object even when the extras are a few bytes.
+	var buf bytes.Buffer
+	wrote := false
+	root.ForEach(func(key, value gjson.Result) bool {
+		if isKnown(key.String()) {
+			return true
+		}
+		if wrote {
+			buf.WriteByte(',')
+		} else {
+			buf.Grow(min(len(data), 256))
+			buf.WriteByte('{')
+		}
+		buf.WriteString(key.Raw)
+		buf.WriteByte(':')
+		buf.WriteString(value.Raw)
+		wrote = true
+		return true
+	})
+	if !wrote {
+		return UnknownJSONFields{}, nil
+	}
+
+	buf.WriteByte('}')
+	raw := buf.Bytes()
+	// Re-copy only when the buffer over-grew, so the retained extras never
+	// pin significantly more capacity than their own length.
+	if cap(raw)-len(raw) > 1024 {
+		raw = bytes.Clone(raw)
+	}
+	return UnknownJSONFields{raw: raw}, nil
+}
+
+func marshalWithUnknownJSONFields(base any, extraFields UnknownJSONFields) ([]byte, error) {
+	baseBody, err := json.Marshal(base)
+	if err != nil {
+		return nil, err
+	}
+	if extraFields.IsEmpty() {
+		return baseBody, nil
+	}
+	return mergeUnknownJSONObject(baseBody, extraFields.raw)
+}
+
+func mergeUnknownJSONObject(baseBody, extraBody []byte) ([]byte, error) {
+	baseBody = bytes.TrimSpace(baseBody)
+	extraBody = bytes.TrimSpace(extraBody)
+	if len(extraBody) == 0 || bytes.Equal(extraBody, []byte("{}")) {
+		return CloneRawJSON(baseBody), nil
+	}
+	if len(baseBody) == 0 {
+		return nil, fmt.Errorf("base JSON object is empty")
+	}
+	if baseBody[0] != '{' || baseBody[len(baseBody)-1] != '}' {
+		return nil, fmt.Errorf("base JSON is not an object")
+	}
+	if extraBody[0] != '{' || extraBody[len(extraBody)-1] != '}' {
+		return nil, fmt.Errorf("unknown JSON fields are not an object")
+	}
+	if bytes.Equal(baseBody, []byte("{}")) {
+		return CloneRawJSON(extraBody), nil
+	}
+
+	totalCap, err := mergedJSONObjectCap(len(baseBody), len(extraBody))
+	if err != nil {
+		return nil, err
+	}
+	merged := make([]byte, 0, totalCap)
+	merged = append(merged, baseBody[:len(baseBody)-1]...)
+	if !bytes.Equal(extraBody, []byte("{}")) {
+		merged = append(merged, ',')
+		merged = append(merged, extraBody[1:]...)
+	}
+	return merged, nil
+}
+
+func mergedJSONObjectCap(baseLen, extraLen int) (int, error) {
+	if extraLen <= 0 {
+		return 0, fmt.Errorf("unknown JSON fields are empty")
+	}
+	if baseLen > math.MaxInt-(extraLen-1) {
+		return 0, fmt.Errorf("combined JSON object too large")
+	}
+	return baseLen + extraLen - 1, nil
+}

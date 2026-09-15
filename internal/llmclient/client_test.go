@@ -1,0 +1,2754 @@
+package llmclient
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	goconfig "github.com/enterpilot/gomodel/config"
+	"github.com/enterpilot/gomodel/internal/core"
+)
+
+func TestClient_Do_Success(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"message":"hello"}`))
+	}))
+	defer server.Close()
+
+	client := New(
+		DefaultConfig("test", server.URL),
+		func(req *http.Request) {
+			req.Header.Set("X-Test", "value")
+		},
+	)
+
+	var result struct {
+		Message string `json:"message"`
+	}
+	err := client.Do(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	}, &result)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Message != "hello" {
+		t.Errorf("expected message 'hello', got '%s'", result.Message)
+	}
+}
+
+func TestClient_Do_WithRequestBody(t *testing.T) {
+	var receivedBody map[string]any
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Content-Type") != "application/json" {
+			t.Errorf("expected Content-Type 'application/json', got '%s'", r.Header.Get("Content-Type"))
+		}
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &receivedBody)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer server.Close()
+
+	client := New(DefaultConfig("test", server.URL), nil)
+
+	requestBody := map[string]string{"input": "test"}
+	var result map[string]string
+	err := client.Do(context.Background(), Request{
+		Method:   http.MethodPost,
+		Endpoint: "/test",
+		Body:     requestBody,
+	}, &result)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if receivedBody["input"] != "test" {
+		t.Errorf("expected input 'test', got '%v'", receivedBody["input"])
+	}
+}
+
+func TestClient_Do_Headers(t *testing.T) {
+	var receivedHeaders http.Header
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedHeaders = r.Header.Clone()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	client := New(
+		DefaultConfig("test", server.URL),
+		func(req *http.Request) {
+			req.Header.Set("Authorization", "Bearer token")
+		},
+	)
+
+	err := client.Do(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+		Headers: http.Header{
+			"X-Custom": {"custom-value"},
+		},
+	}, nil)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if receivedHeaders.Get("Authorization") != "Bearer token" {
+		t.Errorf("expected Authorization header 'Bearer token', got '%s'", receivedHeaders.Get("Authorization"))
+	}
+	if receivedHeaders.Get("X-Custom") != "custom-value" {
+		t.Errorf("expected X-Custom header 'custom-value', got '%s'", receivedHeaders.Get("X-Custom"))
+	}
+}
+
+func TestClient_Do_ErrorParsing(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		body       string
+		wantType   core.ErrorType
+	}{
+		{
+			name:       "rate limit",
+			statusCode: http.StatusTooManyRequests,
+			body:       `{"error":{"message":"Rate limited"}}`,
+			wantType:   core.ErrorTypeRateLimit,
+		},
+		{
+			name:       "authentication",
+			statusCode: http.StatusUnauthorized,
+			body:       `{"error":{"message":"Invalid API key"}}`,
+			wantType:   core.ErrorTypeAuthentication,
+		},
+		{
+			name:       "bad request",
+			statusCode: http.StatusBadRequest,
+			body:       `{"error":{"message":"Invalid model"}}`,
+			wantType:   core.ErrorTypeInvalidRequest,
+		},
+		{
+			name:       "server error",
+			statusCode: http.StatusInternalServerError,
+			body:       `{"error":{"message":"Server error"}}`,
+			wantType:   core.ErrorTypeProvider,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tt.statusCode)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			defer server.Close()
+
+			config := DefaultConfig("test", server.URL)
+			config.Retry.MaxRetries = 0 // No retries for this test
+			client := New(config, nil)
+
+			err := client.Do(context.Background(), Request{
+				Method:   http.MethodGet,
+				Endpoint: "/test",
+			}, nil)
+
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			gatewayErr, ok := err.(*core.GatewayError)
+			if !ok {
+				t.Fatalf("expected GatewayError, got %T", err)
+			}
+			if gatewayErr.Type != tt.wantType {
+				t.Errorf("expected error type %s, got %s", tt.wantType, gatewayErr.Type)
+			}
+		})
+	}
+}
+
+func TestClient_Do_Retries(t *testing.T) {
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := attempts.Add(1)
+		if count < 3 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte(`{"error":{"message":"Rate limited"}}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"success":true}`))
+	}))
+	defer server.Close()
+
+	config := DefaultConfig("test", server.URL)
+	config.Retry.MaxRetries = 3
+	config.Retry.InitialBackoff = 10 * time.Millisecond // Fast backoff for tests
+	config.Retry.JitterFactor = 0                       // Disable jitter for predictable tests
+	client := New(config, nil)
+
+	var result struct {
+		Success bool `json:"success"`
+	}
+	err := client.Do(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	}, &result)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.Success {
+		t.Error("expected success to be true")
+	}
+	if attempts.Load() != 3 {
+		t.Errorf("expected 3 attempts, got %d", attempts.Load())
+	}
+}
+
+func TestClient_Do_RetriesContinueAfterCircuitTrips(t *testing.T) {
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := attempts.Add(1)
+		if count < 3 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"error":{"message":"temporary failure"}}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"success":true}`))
+	}))
+	defer server.Close()
+
+	config := DefaultConfig("test", server.URL)
+	config.Retry.MaxRetries = 2
+	config.Retry.InitialBackoff = 10 * time.Millisecond
+	config.Retry.MaxBackoff = 10 * time.Millisecond
+	config.Retry.BackoffFactor = 1
+	config.Retry.JitterFactor = 0
+	config.CircuitBreaker = goconfig.CircuitBreakerConfig{
+		Enabled:          true,
+		FailureThreshold: 1,
+		SuccessThreshold: 1,
+		Timeout:          time.Minute,
+	}
+	client := New(config, nil)
+
+	var result struct {
+		Success bool `json:"success"`
+	}
+	err := client.Do(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	}, &result)
+
+	if err != nil {
+		t.Fatalf("expected retries to continue after circuit trips, got: %v", err)
+	}
+	if !result.Success {
+		t.Fatal("expected success response after retries")
+	}
+	if got := attempts.Load(); got != 3 {
+		t.Fatalf("expected request to use full retry budget after circuit trips, got %d attempts", got)
+	}
+}
+
+func TestClient_Do_RetriesExhausted(t *testing.T) {
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":{"message":"Rate limited"}}`))
+	}))
+	defer server.Close()
+
+	config := DefaultConfig("test", server.URL)
+	config.Retry.MaxRetries = 2
+	config.Retry.InitialBackoff = 10 * time.Millisecond
+	config.Retry.JitterFactor = 0
+	client := New(config, nil)
+
+	err := client.Do(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	}, nil)
+
+	if err == nil {
+		t.Fatal("expected error after retries exhausted")
+	}
+	// 1 initial + 2 retries = 3 attempts
+	if attempts.Load() != 3 {
+		t.Errorf("expected 3 attempts, got %d", attempts.Load())
+	}
+}
+
+// TestClient_DoRaw_Success tests DoRaw directly to ensure raw response handling works correctly
+func TestClient_DoRaw_Success(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"raw":"response"}`))
+	}))
+	defer server.Close()
+
+	config := DefaultConfig("test", server.URL)
+	config.Retry.MaxRetries = 0
+	client := New(config, nil)
+
+	resp, err := client.DoRaw(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected response, got nil")
+		return
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected status 200, got %d", resp.StatusCode)
+	}
+	if !strings.Contains(string(resp.Body), "raw") {
+		t.Errorf("expected body to contain 'raw', got: %s", string(resp.Body))
+	}
+}
+
+// TestClient_DoRaw_Error tests DoRaw error handling
+func TestClient_DoRaw_Error(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"message":"Bad request"}}`))
+	}))
+	defer server.Close()
+
+	config := DefaultConfig("test", server.URL)
+	config.Retry.MaxRetries = 0
+	client := New(config, nil)
+
+	resp, err := client.DoRaw(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	})
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if resp != nil {
+		t.Error("expected nil response on error")
+	}
+	gatewayErr, ok := err.(*core.GatewayError)
+	if !ok {
+		t.Fatalf("expected GatewayError, got %T", err)
+	}
+	if gatewayErr.Type != core.ErrorTypeInvalidRequest {
+		t.Errorf("expected error type %s, got %s", core.ErrorTypeInvalidRequest, gatewayErr.Type)
+	}
+}
+
+// TestClient_DoRaw_WithRetries tests that DoRaw properly handles retries
+func TestClient_DoRaw_WithRetries(t *testing.T) {
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := attempts.Add(1)
+		if count < 2 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"error":{"message":"Service unavailable"}}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer server.Close()
+
+	config := DefaultConfig("test", server.URL)
+	config.Retry.MaxRetries = 3
+	config.Retry.InitialBackoff = 10 * time.Millisecond
+	config.Retry.JitterFactor = 0
+	client := New(config, nil)
+
+	resp, err := client.DoRaw(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected status 200, got %d", resp.StatusCode)
+	}
+	if attempts.Load() != 2 {
+		t.Errorf("expected 2 attempts, got %d", attempts.Load())
+	}
+}
+
+func TestClient_DoRaw_DoesNotRetryRawBodyReader(t *testing.T) {
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"error":{"message":"retryable"}}`))
+	}))
+	defer server.Close()
+
+	config := DefaultConfig("test", server.URL)
+	config.Retry.MaxRetries = 3
+	config.Retry.InitialBackoff = 10 * time.Millisecond
+	config.Retry.JitterFactor = 0
+	client := New(config, nil)
+
+	resp, err := client.DoRaw(context.Background(), Request{
+		Method:        http.MethodPost,
+		Endpoint:      "/test",
+		RawBodyReader: strings.NewReader(`{"hello":"world"}`),
+		Headers: http.Header{
+			"Content-Type": {"application/json"},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if resp != nil {
+		t.Fatalf("expected nil response, got %+v", resp)
+	}
+	if got := attempts.Load(); got != 1 {
+		t.Fatalf("attempts = %d, want 1", got)
+	}
+}
+
+func TestClient_DoPassthrough_WithRetries(t *testing.T) {
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := attempts.Add(1)
+		if count < 3 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte(`{"error":{"message":"rate limited"}}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	config := DefaultConfig("test", server.URL)
+	config.Retry.MaxRetries = 3
+	config.Retry.InitialBackoff = 10 * time.Millisecond
+	config.Retry.JitterFactor = 0
+	client := New(config, nil)
+
+	resp, err := client.DoPassthrough(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read body: %v", err)
+	}
+	if got := string(body); got != `{"ok":true}` {
+		t.Fatalf("body = %q, want success response", got)
+	}
+	if got := attempts.Load(); got != 3 {
+		t.Fatalf("attempts = %d, want 3", got)
+	}
+}
+
+func TestClient_DoPassthrough_ReturnsLastRetryableResponseAfterRetries(t *testing.T) {
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := attempts.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"attempt":` + strconv.FormatInt(int64(count), 10) + `}`))
+	}))
+	defer server.Close()
+
+	config := DefaultConfig("test", server.URL)
+	config.Retry.MaxRetries = 2
+	config.Retry.InitialBackoff = 10 * time.Millisecond
+	config.Retry.MaxBackoff = 10 * time.Millisecond
+	config.Retry.BackoffFactor = 1
+	config.Retry.JitterFactor = 0
+	client := New(config, nil)
+
+	resp, err := client.DoPassthrough(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503", resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read body: %v", err)
+	}
+	if got := string(body); got != `{"attempt":3}` {
+		t.Fatalf("body = %q, want final retry response", got)
+	}
+	if got := attempts.Load(); got != 3 {
+		t.Fatalf("attempts = %d, want 3", got)
+	}
+}
+
+func TestClient_DoPassthrough_HTTPTimeoutDoesNotRetry(t *testing.T) {
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		time.Sleep(200 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	config := DefaultConfig("test", server.URL)
+	config.Retry.MaxRetries = 3
+	config.Retry.InitialBackoff = time.Millisecond
+	config.Retry.MaxBackoff = time.Millisecond
+	config.Retry.BackoffFactor = 1
+	config.Retry.JitterFactor = 0
+	config.CircuitBreaker = goconfig.CircuitBreakerConfig{
+		Enabled:          true,
+		FailureThreshold: 2,
+		SuccessThreshold: 1,
+		Timeout:          time.Second,
+	}
+	client := NewWithHTTPClient(&http.Client{Timeout: 30 * time.Millisecond}, config, nil)
+
+	resp, err := client.DoPassthrough(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	})
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+	var gatewayErr *core.GatewayError
+	if !errors.As(err, &gatewayErr) {
+		t.Fatalf("expected GatewayError, got %T", err)
+	}
+	if gatewayErr.StatusCode != http.StatusGatewayTimeout {
+		t.Fatalf("StatusCode = %d, want %d", gatewayErr.StatusCode, http.StatusGatewayTimeout)
+	}
+	if got := attempts.Load(); got != 1 {
+		t.Fatalf("upstream attempts = %d, want 1 for client-side timeout", got)
+	}
+	if state := client.circuitBreaker.State(); state != "closed" {
+		t.Fatalf("circuit state = %q, want closed after one logical timeout", state)
+	}
+}
+
+func TestClient_DoPassthrough_DoesNotRetryNonReplaySafeMethod(t *testing.T) {
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":"rate limited"}`))
+	}))
+	defer server.Close()
+
+	config := DefaultConfig("test", server.URL)
+	config.Retry.MaxRetries = 3
+	config.Retry.InitialBackoff = 10 * time.Millisecond
+	config.Retry.MaxBackoff = 10 * time.Millisecond
+	config.Retry.BackoffFactor = 1
+	config.Retry.JitterFactor = 0
+	client := New(config, nil)
+
+	resp, err := client.DoPassthrough(context.Background(), Request{
+		Method:   http.MethodPost,
+		Endpoint: "/test",
+		RawBody:  []byte(`{"hello":"world"}`),
+		Headers:  http.Header{"Content-Type": {"application/json"}},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want 429", resp.StatusCode)
+	}
+	if got := attempts.Load(); got != 1 {
+		t.Fatalf("attempts = %d, want 1", got)
+	}
+}
+
+func TestClient_DoPassthrough_RetriesWhenIdempotencyKeyPresent(t *testing.T) {
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		count := attempts.Add(1)
+		if count < 3 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"attempt":` + strconv.FormatInt(int64(count), 10) + `}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	config := DefaultConfig("test", server.URL)
+	config.Retry.MaxRetries = 3
+	config.Retry.InitialBackoff = 10 * time.Millisecond
+	config.Retry.MaxBackoff = 10 * time.Millisecond
+	config.Retry.BackoffFactor = 1
+	config.Retry.JitterFactor = 0
+	client := New(config, nil)
+
+	resp, err := client.DoPassthrough(context.Background(), Request{
+		Method:   http.MethodPost,
+		Endpoint: "/test",
+		RawBody:  []byte(`{"hello":"world"}`),
+		Headers: http.Header{
+			"Content-Type":    {"application/json"},
+			"Idempotency-Key": {"req-123"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if got := attempts.Load(); got != 3 {
+		t.Fatalf("attempts = %d, want 3", got)
+	}
+}
+
+func TestClient_DoStream_Success(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"chunk\":1}\n\n"))
+		_, _ = w.Write([]byte("data: {\"chunk\":2}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer server.Close()
+
+	client := New(DefaultConfig("test", server.URL), nil)
+
+	stream, err := client.DoStream(context.Background(), Request{
+		Method:   http.MethodPost,
+		Endpoint: "/stream",
+		Body:     map[string]bool{"stream": true},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer stream.Close()
+
+	body, err := io.ReadAll(stream)
+	if err != nil {
+		t.Fatalf("failed to read stream: %v", err)
+	}
+
+	if !strings.Contains(string(body), "chunk") {
+		t.Errorf("expected body to contain 'chunk', got: %s", string(body))
+	}
+}
+
+func TestClient_DoPassthrough_FirstChunkHookUsesOpaqueStreamBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: passthrough\n\n"))
+	}))
+	defer server.Close()
+
+	var firstChunk ResponseInfo
+	cfg := DefaultConfig("test", server.URL)
+	cfg.Hooks.OnStreamFirstChunk = func(_ context.Context, info ResponseInfo) { firstChunk = info }
+	client := New(cfg, nil)
+	resp, err := client.DoPassthrough(t.Context(), Request{
+		Method:    http.MethodPost,
+		Endpoint:  "/v2/chat",
+		Operation: OperationChat,
+		Model:     "command-r",
+		Stream:    true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if firstChunk.Duration != 0 {
+		t.Fatal("first chunk hook fired at passthrough response headers")
+	}
+	if _, err := io.ReadAll(resp.Body); err != nil {
+		t.Fatal(err)
+	}
+	if firstChunk.Operation != OperationChat || firstChunk.Model != "command-r" || !firstChunk.Stream {
+		t.Fatalf("first chunk = %+v, want streaming command-r chat", firstChunk)
+	}
+}
+
+func TestClient_DoPassthrough_FirstChunkHookUsesSuccessfulSSEContentType(t *testing.T) {
+	body := `{"padding":"` + strings.Repeat("x", 65*1024) + `","stream":true}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, err := io.Copy(io.Discard, r.Body); err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+		_, _ = w.Write([]byte("data: passthrough\n\n"))
+	}))
+	defer server.Close()
+
+	var firstChunks []ResponseInfo
+	cfg := DefaultConfig("test", server.URL)
+	cfg.Hooks.OnStreamFirstChunk = func(_ context.Context, info ResponseInfo) {
+		firstChunks = append(firstChunks, info)
+	}
+	client := New(cfg, nil)
+	resp, err := client.DoPassthrough(t.Context(), Request{
+		Method:        http.MethodPost,
+		Endpoint:      "/chat/completions",
+		Operation:     OperationChat,
+		RawBodyReader: io.NopCloser(strings.NewReader(body)),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if len(firstChunks) != 0 {
+		t.Fatalf("first chunk hook fired at response headers: %+v", firstChunks)
+	}
+	if _, err := io.ReadAll(resp.Body); err != nil {
+		t.Fatal(err)
+	}
+	if len(firstChunks) != 1 || !firstChunks[0].Stream || firstChunks[0].Operation != OperationChat {
+		t.Fatalf("first chunk observations = %+v, want one streaming chat observation", firstChunks)
+	}
+}
+
+func TestClient_DoPassthrough_ErrorResponseDoesNotFireFirstChunkHook(t *testing.T) {
+	for _, status := range []int{http.StatusBadRequest, http.StatusServiceUnavailable} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "text/event-stream")
+				w.WriteHeader(status)
+				_, _ = w.Write([]byte("data: error\n\n"))
+			}))
+			defer server.Close()
+
+			firstChunks := 0
+			cfg := DefaultConfig("test", server.URL)
+			cfg.Retry.MaxRetries = 0
+			cfg.Hooks.OnStreamFirstChunk = func(context.Context, ResponseInfo) { firstChunks++ }
+			client := New(cfg, nil)
+			resp, err := client.DoPassthrough(t.Context(), Request{
+				Method:   http.MethodPost,
+				Endpoint: "/chat/completions",
+				Stream:   true,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if _, err := io.ReadAll(resp.Body); err != nil {
+				t.Fatal(err)
+			}
+			if firstChunks != 0 {
+				t.Fatalf("first chunk hook calls = %d, want 0", firstChunks)
+			}
+		})
+	}
+}
+
+func TestClient_DoStream_FirstChunkHookWaitsForBodyBytes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: first\n\n"))
+	}))
+	defer server.Close()
+
+	var firstChunks []ResponseInfo
+	cfg := DefaultConfig("test", server.URL)
+	cfg.Hooks.OnStreamFirstChunk = func(_ context.Context, info ResponseInfo) {
+		firstChunks = append(firstChunks, info)
+	}
+	client := New(cfg, nil)
+	stream, err := client.DoStream(t.Context(), Request{
+		Method:    http.MethodPost,
+		Endpoint:  "/stream",
+		Operation: OperationChat,
+		Body:      map[string]bool{"stream": true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stream.Close()
+	if len(firstChunks) != 0 {
+		t.Fatalf("first chunk hook fired at response headers: %+v", firstChunks)
+	}
+	buf := make([]byte, 1)
+	if _, err := stream.Read(buf); err != nil {
+		t.Fatal(err)
+	}
+	if len(firstChunks) != 1 || firstChunks[0].Operation != OperationChat || !firstChunks[0].Stream {
+		t.Fatalf("first chunk observations = %+v, want one streaming chat observation", firstChunks)
+	}
+	if _, err := io.ReadAll(stream); err != nil {
+		t.Fatal(err)
+	}
+	if len(firstChunks) != 1 {
+		t.Fatalf("first chunk hook fired %d times, want once", len(firstChunks))
+	}
+}
+
+func TestClient_DoStream_Error(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":{"message":"Invalid API key"}}`))
+	}))
+	defer server.Close()
+
+	client := New(DefaultConfig("test", server.URL), nil)
+
+	_, err := client.DoStream(context.Background(), Request{
+		Method:   http.MethodPost,
+		Endpoint: "/stream",
+	})
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	gatewayErr, ok := err.(*core.GatewayError)
+	if !ok {
+		t.Fatalf("expected GatewayError, got %T", err)
+	}
+	if gatewayErr.Type != core.ErrorTypeAuthentication {
+		t.Errorf("expected error type %s, got %s", core.ErrorTypeAuthentication, gatewayErr.Type)
+	}
+}
+
+// TestClient_BuildErrorDoesNotRetryOrChargeBreaker verifies that caller-side
+// request-construction failures (an invalid HTTP method, in this case)
+// short-circuit out of every Do* entry point without retrying and without
+// charging the circuit breaker — the upstream was never contacted, so the
+// retry would just repeat the validation failure and the breaker should not
+// blame the provider.
+//
+// The closed-state subtests verify that build errors don't trip a healthy
+// breaker. The half-open subtests verify that build errors don't advance the
+// breaker state machine in either direction (no failure recorded → no
+// transition back to open; no success counted → no progress toward closed).
+func TestClient_BuildErrorDoesNotRetryOrChargeBreaker(t *testing.T) {
+	t.Parallel()
+
+	entries := []struct {
+		name string
+		call func(t *testing.T, client *Client) error
+	}{
+		{
+			name: "DoRaw",
+			call: func(t *testing.T, client *Client) error {
+				_, err := client.DoRaw(context.Background(), Request{Method: "INVALID", Endpoint: "/test"})
+				return err
+			},
+		},
+		{
+			name: "DoStream",
+			call: func(t *testing.T, client *Client) error {
+				_, err := client.DoStream(context.Background(), Request{Method: "INVALID", Endpoint: "/test"})
+				return err
+			},
+		},
+		{
+			name: "DoPassthrough",
+			call: func(t *testing.T, client *Client) error {
+				_, err := client.DoPassthrough(context.Background(), Request{Method: "INVALID", Endpoint: "/test"})
+				return err
+			},
+		},
+	}
+
+	states := []struct {
+		name      string
+		preSeed   func(cb *circuitBreaker)
+		wantState string
+	}{
+		{
+			name:      "closed",
+			preSeed:   func(*circuitBreaker) {},
+			wantState: "closed",
+		},
+		{
+			// Half-open with the probe slot available: the breaker grants the
+			// probe, so the build error fires through the normal request path.
+			// We then assert the breaker stayed half-open — the build error
+			// must not record a success (which would advance toward closed)
+			// nor a failure (which would reopen the breaker).
+			name: "half_open",
+			preSeed: func(cb *circuitBreaker) {
+				cb.mu.Lock()
+				defer cb.mu.Unlock()
+				cb.state = circuitHalfOpen
+				cb.failures = cb.failureThreshold
+				cb.successes = 0
+				cb.halfOpenAllowed = true
+				cb.lastFailure = time.Now().Add(-cb.timeout - time.Millisecond)
+			},
+			wantState: "half-open",
+		},
+	}
+
+	for _, st := range states {
+		for _, e := range entries {
+			t.Run(st.name+"/"+e.name, func(t *testing.T) {
+				var attempts atomic.Int32
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					attempts.Add(1)
+				}))
+				defer server.Close()
+
+				config := DefaultConfig("test", server.URL)
+				config.Retry.MaxRetries = 3
+				config.Retry.InitialBackoff = time.Millisecond
+				config.Retry.JitterFactor = 0
+				config.CircuitBreaker = goconfig.CircuitBreakerConfig{
+					Enabled:          true,
+					FailureThreshold: 1,
+					SuccessThreshold: 2,
+					Timeout:          time.Second,
+				}
+				client := New(config, nil)
+				st.preSeed(client.circuitBreaker)
+
+				err := e.call(t, client)
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				var gwErr *core.GatewayError
+				if !errors.As(err, &gwErr) {
+					t.Fatalf("expected *core.GatewayError, got %T: %v", err, err)
+				}
+				if gwErr.Type != core.ErrorTypeInvalidRequest {
+					t.Errorf("error type = %s, want %s", gwErr.Type, core.ErrorTypeInvalidRequest)
+				}
+				if got := attempts.Load(); got != 0 {
+					t.Errorf("server received %d attempts; want 0 (build errors must not be retried)", got)
+				}
+				if state := client.circuitBreaker.State(); state != st.wantState {
+					t.Errorf("breaker state = %q; want %q (build errors must not advance the breaker)", state, st.wantState)
+				}
+				// A consumed half-open probe slot must be released, or the
+				// breaker rejects every request from here on.
+				if _, err := client.DoRaw(context.Background(), Request{Method: http.MethodGet, Endpoint: "/test"}); err != nil {
+					t.Errorf("follow-up request after build error failed: %v (probe slot leaked)", err)
+				}
+			})
+		}
+	}
+}
+
+// TestRequest_Validation tests validation of Request fields
+func TestRequest_Validation(t *testing.T) {
+	config := DefaultConfig("test", "http://localhost")
+	config.Retry.MaxRetries = 0
+	client := New(config, nil)
+
+	tests := []struct {
+		name        string
+		request     Request
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:        "empty method",
+			request:     Request{Endpoint: "/test"},
+			wantErr:     true,
+			errContains: "method is required",
+		},
+		{
+			name:        "empty endpoint",
+			request:     Request{Method: http.MethodGet},
+			wantErr:     true,
+			errContains: "endpoint is required",
+		},
+		{
+			name:        "invalid method",
+			request:     Request{Method: "INVALID", Endpoint: "/test"},
+			wantErr:     true,
+			errContains: "invalid HTTP method",
+		},
+		{
+			name:    "valid GET request",
+			request: Request{Method: http.MethodGet, Endpoint: "/test"},
+			wantErr: false,
+		},
+		{
+			name:    "valid POST request",
+			request: Request{Method: http.MethodPost, Endpoint: "/test"},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := client.buildRequest(context.Background(), tt.request)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+					return
+				}
+				if !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("expected error to contain '%s', got: %v", tt.errContains, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestCircuitBreaker_OpensAfterFailures(t *testing.T) {
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":{"message":"Server error"}}`))
+	}))
+	defer server.Close()
+
+	config := DefaultConfig("test", server.URL)
+	config.Retry.MaxRetries = 0 // No retries
+	config.CircuitBreaker = goconfig.CircuitBreakerConfig{
+		Enabled:          true,
+		FailureThreshold: 3,
+		SuccessThreshold: 2,
+		Timeout:          1 * time.Second,
+	}
+	client := New(config, nil)
+
+	// Make requests until circuit opens
+	for range 5 {
+		_ = client.Do(context.Background(), Request{
+			Method:   http.MethodGet,
+			Endpoint: "/test",
+		}, nil)
+	}
+
+	// Circuit should be open now - requests should fail immediately
+	err := client.Do(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	}, nil)
+
+	if err == nil {
+		t.Fatal("expected circuit breaker error")
+	}
+	gatewayErr, ok := err.(*core.GatewayError)
+	if !ok {
+		t.Fatalf("expected GatewayError, got %T", err)
+	}
+	if gatewayErr.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("expected status %d, got %d", http.StatusServiceUnavailable, gatewayErr.StatusCode)
+	}
+	if !strings.Contains(gatewayErr.Message, "circuit breaker") {
+		t.Errorf("expected circuit breaker message, got: %s", gatewayErr.Message)
+	}
+	if !strings.Contains(gatewayErr.Message, "provider test") {
+		t.Errorf("expected circuit breaker message to identify provider, got: %s", gatewayErr.Message)
+	}
+
+	// Should have made exactly 3 requests (threshold)
+	if attempts.Load() != 3 {
+		t.Errorf("expected 3 attempts before circuit opened, got %d", attempts.Load())
+	}
+}
+
+func TestCircuitBreaker_ClosesAfterTimeout(t *testing.T) {
+	var attempts atomic.Int32
+	var shouldSucceed atomic.Bool
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		if shouldSucceed.Load() {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"success":true}`))
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":{"message":"Server error"}}`))
+	}))
+	defer server.Close()
+
+	config := DefaultConfig("test", server.URL)
+	config.Retry.MaxRetries = 0
+	config.CircuitBreaker = goconfig.CircuitBreakerConfig{
+		Enabled:          true,
+		FailureThreshold: 2,
+		SuccessThreshold: 1,
+		Timeout:          50 * time.Millisecond,
+	}
+	client := New(config, nil)
+
+	// Trigger circuit breaker to open
+	for range 2 {
+		_ = client.Do(context.Background(), Request{
+			Method:   http.MethodGet,
+			Endpoint: "/test",
+		}, nil)
+	}
+
+	// Verify circuit is open
+	err := client.Do(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	}, nil)
+	if err == nil {
+		t.Fatal("expected circuit to be open")
+	}
+
+	// Wait for timeout
+	time.Sleep(100 * time.Millisecond)
+
+	// Now make server succeed
+	shouldSucceed.Store(true)
+
+	// Should be able to make request (half-open state)
+	var result struct {
+		Success bool `json:"success"`
+	}
+	err = client.Do(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	}, &result)
+
+	if err != nil {
+		t.Fatalf("expected success after timeout, got: %v", err)
+	}
+	if !result.Success {
+		t.Error("expected success to be true")
+	}
+}
+
+// TestCircuitBreaker_HalfOpenPreventsThunderingHerd tests that only one request
+// is allowed through in half-open state to prevent thundering herd
+func TestCircuitBreaker_HalfOpenPreventsThunderingHerd(t *testing.T) {
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		time.Sleep(50 * time.Millisecond) // Simulate slow response
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"success":true}`))
+	}))
+	defer server.Close()
+
+	config := DefaultConfig("test", server.URL)
+	config.Retry.MaxRetries = 0
+	config.CircuitBreaker = goconfig.CircuitBreakerConfig{
+		Enabled:          true,
+		FailureThreshold: 1,
+		SuccessThreshold: 1,
+		Timeout:          10 * time.Millisecond,
+	}
+	client := New(config, nil)
+
+	// Open the circuit with a failure
+	failServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":{"message":"Server error"}}`))
+	}))
+	client.SetBaseURL(failServer.URL)
+	_ = client.Do(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	}, nil)
+	failServer.Close()
+
+	// Wait for timeout to transition to half-open
+	time.Sleep(20 * time.Millisecond)
+
+	// Switch to successful server
+	client.SetBaseURL(server.URL)
+
+	// Try to make multiple concurrent requests
+	var wg sync.WaitGroup
+	results := make(chan error, 10)
+
+	for range 10 {
+		wg.Go(func() {
+			err := client.Do(context.Background(), Request{
+				Method:   http.MethodGet,
+				Endpoint: "/test",
+			}, nil)
+			results <- err
+		})
+	}
+
+	wg.Wait()
+	close(results)
+
+	// Count successes and circuit breaker rejections
+	var successes, rejections int
+	for err := range results {
+		if err == nil {
+			successes++
+		} else {
+			gatewayErr, ok := err.(*core.GatewayError)
+			if ok && strings.Contains(gatewayErr.Message, "circuit breaker") {
+				rejections++
+			}
+		}
+	}
+
+	// In half-open state, only one request should be allowed through initially
+	// After it succeeds, the circuit closes and more requests can go through
+	if successes == 0 {
+		t.Error("expected at least one successful request")
+	}
+
+	// Most requests should be rejected by the circuit breaker
+	if rejections == 0 && successes == 10 {
+		t.Log("Warning: all requests succeeded, circuit breaker may not have been in half-open state")
+	}
+}
+
+func TestCircuitBreaker_HalfOpenProbeDoesNotRetry(t *testing.T) {
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"error":{"message":"temporary failure"}}`))
+	}))
+	defer server.Close()
+
+	config := DefaultConfig("test", server.URL)
+	config.Retry.MaxRetries = 2
+	config.Retry.InitialBackoff = 30 * time.Millisecond
+	config.Retry.MaxBackoff = 30 * time.Millisecond
+	config.Retry.BackoffFactor = 1
+	config.Retry.JitterFactor = 0
+	config.CircuitBreaker = goconfig.CircuitBreakerConfig{
+		Enabled:          true,
+		FailureThreshold: 1,
+		SuccessThreshold: 1,
+		Timeout:          20 * time.Millisecond,
+	}
+	client := New(config, nil)
+
+	client.circuitBreaker.mu.Lock()
+	client.circuitBreaker.state = circuitOpen
+	client.circuitBreaker.failures = client.circuitBreaker.failureThreshold
+	client.circuitBreaker.successes = 0
+	client.circuitBreaker.lastFailure = time.Now().Add(-client.circuitBreaker.timeout - time.Millisecond)
+	client.circuitBreaker.halfOpenAllowed = true
+	client.circuitBreaker.mu.Unlock()
+
+	err := client.Do(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	}, nil)
+	if err == nil {
+		t.Fatal("expected provider error from half-open probe")
+	}
+
+	gatewayErr, ok := err.(*core.GatewayError)
+	if !ok {
+		t.Fatalf("expected GatewayError, got %T", err)
+	}
+	if gatewayErr.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, gatewayErr.StatusCode)
+	}
+	if strings.Contains(gatewayErr.Message, "circuit breaker is open") {
+		t.Fatalf("expected original upstream error, got circuit breaker error: %s", gatewayErr.Message)
+	}
+	if got := attempts.Load(); got != 1 {
+		t.Fatalf("expected exactly 1 upstream attempt in half-open state, got %d", got)
+	}
+	if state := client.circuitBreaker.State(); state != "open" {
+		t.Fatalf("expected circuit to reopen after failed half-open probe, got %q", state)
+	}
+
+	err = client.Do(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	}, nil)
+	if err == nil {
+		t.Fatal("expected circuit breaker rejection after failed half-open probe")
+	}
+
+	gatewayErr, ok = err.(*core.GatewayError)
+	if !ok {
+		t.Fatalf("expected GatewayError, got %T", err)
+	}
+	if !strings.Contains(gatewayErr.Message, "circuit breaker is open") {
+		t.Fatalf("expected circuit breaker error after failed half-open probe, got %s", gatewayErr.Message)
+	}
+	if got := attempts.Load(); got != 1 {
+		t.Fatalf("expected follow-up request to be blocked without another upstream attempt, got %d attempts", got)
+	}
+}
+
+func TestCircuitBreaker_HalfOpenProbeResolvesOnClientError(t *testing.T) {
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"message":"bad request"}}`))
+	}))
+	defer server.Close()
+
+	config := DefaultConfig("test", server.URL)
+	config.Retry.MaxRetries = 0
+	config.CircuitBreaker = goconfig.CircuitBreakerConfig{
+		Enabled:          true,
+		FailureThreshold: 1,
+		SuccessThreshold: 1,
+		Timeout:          20 * time.Millisecond,
+	}
+	client := New(config, nil)
+
+	client.circuitBreaker.mu.Lock()
+	client.circuitBreaker.state = circuitOpen
+	client.circuitBreaker.failures = client.circuitBreaker.failureThreshold
+	client.circuitBreaker.successes = 0
+	client.circuitBreaker.lastFailure = time.Now().Add(-client.circuitBreaker.timeout - time.Millisecond)
+	client.circuitBreaker.halfOpenAllowed = true
+	client.circuitBreaker.mu.Unlock()
+
+	_, err := client.DoRaw(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	})
+	if err == nil {
+		t.Fatal("expected provider error from half-open probe")
+	}
+	var gatewayErr *core.GatewayError
+	if !errors.As(err, &gatewayErr) {
+		t.Fatalf("expected GatewayError, got %T", err)
+	}
+	if gatewayErr.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, gatewayErr.StatusCode)
+	}
+	if state := client.circuitBreaker.State(); state != "closed" {
+		t.Fatalf("expected circuit to close after non-retryable probe, got %q", state)
+	}
+	if got := attempts.Load(); got != 1 {
+		t.Fatalf("expected 1 upstream attempt, got %d", got)
+	}
+
+	_, err = client.DoRaw(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	})
+	if err == nil {
+		t.Fatal("expected provider error on follow-up request")
+	}
+	if got := attempts.Load(); got != 2 {
+		t.Fatalf("expected follow-up request to reach upstream, got %d attempts", got)
+	}
+}
+
+func TestCircuitBreaker_ExcludedRateLimitDoesNotOpenCircuit(t *testing.T) {
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":{"message":"rate limit exceeded"}}`))
+	}))
+	defer server.Close()
+
+	config := DefaultConfig("test", server.URL)
+	config.Retry.MaxRetries = 0
+	config.CircuitBreaker = goconfig.CircuitBreakerConfig{
+		FailureOnStatuses: []string{"5xx"},
+		Enabled:           true,
+		FailureThreshold:  1,
+		SuccessThreshold:  1,
+		Timeout:           time.Second,
+	}
+	client := New(config, nil)
+
+	for i := range 2 {
+		err := client.Do(context.Background(), Request{
+			Method:   http.MethodGet,
+			Endpoint: "/test",
+		}, nil)
+		if err == nil {
+			t.Fatalf("attempt %d: expected rate limit error", i+1)
+		}
+
+		var gatewayErr *core.GatewayError
+		if !errors.As(err, &gatewayErr) {
+			t.Fatalf("attempt %d: expected GatewayError, got %T", i+1, err)
+		}
+		if gatewayErr.StatusCode != http.StatusTooManyRequests {
+			t.Fatalf("attempt %d: status = %d, want %d", i+1, gatewayErr.StatusCode, http.StatusTooManyRequests)
+		}
+	}
+
+	if state := client.circuitBreaker.State(); state != "closed" {
+		t.Fatalf("expected circuit to remain closed after rate limits, got %q", state)
+	}
+	if got := attempts.Load(); got != 2 {
+		t.Fatalf("expected both requests to reach upstream, got %d attempts", got)
+	}
+}
+
+func TestCircuitBreaker_HalfOpenProbeReopensOnRateLimit(t *testing.T) {
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":{"message":"rate limit exceeded"}}`))
+	}))
+	defer server.Close()
+
+	config := DefaultConfig("test", server.URL)
+	config.Retry.MaxRetries = 0
+	config.CircuitBreaker = goconfig.CircuitBreakerConfig{
+		Enabled:          true,
+		FailureThreshold: 1,
+		SuccessThreshold: 1,
+		Timeout:          20 * time.Millisecond,
+	}
+	client := New(config, nil)
+
+	client.circuitBreaker.mu.Lock()
+	client.circuitBreaker.state = circuitOpen
+	client.circuitBreaker.failures = client.circuitBreaker.failureThreshold
+	client.circuitBreaker.successes = 0
+	client.circuitBreaker.lastFailure = time.Now().Add(-client.circuitBreaker.timeout - time.Millisecond)
+	client.circuitBreaker.halfOpenAllowed = true
+	client.circuitBreaker.mu.Unlock()
+
+	err := client.Do(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	}, nil)
+	if err == nil {
+		t.Fatal("expected rate limit error from half-open probe")
+	}
+
+	var gatewayErr *core.GatewayError
+	if !errors.As(err, &gatewayErr) {
+		t.Fatalf("expected GatewayError, got %T", err)
+	}
+	if gatewayErr.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want %d", gatewayErr.StatusCode, http.StatusTooManyRequests)
+	}
+	if state := client.circuitBreaker.State(); state != "open" {
+		t.Fatalf("expected circuit to reopen after rate-limited probe, got %q", state)
+	}
+
+	err = client.Do(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	}, nil)
+	if err == nil {
+		t.Fatal("expected circuit breaker rejection after rate-limited half-open probe")
+	}
+	if !errors.As(err, &gatewayErr) {
+		t.Fatalf("expected GatewayError, got %T", err)
+	}
+	if !strings.Contains(gatewayErr.Message, "circuit breaker is open") {
+		t.Fatalf("expected circuit breaker error after rate-limited half-open probe, got %s", gatewayErr.Message)
+	}
+	if got := attempts.Load(); got != 1 {
+		t.Fatalf("expected follow-up request to be blocked without another upstream attempt, got %d attempts", got)
+	}
+}
+
+func TestCircuitBreaker_State(t *testing.T) {
+	cb := newCircuitBreaker(3, 2, time.Minute)
+
+	if state := cb.State(); state != "closed" {
+		t.Errorf("expected initial state 'closed', got '%s'", state)
+	}
+
+	// Record failures to open circuit
+	for range 3 {
+		cb.RecordFailure()
+	}
+	if state := cb.State(); state != "open" {
+		t.Errorf("expected state 'open' after failures, got '%s'", state)
+	}
+}
+
+// ResponseInfo carries the breaker state to observability hooks — including
+// on requests the breaker rejects.
+func TestCircuitBreaker_StateReportedToHooks(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	var states []string
+	config := DefaultConfig("test", server.URL)
+	config.Retry.MaxRetries = 0
+	config.CircuitBreaker = goconfig.CircuitBreakerConfig{
+		Enabled:          true,
+		FailureThreshold: 1,
+		SuccessThreshold: 1,
+		Timeout:          time.Minute,
+	}
+	config.Hooks = Hooks{
+		OnRequestEnd: func(_ context.Context, info ResponseInfo) {
+			states = append(states, info.CircuitState)
+		},
+	}
+	client := New(config, nil)
+
+	// First request fails (500) and opens the breaker; the second is rejected
+	// by the open breaker. Both completions must report the state.
+	_, _ = client.DoRaw(context.Background(), Request{Method: http.MethodGet, Endpoint: "/test"})
+	_, _ = client.DoRaw(context.Background(), Request{Method: http.MethodGet, Endpoint: "/test"})
+
+	want := []string{"open", "open"}
+	if len(states) != len(want) {
+		t.Fatalf("hook fired %d times, want %d (states: %v)", len(states), len(want), states)
+	}
+	for i := range want {
+		if states[i] != want[i] {
+			t.Fatalf("CircuitState[%d] = %q, want %q", i, states[i], want[i])
+		}
+	}
+
+	// Without a breaker the field stays empty.
+	states = nil
+	config.CircuitBreaker = goconfig.CircuitBreakerConfig{}
+	plain := New(config, nil)
+	_, _ = plain.DoRaw(context.Background(), Request{Method: http.MethodGet, Endpoint: "/test"})
+	if len(states) != 1 || states[0] != "" {
+		t.Fatalf("CircuitState without breaker = %v, want one empty entry", states)
+	}
+}
+
+func TestCircuitBreakerDisabledNeverShortCircuits(t *testing.T) {
+	tests := []struct {
+		name string
+		cb   goconfig.CircuitBreakerConfig
+	}{
+		{
+			name: "enabled false",
+			cb: goconfig.CircuitBreakerConfig{
+				Enabled:          false,
+				FailureThreshold: 1,
+				SuccessThreshold: 1,
+				Timeout:          time.Minute,
+			},
+		},
+		{
+			// Legacy disable path, kept for backward compatibility.
+			name: "zero failure threshold",
+			cb: goconfig.CircuitBreakerConfig{
+				Enabled:          true,
+				FailureThreshold: 0,
+				SuccessThreshold: 1,
+				Timeout:          time.Minute,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var requests atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				w.WriteHeader(http.StatusInternalServerError)
+			}))
+			defer server.Close()
+
+			config := DefaultConfig("test", server.URL)
+			config.Retry.MaxRetries = 0
+			config.CircuitBreaker = tt.cb
+			client := New(config, nil)
+
+			if client.circuitBreaker != nil {
+				t.Fatal("expected no circuit breaker")
+			}
+
+			// Every request must reach the upstream: an active breaker with
+			// FailureThreshold=1 would fail fast from the second request onwards.
+			const attempts = 3
+			for i := range attempts {
+				_, err := client.DoRaw(context.Background(), Request{Method: http.MethodGet, Endpoint: "/test"})
+				if err == nil {
+					t.Fatalf("attempt %d: expected upstream 500 error", i+1)
+				}
+				if strings.Contains(err.Error(), "circuit breaker is open") {
+					t.Fatalf("attempt %d: request was short-circuited by a disabled breaker: %v", i+1, err)
+				}
+			}
+			if got := requests.Load(); got != attempts {
+				t.Fatalf("upstream requests = %d, want %d", got, attempts)
+			}
+		})
+	}
+}
+
+// A caller cancellation that consumed the half-open probe slot must release
+// it; otherwise the breaker rejects every request until process restart.
+func TestCircuitBreaker_CanceledHalfOpenProbeReleasesSlot(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	config := DefaultConfig("test", server.URL)
+	config.CircuitBreaker = goconfig.CircuitBreakerConfig{
+		Enabled:          true,
+		FailureThreshold: 1,
+		SuccessThreshold: 2,
+		Timeout:          time.Minute,
+	}
+	client := New(config, nil)
+
+	cb := client.circuitBreaker
+	cb.mu.Lock()
+	cb.state = circuitHalfOpen
+	cb.halfOpenAllowed = true
+	cb.mu.Unlock()
+
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := client.DoRaw(canceled, Request{Method: http.MethodGet, Endpoint: "/test"}); err == nil {
+		t.Fatal("expected error from canceled context")
+	}
+
+	if state := cb.State(); state != "half-open" {
+		t.Fatalf("breaker state = %q; want half-open (cancellation is not a provider failure)", state)
+	}
+	// The slot must be free again so the next request can be the probe.
+	if _, err := client.DoRaw(context.Background(), Request{Method: http.MethodGet, Endpoint: "/test"}); err != nil {
+		t.Fatalf("probe after canceled probe failed: %v (probe slot leaked)", err)
+	}
+}
+
+// Client disconnects while a stream is being established must not be charged
+// to the breaker as provider failures.
+func TestCircuitBreaker_ClientCancellationDoesNotTrip(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {}\n\n"))
+	}))
+	defer server.Close()
+
+	config := DefaultConfig("test", server.URL)
+	config.CircuitBreaker = goconfig.CircuitBreakerConfig{
+		Enabled:          true,
+		FailureThreshold: 1,
+		SuccessThreshold: 1,
+		Timeout:          time.Minute,
+	}
+	client := New(config, nil)
+
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := client.DoStream(canceled, Request{Method: http.MethodPost, Endpoint: "/test", Body: map[string]string{"k": "v"}}); err == nil {
+		t.Fatal("expected error from canceled context")
+	}
+
+	if state := client.circuitBreaker.State(); state != "closed" {
+		t.Fatalf("breaker state = %q; want closed (client cancellation must not count as a provider failure)", state)
+	}
+
+	stream, err := client.DoStream(context.Background(), Request{Method: http.MethodPost, Endpoint: "/test", Body: map[string]string{"k": "v"}})
+	if err != nil {
+		t.Fatalf("live stream after cancellation failed: %v", err)
+	}
+	_ = stream.Close()
+}
+
+func TestClient_ContextCancellation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(1 * time.Second)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	client := New(DefaultConfig("test", server.URL), nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	err := client.Do(ctx, Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	}, nil)
+
+	if err == nil {
+		t.Fatal("expected context cancellation error")
+	}
+}
+
+func TestClient_Do_HTTPTimeoutReturnsGatewayTimeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	cfg := DefaultConfig("test", server.URL)
+	cfg.Retry.MaxRetries = 0
+	client := NewWithHTTPClient(&http.Client{Timeout: 50 * time.Millisecond}, cfg, nil)
+
+	err := client.Do(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	}, nil)
+
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+
+	gatewayErr, ok := err.(*core.GatewayError)
+	if !ok {
+		t.Fatalf("expected GatewayError, got %T", err)
+	}
+	if gatewayErr.StatusCode != http.StatusGatewayTimeout {
+		t.Fatalf("StatusCode = %d, want %d", gatewayErr.StatusCode, http.StatusGatewayTimeout)
+	}
+	if !strings.Contains(gatewayErr.Message, "failed to send request") {
+		t.Fatalf("Message = %q, want send-request timeout context", gatewayErr.Message)
+	}
+}
+
+func TestClient_Do_HTTPTimeoutDoesNotRetry(t *testing.T) {
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		time.Sleep(200 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	cfg := DefaultConfig("test", server.URL)
+	cfg.Retry.MaxRetries = 3
+	cfg.Retry.InitialBackoff = time.Millisecond
+	cfg.Retry.MaxBackoff = time.Millisecond
+	cfg.Retry.BackoffFactor = 1
+	cfg.Retry.JitterFactor = 0
+	cfg.CircuitBreaker = goconfig.CircuitBreakerConfig{
+		Enabled:          true,
+		FailureThreshold: 2,
+		SuccessThreshold: 1,
+		Timeout:          time.Second,
+	}
+	client := NewWithHTTPClient(&http.Client{Timeout: 30 * time.Millisecond}, cfg, nil)
+
+	err := client.Do(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	}, nil)
+
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+	var gatewayErr *core.GatewayError
+	if !errors.As(err, &gatewayErr) {
+		t.Fatalf("expected GatewayError, got %T", err)
+	}
+	if gatewayErr.StatusCode != http.StatusGatewayTimeout {
+		t.Fatalf("StatusCode = %d, want %d", gatewayErr.StatusCode, http.StatusGatewayTimeout)
+	}
+	if got := attempts.Load(); got != 1 {
+		t.Fatalf("upstream attempts = %d, want 1 for client-side timeout", got)
+	}
+	if state := client.circuitBreaker.State(); state != "closed" {
+		t.Fatalf("circuit state = %q, want closed after one logical timeout", state)
+	}
+}
+
+func TestCircuitBreakerCountsRetriedRequestOnce(t *testing.T) {
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte(`{"error":{"message":"temporary failure"}}`))
+	}))
+	defer server.Close()
+
+	cfg := DefaultConfig("test", server.URL)
+	cfg.Retry.MaxRetries = 3
+	cfg.Retry.InitialBackoff = time.Millisecond
+	cfg.Retry.MaxBackoff = time.Millisecond
+	cfg.Retry.BackoffFactor = 1
+	cfg.Retry.JitterFactor = 0
+	cfg.CircuitBreaker = goconfig.CircuitBreakerConfig{
+		Enabled:          true,
+		FailureThreshold: 2,
+		SuccessThreshold: 1,
+		Timeout:          time.Second,
+	}
+	client := New(cfg, nil)
+
+	for i := range 2 {
+		err := client.Do(context.Background(), Request{
+			Method:   http.MethodGet,
+			Endpoint: "/test",
+		}, nil)
+		if err == nil {
+			t.Fatalf("request %d: expected provider error", i+1)
+		}
+		var gatewayErr *core.GatewayError
+		if !errors.As(err, &gatewayErr) {
+			t.Fatalf("request %d: expected GatewayError, got %T", i+1, err)
+		}
+		if gatewayErr.StatusCode != http.StatusServiceUnavailable {
+			t.Fatalf("request %d: status = %d, want %d", i+1, gatewayErr.StatusCode, http.StatusServiceUnavailable)
+		}
+
+		wantAttempts := int32((i + 1) * (cfg.Retry.MaxRetries + 1))
+		if got := attempts.Load(); got != wantAttempts {
+			t.Fatalf("request %d: upstream attempts = %d, want %d", i+1, got, wantAttempts)
+		}
+	}
+
+	err := client.Do(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	}, nil)
+	if err == nil {
+		t.Fatal("expected circuit breaker rejection")
+	}
+	var gatewayErr *core.GatewayError
+	if !errors.As(err, &gatewayErr) {
+		t.Fatalf("expected GatewayError, got %T", err)
+	}
+	if !strings.Contains(gatewayErr.Message, "circuit breaker is open") {
+		t.Fatalf("expected circuit breaker error, got %s", gatewayErr.Message)
+	}
+	if got, want := attempts.Load(), int32(2*(cfg.Retry.MaxRetries+1)); got != want {
+		t.Fatalf("upstream attempts after circuit rejection = %d, want %d", got, want)
+	}
+}
+
+func TestClient_Do_BodyReadTimeoutReturnsGatewayTimeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"partial":"`))
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+		time.Sleep(200 * time.Millisecond)
+		_, _ = w.Write([]byte(`done"}`))
+	}))
+	defer server.Close()
+
+	cfg := DefaultConfig("test", server.URL)
+	cfg.Retry.MaxRetries = 0
+	client := NewWithHTTPClient(&http.Client{Timeout: 50 * time.Millisecond}, cfg, nil)
+
+	err := client.Do(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	}, nil)
+
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+
+	gatewayErr, ok := err.(*core.GatewayError)
+	if !ok {
+		t.Fatalf("expected GatewayError, got %T", err)
+	}
+	if gatewayErr.StatusCode != http.StatusGatewayTimeout {
+		t.Fatalf("StatusCode = %d, want %d", gatewayErr.StatusCode, http.StatusGatewayTimeout)
+	}
+	if !strings.Contains(gatewayErr.Message, "failed to read response") {
+		t.Fatalf("Message = %q, want read-response timeout context", gatewayErr.Message)
+	}
+}
+
+func TestDefaultConfig(t *testing.T) {
+	config := DefaultConfig("test-provider", "https://api.test.com")
+
+	if config.ProviderName != "test-provider" {
+		t.Errorf("expected provider name 'test-provider', got '%s'", config.ProviderName)
+	}
+	if config.BaseURL != "https://api.test.com" {
+		t.Errorf("expected base URL 'https://api.test.com', got '%s'", config.BaseURL)
+	}
+	if config.Retry.MaxRetries != 3 {
+		t.Errorf("expected MaxRetries 3, got %d", config.Retry.MaxRetries)
+	}
+	if config.Retry.InitialBackoff != 1*time.Second {
+		t.Errorf("expected InitialBackoff 1s, got %v", config.Retry.InitialBackoff)
+	}
+	if config.Retry.JitterFactor != 0.1 {
+		t.Errorf("expected JitterFactor 0.1, got %v", config.Retry.JitterFactor)
+	}
+	if config.CircuitBreaker.FailureThreshold != 5 {
+		t.Errorf("expected CircuitBreaker.FailureThreshold=5, got %d", config.CircuitBreaker.FailureThreshold)
+	}
+	if config.CircuitBreaker.SuccessThreshold != 2 {
+		t.Errorf("expected CircuitBreaker.SuccessThreshold=2, got %d", config.CircuitBreaker.SuccessThreshold)
+	}
+	if config.CircuitBreaker.Timeout != 30*time.Second {
+		t.Errorf("expected CircuitBreaker.Timeout=30s, got %v", config.CircuitBreaker.Timeout)
+	}
+}
+
+func TestClient_SetBaseURL(t *testing.T) {
+	client := New(DefaultConfig("test", "https://original.com"), nil)
+
+	if client.BaseURL() != "https://original.com" {
+		t.Errorf("expected base URL 'https://original.com', got '%s'", client.BaseURL())
+	}
+
+	client.SetBaseURL("https://new.com")
+
+	if client.BaseURL() != "https://new.com" {
+		t.Errorf("expected base URL 'https://new.com', got '%s'", client.BaseURL())
+	}
+}
+
+// TestClient_SetBaseURL_Concurrent tests thread-safety of SetBaseURL
+func TestClient_SetBaseURL_Concurrent(t *testing.T) {
+	client := New(DefaultConfig("test", "https://original.com"), nil)
+
+	var wg sync.WaitGroup
+	for i := range 100 {
+		wg.Add(2)
+		go func(i int) {
+			defer wg.Done()
+			client.SetBaseURL("https://new" + string(rune('0'+i%10)) + ".com")
+		}(i)
+		go func() {
+			defer wg.Done()
+			_ = client.BaseURL() // Read while others are writing
+		}()
+	}
+	wg.Wait()
+	// Test passes if no race condition panic occurs
+}
+
+func TestClient_NonRetryableErrors(t *testing.T) {
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"message":"Bad request"}}`))
+	}))
+	defer server.Close()
+
+	config := DefaultConfig("test", server.URL)
+	config.Retry.MaxRetries = 3
+	client := New(config, nil)
+
+	err := client.Do(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	}, nil)
+
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	// Should NOT retry on 400 errors
+	if attempts.Load() != 1 {
+		t.Errorf("expected 1 attempt (no retries on 400), got %d", attempts.Load())
+	}
+}
+
+func TestBackoffCalculation(t *testing.T) {
+	config := DefaultConfig("test", "http://test.com")
+	config.Retry.InitialBackoff = 100 * time.Millisecond
+	config.Retry.MaxBackoff = 1 * time.Second
+	config.Retry.BackoffFactor = 2.0
+	config.Retry.JitterFactor = 0 // Disable jitter for predictable tests
+	client := New(config, nil)
+
+	tests := []struct {
+		attempt  int
+		expected time.Duration
+	}{
+		{1, 100 * time.Millisecond}, // Initial
+		{2, 200 * time.Millisecond}, // 100 * 2
+		{3, 400 * time.Millisecond}, // 100 * 4
+		{4, 800 * time.Millisecond}, // 100 * 8
+		{5, 1 * time.Second},        // Capped at max
+		{10, 1 * time.Second},       // Still capped
+	}
+
+	for _, tt := range tests {
+		result := client.calculateBackoff(tt.attempt)
+		if result != tt.expected {
+			t.Errorf("attempt %d: expected backoff %v, got %v", tt.attempt, tt.expected, result)
+		}
+	}
+}
+
+// TestBackoffCalculation_WithJitter tests that jitter is applied correctly
+func TestBackoffCalculation_WithJitter(t *testing.T) {
+	config := DefaultConfig("test", "http://test.com")
+	config.Retry.InitialBackoff = 100 * time.Millisecond
+	config.Retry.MaxBackoff = 1 * time.Second
+	config.Retry.BackoffFactor = 2.0
+	config.Retry.JitterFactor = 0.5 // 50% jitter
+	client := New(config, nil)
+
+	// With 50% jitter on 100ms base, result should be between 50ms and 150ms
+	for range 100 {
+		result := client.calculateBackoff(1)
+		if result < 50*time.Millisecond || result > 150*time.Millisecond {
+			t.Errorf("backoff %v outside expected range [50ms, 150ms]", result)
+		}
+	}
+}
+
+// TestWaitForRetry_ContextCancelled checks that cancelling the context returns
+// ctx.Err() promptly instead of waiting out the backoff timer. The "cancelled
+// while the timer is pending" case cancels from a goroutine after
+// waitForRetry has started blocking, so a precheck-then-time.After
+// implementation would not pass it.
+func TestWaitForRetry_ContextCancelled(t *testing.T) {
+	config := DefaultConfig("test", "http://test.com")
+	config.Retry.InitialBackoff = time.Hour
+	config.Retry.MaxBackoff = time.Hour
+	config.Retry.JitterFactor = 0
+	client := New(config, nil)
+
+	tests := []struct {
+		name    string
+		attempt int
+		// cancelAfter is the delay before the context is cancelled from a
+		// separate goroutine; a negative value cancels before the call.
+		cancelAfter time.Duration
+		want        error
+	}{
+		{name: "first attempt does not wait", attempt: 0, cancelAfter: time.Hour, want: nil},
+		{name: "cancelled while the timer is pending", attempt: 1, cancelAfter: 20 * time.Millisecond, want: context.Canceled},
+		{name: "already cancelled", attempt: 3, cancelAfter: -1, want: context.Canceled},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if tt.cancelAfter < 0 {
+				cancel()
+			} else {
+				timer := time.AfterFunc(tt.cancelAfter, cancel)
+				defer timer.Stop()
+			}
+
+			start := time.Now()
+			err := client.waitForRetry(ctx, tt.attempt)
+			elapsed := time.Since(start)
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("waitForRetry() error = %v, want %v", err, tt.want)
+			}
+			if elapsed > time.Second {
+				t.Fatalf("waitForRetry() took %v, expected a return well before the backoff", elapsed)
+			}
+		})
+	}
+}
+
+type recordingReadCloser struct {
+	io.Reader
+	closed atomic.Bool
+}
+
+func (r *recordingReadCloser) Close() error {
+	r.closed.Store(true)
+	return nil
+}
+
+func TestPreTransportErrorsCloseRawBodyReader(t *testing.T) {
+	t.Run("request build error", func(t *testing.T) {
+		client := New(DefaultConfig("test", "http://127.0.0.1:0"), nil)
+		reader := &recordingReadCloser{Reader: strings.NewReader("upload payload")}
+
+		_, err := client.DoRaw(context.Background(), Request{
+			Method:        "bogus method",
+			Endpoint:      "/files",
+			RawBodyReader: reader,
+		})
+		if err == nil {
+			t.Fatal("DoRaw() error = nil, want build error")
+		}
+		if !reader.closed.Load() {
+			t.Fatal("RawBodyReader not closed on request build error")
+		}
+	})
+
+	t.Run("circuit breaker open", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}))
+		defer server.Close()
+
+		config := DefaultConfig("test", server.URL)
+		config.Retry.MaxRetries = 0
+		config.CircuitBreaker = goconfig.CircuitBreakerConfig{
+			Enabled:          true,
+			FailureThreshold: 1,
+			SuccessThreshold: 1,
+			Timeout:          time.Minute,
+		}
+		client := New(config, nil)
+
+		// Trip the breaker with one failing request.
+		if _, err := client.DoRaw(context.Background(), Request{Method: http.MethodGet, Endpoint: "/test"}); err == nil {
+			t.Fatal("expected failure to trip the breaker")
+		}
+
+		// A pipe-backed upload rejected by the open breaker never reaches the
+		// transport; the client must close the reader so the producer
+		// goroutine (and the buffers it pins) can exit.
+		reader := &recordingReadCloser{Reader: strings.NewReader("upload payload")}
+		_, err := client.DoRaw(context.Background(), Request{
+			Method:        http.MethodPost,
+			Endpoint:      "/files",
+			RawBodyReader: reader,
+		})
+		if err == nil {
+			t.Fatal("DoRaw() error = nil, want circuit breaker open")
+		}
+		if !strings.Contains(err.Error(), "circuit breaker is open") {
+			t.Fatalf("DoRaw() error = %v, want circuit breaker open", err)
+		}
+		if !reader.closed.Load() {
+			t.Fatal("RawBodyReader not closed when the circuit breaker rejected the request")
+		}
+	})
+}
+
+func TestClient_DoPassthrough_ResolvesUncertainStreamIntentFromResponse(t *testing.T) {
+	tests := []struct {
+		name        string
+		contentType string
+		wantStream  bool
+	}{
+		{name: "buffered JSON response", contentType: "application/json", wantStream: false},
+		{name: "SSE response", contentType: "text/event-stream", wantStream: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", tt.contentType)
+				_, _ = w.Write([]byte("data"))
+			}))
+			defer server.Close()
+
+			var ends []ResponseInfo
+			config := DefaultConfig("test", server.URL)
+			config.Retry.MaxRetries = 0
+			config.Hooks = Hooks{OnRequestEnd: func(_ context.Context, info ResponseInfo) { ends = append(ends, info) }}
+			client := New(config, nil)
+
+			resp, err := client.DoPassthrough(context.Background(), Request{
+				Method: http.MethodPost, Endpoint: "/chat/completions", Operation: OperationChat, StreamUncertain: true,
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			_ = resp.Body.Close()
+
+			if len(ends) != 1 {
+				t.Fatalf("OnRequestEnd fired %d times, want 1", len(ends))
+			}
+			if ends[0].StreamUncertain || ends[0].Stream != tt.wantStream {
+				t.Fatalf("OnRequestEnd stream state = (stream=%v, uncertain=%v), want (stream=%v, uncertain=false)",
+					ends[0].Stream, ends[0].StreamUncertain, tt.wantStream)
+			}
+		})
+	}
+}
+
+func TestClient_DoPassthrough_ReportsStreamThatEndsBeforeFirstChunk(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	var firstChunks, empties []ResponseInfo
+	config := DefaultConfig("test", server.URL)
+	config.Retry.MaxRetries = 0
+	config.Hooks = Hooks{
+		OnStreamFirstChunk: func(_ context.Context, info ResponseInfo) { firstChunks = append(firstChunks, info) },
+		OnStreamEmpty:      func(_ context.Context, info ResponseInfo) { empties = append(empties, info) },
+	}
+	client := New(config, nil)
+
+	resp, err := client.DoPassthrough(context.Background(), Request{
+		Method: http.MethodPost, Endpoint: "/chat/completions", Operation: OperationChat, Stream: true,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, err := io.ReadAll(resp.Body); err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	if len(firstChunks) != 0 {
+		t.Fatalf("OnStreamFirstChunk fired for an empty stream: %+v", firstChunks)
+	}
+	if len(empties) != 1 || !empties[0].Stream || empties[0].StatusCode != http.StatusOK || !errors.Is(empties[0].Error, io.EOF) {
+		t.Fatalf("OnStreamEmpty = %+v, want one successful-status EOF report", empties)
+	}
+}
+
+func TestClient_Do_EmbeddedErrorBody(t *testing.T) {
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		// HTTP 200 that is really an error (OpenRouter-style).
+		_, _ = w.Write([]byte(`{"error":{"message":"invalid key","code":401}}`))
+	}))
+	defer server.Close()
+
+	config := DefaultConfig("test", server.URL)
+	config.Retry.MaxRetries = 3
+	config.Retry.InitialBackoff = time.Millisecond
+	client := New(config, nil)
+
+	var result map[string]any
+	err := client.Do(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	}, &result)
+
+	var gatewayErr *core.GatewayError
+	if !errors.As(err, &gatewayErr) {
+		t.Fatalf("expected GatewayError, got %v", err)
+	}
+	if gatewayErr.StatusCode != http.StatusUnauthorized {
+		t.Errorf("StatusCode = %d, want %d", gatewayErr.StatusCode, http.StatusUnauthorized)
+	}
+	if gatewayErr.Type != core.ErrorTypeAuthentication {
+		t.Errorf("Type = %v, want %v", gatewayErr.Type, core.ErrorTypeAuthentication)
+	}
+	if gatewayErr.Message != "invalid key" {
+		t.Errorf("Message = %q, want %q", gatewayErr.Message, "invalid key")
+	}
+	if gatewayErr.ResponseHeaders == nil {
+		t.Error("expected upstream response headers attached for audit")
+	}
+	if !errors.Is(err, core.ErrEmbeddedInSuccess) {
+		t.Error("expected error to wrap core.ErrEmbeddedInSuccess")
+	}
+	// An embedded 401 is not retryable, exactly like a genuine 401 status.
+	if attempts.Load() != 1 {
+		t.Errorf("expected 1 attempt, got %d", attempts.Load())
+	}
+}
+
+func TestClient_Do_EmbeddedErrorRetriesRetryableStatus(t *testing.T) {
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if attempts.Add(1) == 1 {
+			_, _ = w.Write([]byte(`{"error":{"message":"Rate limited","code":429}}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"success":true}`))
+	}))
+	defer server.Close()
+
+	config := DefaultConfig("test", server.URL)
+	config.Retry.MaxRetries = 2
+	config.Retry.InitialBackoff = time.Millisecond
+	config.Retry.JitterFactor = 0
+	client := New(config, nil)
+
+	var result struct {
+		Success bool `json:"success"`
+	}
+	err := client.Do(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	}, &result)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !result.Success {
+		t.Error("expected success after retrying past the embedded 429")
+	}
+	if attempts.Load() != 2 {
+		t.Errorf("expected 2 attempts, got %d", attempts.Load())
+	}
+}
+
+func TestClient_Do_EmbeddedErrorWithoutCodeMapsToBadGateway(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"error":{"message":"upstream disconnected"}}`))
+	}))
+	defer server.Close()
+
+	config := DefaultConfig("test", server.URL)
+	config.Retry.MaxRetries = 1
+	config.Retry.InitialBackoff = time.Millisecond
+	client := New(config, nil)
+
+	err := client.Do(context.Background(), Request{
+		Method:   http.MethodGet,
+		Endpoint: "/test",
+	}, nil)
+
+	var gatewayErr *core.GatewayError
+	if !errors.As(err, &gatewayErr) {
+		t.Fatalf("expected GatewayError, got %v", err)
+	}
+	if gatewayErr.StatusCode != http.StatusBadGateway {
+		t.Errorf("StatusCode = %d, want %d", gatewayErr.StatusCode, http.StatusBadGateway)
+	}
+	if gatewayErr.Type != core.ErrorTypeProvider {
+		t.Errorf("Type = %v, want %v", gatewayErr.Type, core.ErrorTypeProvider)
+	}
+	if gatewayErr.Message != "upstream disconnected" {
+		t.Errorf("Message = %q, want %q", gatewayErr.Message, "upstream disconnected")
+	}
+}
+
+func TestClient_DoStream_EmbeddedErrorOpensCircuitBreaker(t *testing.T) {
+	var attempts atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		// A stream request answered with a buffered 200 error body.
+		_, _ = w.Write([]byte(`{"error":{"message":"upstream down","code":503}}`))
+	}))
+	defer server.Close()
+
+	var lastInfo ResponseInfo
+	config := DefaultConfig("test", server.URL)
+	config.CircuitBreaker = goconfig.CircuitBreakerConfig{
+		Enabled:          true,
+		FailureThreshold: 2,
+		SuccessThreshold: 1,
+		Timeout:          time.Minute,
+	}
+	config.Hooks.OnRequestEnd = func(_ context.Context, info ResponseInfo) {
+		lastInfo = info
+	}
+	client := New(config, nil)
+
+	streamReq := Request{Method: http.MethodPost, Endpoint: "/stream", Body: map[string]bool{"stream": true}}
+
+	for i := 1; i <= 2; i++ {
+		stream, err := client.DoStream(context.Background(), streamReq)
+		if stream != nil || err == nil {
+			t.Fatalf("call %d: expected error and nil stream, got stream=%v err=%v", i, stream, err)
+		}
+		var gatewayErr *core.GatewayError
+		if !errors.As(err, &gatewayErr) {
+			t.Fatalf("call %d: expected GatewayError, got %v", i, err)
+		}
+		if gatewayErr.StatusCode != http.StatusServiceUnavailable {
+			t.Errorf("call %d: StatusCode = %d, want %d", i, gatewayErr.StatusCode, http.StatusServiceUnavailable)
+		}
+		if lastInfo.StatusCode != http.StatusServiceUnavailable || lastInfo.Error == nil {
+			t.Errorf("call %d: hook recorded status=%d error=%v, want mapped failure", i, lastInfo.StatusCode, lastInfo.Error)
+		}
+	}
+
+	// Two embedded failures reach the threshold: the third request must fail
+	// fast without reaching the upstream.
+	if _, err := client.DoStream(context.Background(), streamReq); err == nil {
+		t.Fatal("expected circuit breaker error, got nil")
+	}
+	if attempts.Load() != 2 {
+		t.Errorf("expected 2 upstream requests (breaker open on third), got %d", attempts.Load())
+	}
+}
+
+func TestClient_DoStream_BufferedCompletionPassesThrough(t *testing.T) {
+	body := `{"id":"chatcmpl-1","object":"chat.completion","choices":[{"message":{"content":"hi"}}]}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
+
+	client := New(DefaultConfig("test", server.URL), nil)
+
+	stream, err := client.DoStream(context.Background(), Request{Method: http.MethodPost, Endpoint: "/stream"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer stream.Close()
+
+	got, err := io.ReadAll(stream)
+	if err != nil {
+		t.Fatalf("failed to read stream: %v", err)
+	}
+	if string(got) != body {
+		t.Errorf("buffered completion altered by inspection.\n got: %q\nwant: %q", string(got), body)
+	}
+}
+
+func TestClient_DoStream_NonObjectJSONStreamsThrough(t *testing.T) {
+	// Gemini-style chunked JSON array under application/json: the leading '['
+	// must leave the stream untouched, with peeked bytes replayed.
+	body := "  [{\"candidates\":[{\"content\":\"a\"}]},\n{\"candidates\":[{\"content\":\"b\"}]}]"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
+
+	client := New(DefaultConfig("test", server.URL), nil)
+
+	stream, err := client.DoStream(context.Background(), Request{Method: http.MethodPost, Endpoint: "/stream"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer stream.Close()
+
+	got, err := io.ReadAll(stream)
+	if err != nil {
+		t.Fatalf("failed to read stream: %v", err)
+	}
+	if string(got) != body {
+		t.Errorf("stream altered by inspection.\n got: %q\nwant: %q", string(got), body)
+	}
+}
+
+func TestClient_DoStream_OversizedBufferedJSONStreamsThrough(t *testing.T) {
+	// A JSON object larger than the error-payload cap cannot be an embedded
+	// error; it must stream through complete instead of being buffered whole.
+	body := `{"id":"chatcmpl-1","object":"chat.completion","choices":[{"message":{"content":"` +
+		strings.Repeat("a", maxErrorBodyBytes+1024) + `"}}]}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
+
+	client := New(DefaultConfig("test", server.URL), nil)
+
+	stream, err := client.DoStream(context.Background(), Request{Method: http.MethodPost, Endpoint: "/stream"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer stream.Close()
+
+	got, err := io.ReadAll(stream)
+	if err != nil {
+		t.Fatalf("failed to read stream: %v", err)
+	}
+	if string(got) != body {
+		t.Errorf("oversized body altered: got %d bytes, want %d", len(got), len(body))
+	}
+}
+
+func TestClient_DoStream_BufferedReadErrorPropagates(t *testing.T) {
+	// The upstream announces more bytes than it delivers, so the read fails
+	// mid-body. The partial bytes must reach the caller followed by the read
+	// error — never a clean EOF that presents truncation as success.
+	partial := `{"id":"chatcmpl-1","choices":[{"message":{"content":"Hel`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Length", strconv.Itoa(len(partial)+512))
+		_, _ = w.Write([]byte(partial))
+	}))
+	defer server.Close()
+
+	client := New(DefaultConfig("test", server.URL), nil)
+
+	stream, err := client.DoStream(context.Background(), Request{Method: http.MethodPost, Endpoint: "/stream"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer stream.Close()
+
+	got, err := io.ReadAll(stream)
+	if err == nil {
+		t.Fatal("expected the mid-body read failure to propagate, got clean EOF")
+	}
+	if string(got) != partial {
+		t.Errorf("partial bytes altered.\n got: %q\nwant: %q", string(got), partial)
+	}
+}
+
+func TestClient_DoStream_OpenJSONStreamReturnsWithoutWaitingForEOF(t *testing.T) {
+	// An NDJSON-style trickle mislabeled application/json: the first object
+	// arrives, then the stream stays open. DoStream must classify on that
+	// first object alone and hand the stream back — the handler only sends
+	// the rest after DoStream has returned, so waiting for EOF deadlocks.
+	streamReturned := make(chan struct{})
+	first := `{"choices":[{"delta":{"content":"Hi"}}]}` + "\n"
+	second := `{"choices":[{"delta":{"content":"!"}}]}` + "\n"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(first))
+		w.(http.Flusher).Flush()
+		<-streamReturned
+		_, _ = w.Write([]byte(second))
+	}))
+	defer server.Close()
+
+	client := New(DefaultConfig("test", server.URL), nil)
+
+	stream, err := client.DoStream(context.Background(), Request{Method: http.MethodPost, Endpoint: "/stream"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer stream.Close()
+	close(streamReturned)
+
+	got, err := io.ReadAll(stream)
+	if err != nil {
+		t.Fatalf("failed to read stream: %v", err)
+	}
+	if string(got) != first+second {
+		t.Errorf("stream altered.\n got: %q\nwant: %q", string(got), first+second)
+	}
+}
+
+func TestClient_DoStream_ErrorShapedFirstFrameWithTrailerStreamsThrough(t *testing.T) {
+	// A JSONL body mislabeled application/json whose first frame happens to
+	// be error-shaped is still a stream: a bare error is the entire body, so
+	// the trailing frame must be relayed rather than lost to classification.
+	body := `{"error":"a"}` + "\n" + `{"id":"next"}` + "\n"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
+
+	client := New(DefaultConfig("test", server.URL), nil)
+
+	stream, err := client.DoStream(context.Background(), Request{Method: http.MethodPost, Endpoint: "/stream"})
+	if err != nil {
+		t.Fatalf("expected the JSONL body to stream through, got error: %v", err)
+	}
+	defer stream.Close()
+
+	got, err := io.ReadAll(stream)
+	if err != nil {
+		t.Fatalf("failed to read stream: %v", err)
+	}
+	if string(got) != body {
+		t.Errorf("stream altered.\n got: %q\nwant: %q", string(got), body)
+	}
+}
+
+func TestClient_DoStream_EmbeddedErrorReturnsBeforeBodyCloses(t *testing.T) {
+	// The provider flushes a complete error object and then holds the body
+	// open. DoStream must classify from the bytes it has and return the error
+	// at once — the handler only ends the body after DoStream has returned,
+	// so waiting for EOF deadlocks.
+	streamReturned := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"error":{"message":"upstream down","code":503}}`))
+		w.(http.Flusher).Flush()
+		<-streamReturned
+	}))
+	defer server.Close()
+
+	client := New(DefaultConfig("test", server.URL), nil)
+
+	stream, err := client.DoStream(context.Background(), Request{Method: http.MethodPost, Endpoint: "/stream"})
+	close(streamReturned)
+	if err == nil {
+		_ = stream.Close()
+		t.Fatal("expected the embedded error, got a stream")
+	}
+	var gatewayErr *core.GatewayError
+	if !errors.As(err, &gatewayErr) || gatewayErr.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("expected a 503 gateway error, got %v", err)
+	}
+}
+
+func TestClient_DoStream_ErrorObjectWithLyingContentLengthStillFails(t *testing.T) {
+	// The error object is complete even though the upstream announced more
+	// bytes than it delivers; the bytes in hand decide, not the transport.
+	body := `{"error":"a"}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Length", strconv.Itoa(len(body)+512))
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
+
+	client := New(DefaultConfig("test", server.URL), nil)
+
+	stream, err := client.DoStream(context.Background(), Request{Method: http.MethodPost, Endpoint: "/stream"})
+	if err == nil {
+		_ = stream.Close()
+		t.Fatal("expected the embedded error, got a stream")
+	}
+	if !errors.Is(err, core.ErrEmbeddedInSuccess) {
+		t.Fatalf("expected an embedded provider error, got %v", err)
+	}
+}
+
+func TestBufferedTrailerIsBlank(t *testing.T) {
+	tests := []struct {
+		name     string
+		buffered string
+		want     bool
+	}{
+		{name: "nothing buffered", buffered: "", want: true},
+		{name: "whitespace only", buffered: " \r\n\t", want: true},
+		{name: "next frame", buffered: "\n{\"b\":2}", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := bufio.NewReader(strings.NewReader("x" + tt.buffered))
+			if _, err := r.ReadByte(); err != nil { // fill the buffer, consume the sentinel
+				t.Fatal(err)
+			}
+			if got := bufferedTrailerIsBlank(r); got != tt.want {
+				t.Errorf("got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestReadFirstJSONObject(t *testing.T) {
+	tests := []struct {
+		name         string
+		input        string
+		limit        int
+		wantHead     string
+		wantComplete bool
+	}{
+		{
+			name:         "object followed by stream tail",
+			input:        `{"a":1}` + "\n" + `{"b":2}`,
+			limit:        1024,
+			wantHead:     `{"a":1}`,
+			wantComplete: true,
+		},
+		{
+			name:         "braces and escaped quotes inside strings do not count",
+			input:        `{"msg":"a \"quoted\" {brace}"}tail`,
+			limit:        1024,
+			wantHead:     `{"msg":"a \"quoted\" {brace}"}`,
+			wantComplete: true,
+		},
+		{
+			name:         "escaped backslash before closing quote",
+			input:        `{"path":"c:\\"}`,
+			limit:        1024,
+			wantHead:     `{"path":"c:\\"}`,
+			wantComplete: true,
+		},
+		{
+			name:         "nested objects close at the outer brace",
+			input:        `{"a":{"b":{}}}`,
+			limit:        1024,
+			wantHead:     `{"a":{"b":{}}}`,
+			wantComplete: true,
+		},
+		{
+			name:         "clean EOF mid-object is incomplete without error",
+			input:        `{"a":`,
+			limit:        1024,
+			wantHead:     `{"a":`,
+			wantComplete: false,
+		},
+		{
+			name:         "cap reached mid-object is incomplete",
+			input:        `{"long":"value"}`,
+			limit:        4,
+			wantHead:     `{"lo`,
+			wantComplete: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			head, complete, err := readFirstJSONObject(bufio.NewReader(strings.NewReader(tt.input)), tt.limit)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if string(head) != tt.wantHead {
+				t.Errorf("head = %q, want %q", head, tt.wantHead)
+			}
+			if complete != tt.wantComplete {
+				t.Errorf("complete = %v, want %v", complete, tt.wantComplete)
+			}
+		})
+	}
+}
+
+func TestFirstNonSpaceByte(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		max   int
+		want  byte
+	}{
+		{"leading whitespace then object", " \r\n\t{", 512, '{'},
+		{"empty input", "", 512, 0},
+		{"whitespace only", "   ", 512, 0},
+		{"whitespace beyond the window", strings.Repeat(" ", 20) + "{", 8, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := firstNonSpaceByte(bufio.NewReader(strings.NewReader(tt.input)), tt.max); got != tt.want {
+				t.Errorf("firstNonSpaceByte = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

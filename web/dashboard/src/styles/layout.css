@@ -1,0 +1,77 @@
+/* Content */
+.content {
+  flex: 1 1 0;
+  container-name: dashboard-content;
+  container-type: inline-size;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  padding: var(--space-page);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  transition: width 0.2s;
+}
+
+.content > * {
+  width: 100%;
+  max-width: 1336px;
+  margin-inline: auto;
+}
+
+body.dashboard-modal-open .content {
+  overflow-y: hidden;
+}
+
+.content.interactions-open > * {
+  max-width: none;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-stack);
+}
+
+.page-header h2 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+/* Page Header Controls (interval + date picker wrapper) */
+.page-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.page-with-sticky-date {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 12px;
+}
+
+.page-with-sticky-date > * {
+  grid-column: 1 / -1;
+}
+
+.page-with-sticky-date > .date-range-page-header {
+  grid-column: 1;
+}
+
+.page-with-sticky-date > .sticky-date-range {
+  grid-column: 2;
+  justify-self: end;
+}
+
+.model-count {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.provider-status-section {
+  margin-top: var(--space-stack);
+  scroll-margin-top: 24px;
+}

@@ -1,0 +1,281 @@
+// Package providers provides a factory for creating provider instances.
+package providers
+
+import (
+	"context"
+	"fmt"
+	"maps"
+	"sort"
+	"strings"
+	"sync"
+
+	"github.com/enterpilot/gomodel/config"
+	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/enterpilot/gomodel/internal/llmclient"
+)
+
+// ProviderOptions bundles runtime settings passed from the factory to provider constructors.
+type ProviderOptions struct {
+	// Name is the configured provider instance name (for example "openai-eu").
+	// HTTP clients report it in errors, so two instances of one type stay
+	// distinguishable. It is empty for constructors invoked outside the factory.
+	Name       string
+	Hooks      llmclient.Hooks
+	Models     []string
+	Resilience config.ResilienceConfig
+	// Keys carries every API key configured for this provider instance. It is
+	// nil for keyless providers and for constructors invoked outside the
+	// factory; use the Keyring method rather than reading it directly.
+	Keys *Keyring
+}
+
+// Keyring returns the key source a provider should authenticate with, falling
+// back to a single-key ring over apiKey when the factory supplied none. Every
+// provider constructor takes an API key and ProviderOptions, so this one call
+// gives a provider rotation support without changing its signature, and keeps
+// constructors invoked outside the factory (tests, the NewWithHTTPClient
+// variants) working unchanged.
+func (o ProviderOptions) Keyring(apiKey string) *Keyring {
+	if o.Keys != nil {
+		return o.Keys
+	}
+	return NewKeyring(apiKey)
+}
+
+// ClientName returns the provider name an HTTP client reports in errors: the
+// configured instance name when the factory supplied one, providerType
+// otherwise.
+func (o ProviderOptions) ClientName(providerType string) string {
+	if name := strings.TrimSpace(o.Name); name != "" {
+		return name
+	}
+	return providerType
+}
+
+// ProviderConstructor is the constructor signature for providers.
+type ProviderConstructor func(cfg ProviderConfig, opts ProviderOptions) core.Provider
+
+// DiscoveryConfig describes how a provider participates in config resolution,
+// and — from the same facts — which credential fields it accepts, so the admin
+// form and env/YAML resolution can never disagree about what a type needs.
+// Env var names are derived by convention from Registration.Type.
+type DiscoveryConfig struct {
+	DefaultBaseURL     string
+	RequireBaseURL     bool
+	AllowAPIKeyless    bool
+	SupportsAPIVersion bool
+	NameSeparator      string
+
+	// CredentialFields declares the credential form of provider types that do
+	// not fit the plain "API key against one endpoint" shape (Google's
+	// project/service-account auth, an endpoint mode selector, ...), in display
+	// order. Leave it nil to derive the form from the flags above; the model
+	// list is always appended. See credentialSchema.
+	CredentialFields []CredentialField
+}
+
+// Registration contains metadata for registering a provider with the factory.
+type Registration struct {
+	Type                        string
+	New                         ProviderConstructor
+	PassthroughSemanticEnricher core.PassthroughSemanticEnricher
+	Discovery                   DiscoveryConfig
+}
+
+// ProviderFactory manages provider registration and creation.
+type ProviderFactory struct {
+	mu                   sync.RWMutex
+	builders             map[string]ProviderConstructor
+	discoveryConfigs     map[string]DiscoveryConfig
+	passthroughEnrichers map[string]core.PassthroughSemanticEnricher
+	hooks                llmclient.Hooks
+}
+
+// NewProviderFactory creates a new provider factory instance.
+func NewProviderFactory() *ProviderFactory {
+	return &ProviderFactory{
+		builders:             make(map[string]ProviderConstructor),
+		discoveryConfigs:     make(map[string]DiscoveryConfig),
+		passthroughEnrichers: make(map[string]core.PassthroughSemanticEnricher),
+	}
+}
+
+// SetHooks configures observability hooks for all providers created by this factory.
+func (f *ProviderFactory) SetHooks(hooks llmclient.Hooks) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.hooks = hooks
+}
+
+// AddHooks composes additional hooks with any already configured, affecting
+// providers created after the call.
+func (f *ProviderFactory) AddHooks(hooks llmclient.Hooks) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.hooks = llmclient.JoinHooks(f.hooks, hooks)
+}
+
+// emptyResponseHook returns the composed OnEmptyResponse hook. The router
+// fires it itself, with the route's identity, so providers never receive it.
+func (f *ProviderFactory) emptyResponseHook() func(context.Context, llmclient.EmptyResponseInfo) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return f.hooks.OnEmptyResponse
+}
+
+// Add adds a provider constructor to the factory.
+// Panics if reg.Type is empty or reg.New is nil — both are programming errors
+// caught at startup, not runtime conditions.
+func (f *ProviderFactory) Add(reg Registration) {
+	if reg.Type == "" {
+		panic("providers: Add called with empty Type")
+	}
+	if reg.New == nil {
+		panic(fmt.Sprintf("providers: Add called with nil constructor for type %q", reg.Type))
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.builders[reg.Type] = reg.New
+	f.discoveryConfigs[reg.Type] = reg.Discovery
+	if reg.PassthroughSemanticEnricher != nil {
+		f.passthroughEnrichers[reg.Type] = reg.PassthroughSemanticEnricher
+	} else {
+		delete(f.passthroughEnrichers, reg.Type)
+	}
+}
+
+// Create instantiates a provider based on its resolved configuration.
+func (f *ProviderFactory) Create(cfg ProviderConfig) (core.Provider, error) {
+	if err := config.ValidateResilience(cfg.Resilience); err != nil {
+		return nil, fmt.Errorf("invalid resilience configuration: %w", err)
+	}
+	f.mu.RLock()
+	builder, ok := f.builders[cfg.Type]
+	hooks := f.hooks
+	f.mu.RUnlock()
+
+	if !ok {
+		return nil, fmt.Errorf("unknown provider type: %s", cfg.Type)
+	}
+
+	// One Keyring per provider instance: every client this provider builds
+	// shares session affinity and the sessionless round-robin sequence.
+	// One trimmed name for the clients and the hooks, so both attribute a
+	// request to the same instance.
+	name := strings.TrimSpace(cfg.Name)
+	opts := ProviderOptions{
+		Name:       name,
+		Hooks:      hooksWithProviderIdentity(hooks, name, cfg.Type),
+		Models:     cfg.Models,
+		Resilience: cfg.Resilience,
+		Keys:       NewKeyringWithSessionStickiness(cfg.SessionStickyKeys, cfg.APIKeys...),
+	}
+
+	return builder(cfg, opts), nil
+}
+
+func hooksWithProviderIdentity(hooks llmclient.Hooks, providerName, providerType string) llmclient.Hooks {
+	if hooks.OnRequestStart == nil && hooks.OnRequestEnd == nil && hooks.OnStreamFirstChunk == nil && hooks.OnStreamEmpty == nil {
+		return hooks
+	}
+	setIdentity := func(provider *string, implementation *string) {
+		if providerName != "" {
+			*provider = providerName
+		}
+		*implementation = providerType
+	}
+	typed := llmclient.Hooks{}
+	if hooks.OnRequestStart != nil {
+		typed.OnRequestStart = func(ctx context.Context, info llmclient.RequestInfo) context.Context {
+			setIdentity(&info.Provider, &info.ProviderType)
+			return hooks.OnRequestStart(ctx, info)
+		}
+	}
+	if hooks.OnRequestEnd != nil {
+		typed.OnRequestEnd = func(ctx context.Context, info llmclient.ResponseInfo) {
+			setIdentity(&info.Provider, &info.ProviderType)
+			hooks.OnRequestEnd(ctx, info)
+		}
+	}
+	if hooks.OnStreamFirstChunk != nil {
+		typed.OnStreamFirstChunk = func(ctx context.Context, info llmclient.ResponseInfo) {
+			setIdentity(&info.Provider, &info.ProviderType)
+			hooks.OnStreamFirstChunk(ctx, info)
+		}
+	}
+	if hooks.OnStreamEmpty != nil {
+		typed.OnStreamEmpty = func(ctx context.Context, info llmclient.ResponseInfo) {
+			setIdentity(&info.Provider, &info.ProviderType)
+			hooks.OnStreamEmpty(ctx, info)
+		}
+	}
+	return typed
+}
+
+// discoveryConfigsSnapshot returns provider discovery metadata keyed by provider type.
+func (f *ProviderFactory) discoveryConfigsSnapshot() map[string]DiscoveryConfig {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
+	snapshot := make(map[string]DiscoveryConfig, len(f.discoveryConfigs))
+	maps.Copy(snapshot, f.discoveryConfigs)
+	return snapshot
+}
+
+// discoveryConfig returns one provider type's discovery metadata; the zero
+// value for a type that is not registered.
+func (f *ProviderFactory) discoveryConfig(providerType string) DiscoveryConfig {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return f.discoveryConfigs[providerType]
+}
+
+// knowsType reports whether a builder is registered for the given provider
+// type. Used to reject admin-managed credentials for an unknown type before
+// they reach Create's less specific error.
+func (f *ProviderFactory) knowsType(providerType string) bool {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	_, ok := f.builders[providerType]
+	return ok
+}
+
+// RegisteredTypes returns a list of all registered provider types.
+func (f *ProviderFactory) RegisteredTypes() []string {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
+	types := make([]string, 0, len(f.builders))
+	for t := range f.builders {
+		types = append(types, t)
+	}
+	return types
+}
+
+// PassthroughSemanticEnrichers returns registered passthrough semantic
+// enrichers in deterministic provider-type order.
+func (f *ProviderFactory) PassthroughSemanticEnrichers() []core.PassthroughSemanticEnricher {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
+	if len(f.passthroughEnrichers) == 0 {
+		return nil
+	}
+
+	types := make([]string, 0, len(f.passthroughEnrichers))
+	for providerType := range f.passthroughEnrichers {
+		types = append(types, providerType)
+	}
+	sort.Strings(types)
+
+	enrichers := make([]core.PassthroughSemanticEnricher, 0, len(types))
+	for _, providerType := range types {
+		if enricher := f.passthroughEnrichers[providerType]; enricher != nil {
+			enrichers = append(enrichers, enricher)
+		}
+	}
+	if len(enrichers) == 0 {
+		return nil
+	}
+	return enrichers
+}

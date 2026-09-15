@@ -1,0 +1,240 @@
+package admin
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/labstack/echo/v5"
+
+	"github.com/enterpilot/gomodel/internal/authkeys"
+	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/enterpilot/gomodel/internal/validation"
+)
+
+type createAuthKeyRequest struct {
+	Name            string     `json:"name"`
+	Description     string     `json:"description,omitempty"`
+	UserPath        string     `json:"user_path,omitempty"`
+	Labels          []string   `json:"labels,omitempty"`
+	AllowedModels   []string   `json:"allowed_models,omitempty"`
+	DashboardAccess bool       `json:"dashboard_access,omitempty"`
+	ExpiresAt       *time.Time `json:"expires_at,omitempty"`
+}
+
+// authKeyResponse is one API key row plus the model access it resolves to.
+type authKeyResponse struct {
+	authkeys.View
+	// Restricted reports whether the key's own allowlist or a user-path policy
+	// narrows the key.
+	Restricted bool `json:"restricted"`
+	// EffectiveModels lists the catalog models a request with this key may
+	// use — its user path, its allowlist, and the model-side policies applied
+	// through the same authorizer inference uses. Nil without a catalog.
+	EffectiveModels []string `json:"effective_models"`
+}
+
+func (h *Handler) ListAuthKeys(c *echo.Context) error {
+	if h.authKeys == nil {
+		return handleError(c, featureUnavailableError("auth keys feature is unavailable"))
+	}
+	views := h.authKeys.ListViews()
+	catalog := h.userCatalog()
+	scope := requestScope(c)
+	response := make([]authKeyResponse, 0, len(views))
+	for _, view := range views {
+		if !scope.Allows(view.UserPath) {
+			continue
+		}
+		row := authKeyResponse{View: view, Restricted: len(view.AllowedModels) > 0}
+		ctx := core.WithEffectiveUserPath(context.Background(), view.UserPath)
+		if len(view.AllowedModels) > 0 {
+			ctx = core.WithCredentialAllowedModels(ctx, view.AllowedModels)
+		}
+		if h.users != nil && len(h.users.Constraints(view.UserPath)) > 0 {
+			row.Restricted = true
+		}
+		row.EffectiveModels = h.effectiveModels(ctx, catalog)
+		response = append(response, row)
+	}
+	return c.JSON(http.StatusOK, response)
+}
+
+// CreateAuthKey handles POST /admin/auth-keys
+func (h *Handler) CreateAuthKey(c *echo.Context) error {
+	if h.authKeys == nil {
+		return handleError(c, featureUnavailableError("auth keys feature is unavailable"))
+	}
+
+	var req createAuthKeyRequest
+	if err := c.Bind(&req); err != nil {
+		return handleError(c, core.NewInvalidRequestError("invalid request body: "+err.Error(), err))
+	}
+
+	// A scoped admin issues keys inside its own subtree: an omitted path
+	// binds the key to the scope root, an outside path is rejected.
+	userPath, err := scopedUserPath(c, "user_path", req.UserPath)
+	if err != nil {
+		return handleError(c, err)
+	}
+
+	allowedModels, err := h.normalizeAllowedModels(req.AllowedModels)
+	if err != nil {
+		return handleError(c, err)
+	}
+
+	issued, err := h.authKeys.Create(c.Request().Context(), authkeys.CreateInput{
+		Name:            req.Name,
+		Description:     req.Description,
+		UserPath:        userPath,
+		Labels:          req.Labels,
+		AllowedModels:   allowedModels,
+		DashboardAccess: req.DashboardAccess,
+		ExpiresAt:       req.ExpiresAt,
+	})
+	if err != nil {
+		return handleError(c, authKeyWriteError(err))
+	}
+	if issued == nil {
+		requestID := strings.TrimSpace(core.GetRequestID(c.Request().Context()))
+		slog.Error("auth key service returned nil issued key", "request_id", requestID, "path", c.Request().URL.Path)
+		return c.JSON(http.StatusInternalServerError, (&core.GatewayError{
+			Type:       core.ErrorType("internal_error"),
+			Message:    "auth key creation failed unexpectedly",
+			StatusCode: http.StatusInternalServerError,
+		}).WithCode("auth_key_issue_failed").ToJSON())
+	}
+	return c.JSON(http.StatusCreated, issued)
+}
+
+type updateAuthKeyLabelsRequest struct {
+	Labels []string `json:"labels"`
+}
+
+// UpdateAuthKeyLabels handles PUT /admin/auth-keys/:id/labels. The request
+// labels replace the key's labels; an empty list clears them.
+func (h *Handler) UpdateAuthKeyLabels(c *echo.Context) error {
+	var req updateAuthKeyLabelsRequest
+	return h.updateAuthKey(c, &req, func(ctx context.Context, id string) (*authkeys.View, error) {
+		return h.authKeys.UpdateLabels(ctx, id, req.Labels)
+	})
+}
+
+type updateAuthKeyAllowedModelsRequest struct {
+	// Pointer so an omitted or null value is rejected instead of being
+	// treated as an implicit clear of a restricted key.
+	AllowedModels *[]string `json:"allowed_models"`
+}
+
+// UpdateAuthKeyAllowedModels handles PUT /admin/auth-keys/:id/allowed-models.
+// The request selectors replace the key's model allowlist; an explicit empty
+// list lifts the key-level restriction (user-path policies still apply).
+func (h *Handler) UpdateAuthKeyAllowedModels(c *echo.Context) error {
+	var req updateAuthKeyAllowedModelsRequest
+	return h.updateAuthKey(c, &req, func(ctx context.Context, id string) (*authkeys.View, error) {
+		if req.AllowedModels == nil {
+			return nil, validation.NewError("allowed_models is required", nil)
+		}
+		allowedModels, err := h.normalizeAllowedModels(*req.AllowedModels)
+		if err != nil {
+			return nil, err
+		}
+		return h.authKeys.UpdateAllowedModels(ctx, id, allowedModels)
+	})
+}
+
+// normalizeAllowedModels canonicalizes model selectors against the provider
+// catalog when the users service is available, and syntactically otherwise.
+func (h *Handler) normalizeAllowedModels(raw []string) ([]string, error) {
+	if h.users == nil {
+		return authkeys.NormalizeAllowedModels(raw), nil
+	}
+	allowed, err := h.users.NormalizeAllowedModels(raw)
+	if err != nil {
+		return nil, core.NewInvalidRequestError(err.Error(), err)
+	}
+	return allowed, nil
+}
+
+type updateAuthKeyDashboardAccessRequest struct {
+	// Pointer so an omitted or null value is rejected instead of being
+	// treated as an implicit revoke.
+	DashboardAccess *bool `json:"dashboard_access"`
+}
+
+// UpdateAuthKeyDashboardAccess handles PUT /admin/auth-keys/:id/dashboard-access.
+// It grants or revokes the key's access to the admin API and dashboard.
+func (h *Handler) UpdateAuthKeyDashboardAccess(c *echo.Context) error {
+	var req updateAuthKeyDashboardAccessRequest
+	return h.updateAuthKey(c, &req, func(ctx context.Context, id string) (*authkeys.View, error) {
+		if req.DashboardAccess == nil {
+			return nil, validation.NewError("dashboard_access is required", nil)
+		}
+		return h.authKeys.UpdateDashboardAccess(ctx, id, *req.DashboardAccess)
+	})
+}
+
+// updateAuthKey handles the shared shape of the PUT /admin/auth-keys/:id/*
+// endpoints: bind the request into req, run the update, and render the
+// updated view.
+func (h *Handler) updateAuthKey(c *echo.Context, req any, update func(ctx context.Context, id string) (*authkeys.View, error)) error {
+	if h.authKeys == nil {
+		return handleError(c, featureUnavailableError("auth keys feature is unavailable"))
+	}
+
+	id := strings.TrimSpace(c.Param("id"))
+	if id == "" {
+		return handleError(c, core.NewInvalidRequestError("auth key id is required", nil))
+	}
+
+	if err := c.Bind(req); err != nil {
+		return handleError(c, core.NewInvalidRequestError("invalid request body: "+err.Error(), err))
+	}
+	if err := h.requireAuthKeyInScope(c, id); err != nil {
+		return handleError(c, err)
+	}
+
+	view, err := update(c.Request().Context(), id)
+	if err != nil {
+		if errors.Is(err, authkeys.ErrNotFound) {
+			return handleError(c, core.NewNotFoundError("auth key not found: "+id))
+		}
+		return handleError(c, authKeyWriteError(err))
+	}
+	return c.JSON(http.StatusOK, view)
+}
+
+// DeactivateAuthKey handles POST /admin/auth-keys/:id/deactivate
+func (h *Handler) DeactivateAuthKey(c *echo.Context) error {
+	var unavailableErr error
+	var deactivate func(context.Context, string) error
+	if h.authKeys == nil {
+		unavailableErr = featureUnavailableError("auth keys feature is unavailable")
+	} else {
+		deactivate = func(ctx context.Context, id string) error {
+			if err := h.requireAuthKeyInScope(c, id); err != nil {
+				return err
+			}
+			return h.authKeys.Deactivate(ctx, id)
+		}
+	}
+	return deactivateByID(c, unavailableErr, "auth key", authkeys.ErrNotFound, "auth key not found: ", deactivate, authKeyWriteError)
+}
+
+// requireAuthKeyInScope hides keys bound outside the caller's scope behind
+// the same not-found error an unknown id produces. Global scopes skip the
+// lookup so a missing key still surfaces from the update itself.
+func (h *Handler) requireAuthKeyInScope(c *echo.Context, id string) error {
+	scope := requestScope(c)
+	if scope.Global() {
+		return nil
+	}
+	view, err := h.authKeys.View(id)
+	if err != nil || !scope.Allows(view.UserPath) {
+		return core.NewNotFoundError("auth key not found: " + id)
+	}
+	return nil
+}

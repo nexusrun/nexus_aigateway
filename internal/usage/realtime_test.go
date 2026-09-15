@@ -1,0 +1,253 @@
+package usage
+
+import (
+	"testing"
+
+	"github.com/enterpilot/gomodel/internal/core"
+)
+
+func TestExtractFromRealtimeResponseDone(t *testing.T) {
+	payload := []byte(`{
+		"type": "response.done",
+		"response": {
+			"usage": {
+				"total_tokens": 150,
+				"input_tokens": 100,
+				"output_tokens": 50,
+				"input_token_details": {"text_tokens": 40, "audio_tokens": 60, "cached_tokens": 10},
+				"output_token_details": {"text_tokens": 20, "audio_tokens": 30}
+			}
+		}
+	}`)
+
+	entry := ExtractFromRealtimeResponseDone(payload, "req-1", "gpt-realtime", "openai")
+	if entry == nil {
+		t.Fatal("expected a usage entry")
+	}
+	if entry.Endpoint != endpointRealtime {
+		t.Errorf("endpoint = %q, want %q", entry.Endpoint, endpointRealtime)
+	}
+	if entry.InputTokens != 100 || entry.OutputTokens != 50 || entry.TotalTokens != 150 {
+		t.Errorf("tokens = (%d,%d,%d), want (100,50,150)", entry.InputTokens, entry.OutputTokens, entry.TotalTokens)
+	}
+	// Keys must match cost.go's priced rawData keys so audio is billed at audio rates.
+	if entry.RawData["prompt_audio_tokens"] != 60 || entry.RawData["completion_audio_tokens"] != 30 {
+		t.Errorf("audio token breakdown missing/miskeyed: %v", entry.RawData)
+	}
+	if entry.RawData["prompt_cached_tokens"] != 10 {
+		t.Errorf("cached tokens missing/miskeyed: %v", entry.RawData)
+	}
+}
+
+func TestExtractFromRealtimeResponseDoneUSDCost(t *testing.T) {
+	// Mirrors a live gpt-realtime-mini audio turn: 12 input text tokens, 128
+	// output tokens (99 audio + 29 text). With base output $2.40/Mtok and audio
+	// output $20/Mtok, audio must price at the audio rate (not base) and must not
+	// be double-counted: 29*2.40/1e6 + 99*20/1e6 = 0.0020496.
+	ptr := func(f float64) *float64 { return &f }
+	pricing := &core.ModelPricing{
+		InputPerMtok:       ptr(0.60),
+		OutputPerMtok:      ptr(2.40),
+		AudioInputPerMtok:  ptr(10.0),
+		AudioOutputPerMtok: ptr(20.0),
+	}
+	payload := []byte(`{"type":"response.done","response":{"usage":{
+		"input_tokens":12,"output_tokens":128,"total_tokens":140,
+		"input_token_details":{"text_tokens":12},
+		"output_token_details":{"text_tokens":29,"audio_tokens":99}
+	}}}`)
+
+	entry := ExtractFromRealtimeResponseDone(payload, "r", "gpt-realtime-mini", "openai", pricing)
+	if entry == nil || entry.TotalCost == nil {
+		t.Fatal("expected a costed entry")
+	}
+	const wantInput, wantOutput = 7.2e-06, 0.0020496
+	if got := *entry.InputCost; !floatNear(got, wantInput) {
+		t.Errorf("input cost = %g, want %g", got, wantInput)
+	}
+	if got := *entry.OutputCost; !floatNear(got, wantOutput) {
+		t.Errorf("output cost = %g, want %g (29 text@2.40 + 99 audio@20)", got, wantOutput)
+	}
+	if got := *entry.TotalCost; !floatNear(got, wantInput+wantOutput) {
+		t.Errorf("total cost = %g, want %g", got, wantInput+wantOutput)
+	}
+	if entry.CostsCalculationCaveat != "" {
+		t.Errorf("unexpected caveat: %q", entry.CostsCalculationCaveat)
+	}
+}
+
+func floatNear(a, b float64) bool {
+	d := a - b
+	if d < 0 {
+		d = -d
+	}
+	return d < 1e-12
+}
+
+func TestExtractFromRealtimeResponseDonePluralDetails(t *testing.T) {
+	// Alibaba/Bailian uses the plural "*_tokens_details" spelling; audio tokens
+	// must still be captured and priced.
+	payload := []byte(`{
+		"type": "response.done",
+		"response": {"usage": {
+			"input_tokens": 192, "output_tokens": 11, "total_tokens": 203,
+			"input_tokens_details": {"text_tokens": 192},
+			"output_tokens_details": {"text_tokens": 2, "audio_tokens": 9}
+		}}
+	}`)
+	entry := ExtractFromRealtimeResponseDone(payload, "r", "qwen3-omni-flash-realtime", "bailian")
+	if entry == nil {
+		t.Fatal("expected entry")
+	}
+	if entry.TotalTokens != 203 {
+		t.Errorf("total = %d, want 203", entry.TotalTokens)
+	}
+	if entry.RawData["completion_audio_tokens"] != 9 {
+		t.Errorf("plural output audio tokens not captured: %v", entry.RawData)
+	}
+	if entry.RawData["prompt_text_tokens"] != 192 {
+		t.Errorf("plural input text tokens not captured: %v", entry.RawData)
+	}
+}
+
+func TestExtractFromRealtimeResponseDoneTotalsFallback(t *testing.T) {
+	payload := []byte(`{"type":"response.done","response":{"usage":{"input_tokens":7,"output_tokens":3}}}`)
+	entry := ExtractFromRealtimeResponseDone(payload, "r", "m", "openai")
+	if entry == nil {
+		t.Fatal("expected entry")
+	}
+	if entry.TotalTokens != 10 {
+		t.Errorf("total = %d, want 10 (derived)", entry.TotalTokens)
+	}
+}
+
+func TestExtractFromRealtimeResponseDoneSkipsNonBillable(t *testing.T) {
+	cases := map[string][]byte{
+		"other event type":       []byte(`{"type":"response.audio.delta","delta":"abc"}`),
+		"response.done no usage": []byte(`{"type":"response.done","response":{}}`),
+		"invalid json":           []byte(`not json`),
+		"empty":                  []byte(``),
+	}
+	for name, payload := range cases {
+		t.Run(name, func(t *testing.T) {
+			if entry := ExtractFromRealtimeResponseDone(payload, "r", "m", "openai"); entry != nil {
+				t.Errorf("expected nil entry, got %+v", entry)
+			}
+		})
+	}
+}
+
+func TestExtractFromRealtimeTranscriptionCompleted(t *testing.T) {
+	// The real event shape from a gpt-4o-transcribe transcription session.
+	payload := []byte(`{
+		"type": "conversation.item.input_audio_transcription.completed",
+		"item_id": "item_1",
+		"transcript": "Hello there.",
+		"usage": {
+			"type": "tokens",
+			"total_tokens": 30,
+			"input_tokens": 25,
+			"output_tokens": 5,
+			"input_token_details": {"text_tokens": 0, "audio_tokens": 25}
+		}
+	}`)
+
+	entry := ExtractFromRealtimeTranscriptionCompleted(payload, "req-1", "gpt-4o-transcribe", "openai")
+	if entry == nil {
+		t.Fatal("expected a usage entry")
+	}
+	if entry.Endpoint != endpointRealtime {
+		t.Errorf("endpoint = %q, want %q", entry.Endpoint, endpointRealtime)
+	}
+	if entry.InputTokens != 25 || entry.OutputTokens != 5 || entry.TotalTokens != 30 {
+		t.Errorf("tokens = (%d,%d,%d), want (25,5,30)", entry.InputTokens, entry.OutputTokens, entry.TotalTokens)
+	}
+	if entry.RawData["prompt_audio_tokens"] != 25 {
+		t.Errorf("audio token breakdown missing/miskeyed: %v", entry.RawData)
+	}
+}
+
+func TestExtractFromRealtimeTranscriptionCompletedDuration(t *testing.T) {
+	// whisper-1 reports duration usage instead of tokens: it must carry the
+	// same rawData key as HTTP transcription so the per-second input rate
+	// prices it. 2.5 s at $0.0001/s => $0.00025.
+	payload := []byte(`{
+		"type": "conversation.item.input_audio_transcription.completed",
+		"usage": {"type": "duration", "seconds": 2.5}
+	}`)
+	pricing := &core.ModelPricing{PerSecondInput: new(0.0001)}
+
+	entry := ExtractFromRealtimeTranscriptionCompleted(payload, "req-1", "whisper-1", "openai", pricing)
+	if entry == nil {
+		t.Fatal("expected a usage entry")
+	}
+	if entry.TotalTokens != 0 {
+		t.Errorf("tokens = %d, want 0 for duration usage", entry.TotalTokens)
+	}
+	if entry.RawData[rawKeyAudioSeconds] != 2.5 {
+		t.Errorf("audio seconds missing/miskeyed: %v", entry.RawData)
+	}
+	assertCostPtrNear(t, "input cost", entry.InputCost, 0.00025)
+}
+
+func TestNewRealtimeDurationEntry(t *testing.T) {
+	// Sessions the gateway meters itself (OpenAI translation sessions report no
+	// usage events) price the same way as provider-reported duration usage:
+	// 90 s at $0.00056667/s => $0.051.
+	pricing := &core.ModelPricing{PerSecondInput: new(0.00056667)}
+
+	entry := NewRealtimeDurationEntry(90, "req-1", "gpt-realtime-translate", "openai", pricing)
+	if entry == nil {
+		t.Fatal("expected a usage entry")
+	}
+	if entry.Endpoint != endpointRealtime {
+		t.Errorf("endpoint = %q, want %q", entry.Endpoint, endpointRealtime)
+	}
+	if entry.Model != "gpt-realtime-translate" || entry.Provider != "openai" {
+		t.Errorf("entry = %+v, want the session's model and provider", entry)
+	}
+	if entry.TotalTokens != 0 {
+		t.Errorf("tokens = %d, want 0 for duration usage", entry.TotalTokens)
+	}
+	if entry.RawData[rawKeyAudioSeconds] != float64(90) {
+		t.Errorf("audio seconds missing/miskeyed: %v", entry.RawData)
+	}
+	assertCostPtrNear(t, "input cost", entry.InputCost, 0.0510003)
+}
+
+func TestExtractFromRealtimeTranscriptionCompletedSkipsNonBillable(t *testing.T) {
+	for name, payload := range map[string]string{
+		"delta event":     `{"type":"conversation.item.input_audio_transcription.delta","delta":"He"}`,
+		"missing usage":   `{"type":"conversation.item.input_audio_transcription.completed","transcript":"Hi."}`,
+		"malformed frame": `{"type":`,
+	} {
+		if entry := ExtractFromRealtimeTranscriptionCompleted([]byte(payload), "req-1", "m", "openai"); entry != nil {
+			t.Errorf("%s: expected nil entry, got %+v", name, entry)
+		}
+	}
+}
+
+func TestHasBillableUsage(t *testing.T) {
+	// The gateway meters a session's relayed audio only when the session itself
+	// reported nothing billable, so a zero-value report must not read as a bill.
+	tests := []struct {
+		name  string
+		entry *UsageEntry
+		want  bool
+	}{
+		{name: "nil entry"},
+		{name: "tokens", entry: &UsageEntry{TotalTokens: 30, InputTokens: 25}, want: true},
+		{name: "output tokens only", entry: &UsageEntry{OutputTokens: 5}, want: true},
+		{name: "audio seconds", entry: &UsageEntry{RawData: map[string]any{rawKeyAudioSeconds: 2.5}}, want: true},
+		{name: "zero tokens", entry: &UsageEntry{}},
+		{name: "zero seconds", entry: &UsageEntry{RawData: map[string]any{rawKeyAudioSeconds: 0.0}}},
+		{name: "unrelated raw data", entry: &UsageEntry{RawData: map[string]any{"prompt_text_tokens": 0}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := HasBillableUsage(tt.entry); got != tt.want {
+				t.Errorf("HasBillableUsage() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

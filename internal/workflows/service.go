@@ -1,0 +1,625 @@
+package workflows
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"maps"
+	"sort"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/enterpilot/gomodel/internal/plugins"
+)
+
+const (
+	ManagedDefaultGlobalName        = "default-global"
+	ManagedDefaultGlobalDescription = "Bootstrapped from runtime configuration"
+)
+
+// CompiledWorkflow is the immutable runtime projection cached in the hot-path snapshot.
+type CompiledWorkflow struct {
+	Version Version
+	Policy  *core.ResolvedWorkflowPolicy
+	// Chains holds the compiled plugin chain of every phase; nil when the
+	// workflow runs no guardrails.
+	Chains *plugins.Chains
+}
+
+// Compiler turns one persisted workflow version into its runtime projection.
+type Compiler interface {
+	Compile(version Version) (*CompiledWorkflow, error)
+}
+
+// scopeRef is the comparable snapshot key for a normalized workflow scope.
+// The zero value is the global scope.
+type scopeRef struct {
+	provider string
+	model    string
+	userPath string
+}
+
+func refForScope(scope Scope) scopeRef {
+	return scopeRef{provider: scope.Provider, model: scope.Model, userPath: scope.UserPath}
+}
+
+type snapshot struct {
+	byScope     map[scopeRef]*CompiledWorkflow
+	byVersionID map[string]*CompiledWorkflow
+}
+
+func newSnapshot() snapshot {
+	return snapshot{
+		byScope:     map[scopeRef]*CompiledWorkflow{},
+		byVersionID: map[string]*CompiledWorkflow{},
+	}
+}
+
+// Service keeps the active workflow set cached in memory.
+type Service struct {
+	store     Store
+	compiler  Compiler
+	current   atomic.Value
+	refreshMu sync.Mutex
+}
+
+// NewService creates a workflow service backed by storage.
+func NewService(store Store, compiler Compiler) (*Service, error) {
+	if store == nil {
+		return nil, fmt.Errorf("store is required")
+	}
+	if compiler == nil {
+		return nil, fmt.Errorf("compiler is required")
+	}
+
+	service := &Service{
+		store:    store,
+		compiler: compiler,
+	}
+	service.current.Store(newSnapshot())
+	return service, nil
+}
+
+// Refresh reloads active workflows from storage and atomically swaps the in-memory snapshot.
+func (s *Service) Refresh(ctx context.Context) error {
+	s.refreshMu.Lock()
+	defer s.refreshMu.Unlock()
+	return s.refreshLocked(ctx)
+}
+
+func (s *Service) refreshLocked(ctx context.Context) error {
+	versions, err := s.store.ListActive(ctx)
+	if err != nil {
+		return fmt.Errorf("list active workflows: %w", err)
+	}
+
+	next := newSnapshot()
+
+	for _, version := range versions {
+		scope, scopeKey, err := normalizeScope(version.Scope)
+		if err != nil {
+			return fmt.Errorf("load workflow %q: %w", version.ID, err)
+		}
+		version.Scope = scope
+		version.ScopeKey = scopeKey
+
+		compiled, err := s.compiler.Compile(version)
+		if err != nil {
+			return fmt.Errorf("compile workflow %q: %w", version.ID, err)
+		}
+		if compiled == nil || compiled.Policy == nil {
+			return fmt.Errorf("compile workflow %q: empty compiled workflow", version.ID)
+		}
+
+		ref := refForScope(scope)
+		if existing := next.byScope[ref]; existing != nil {
+			return fmt.Errorf("duplicate active workflows for scope %q: %q and %q", scopeKey, existing.Version.ID, version.ID)
+		}
+		next.byScope[ref] = compiled
+		next.byVersionID[compiled.Version.ID] = compiled
+	}
+
+	if next.byScope[scopeRef{}] == nil {
+		return fmt.Errorf("missing active global workflow")
+	}
+
+	s.install(next)
+	return nil
+}
+
+// install publishes next as the live snapshot. Compiled workflows hold their
+// plugin chains while live, so the guardrails service does not close an
+// instance a workflow still references; the diff against the previous
+// snapshot acquires the newcomers before the swap and releases the dropped
+// ones after it. Callers hold refreshMu.
+func (s *Service) install(next snapshot) {
+	previous := compiledSet(s.snapshot())
+	incoming := compiledSet(next)
+	for compiled := range incoming {
+		if !previous[compiled] {
+			compiled.Chains.Acquire()
+		}
+	}
+	s.current.Store(next)
+	for compiled := range previous {
+		if !incoming[compiled] {
+			compiled.Chains.Release()
+		}
+	}
+}
+
+func compiledSet(current snapshot) map[*CompiledWorkflow]bool {
+	set := make(map[*CompiledWorkflow]bool, len(current.byVersionID))
+	for _, compiled := range current.byScope {
+		set[compiled] = true
+	}
+	for _, compiled := range current.byVersionID {
+		set[compiled] = true
+	}
+	return set
+}
+
+// EnsureDefaultGlobal seeds or reconciles the managed active global workflow.
+func (s *Service) EnsureDefaultGlobal(ctx context.Context, input CreateInput) error {
+	input.Managed = true
+	normalized, _, workflowHash, err := normalizeCreateInput(input)
+	if err != nil {
+		return err
+	}
+	if normalized.Scope.Provider != "" || normalized.Scope.Model != "" || normalized.Scope.UserPath != "" {
+		return newValidationError("default workflow must use global scope", nil)
+	}
+
+	if !normalized.Activate {
+		normalized.Activate = true
+	}
+	normalized.Managed = true
+	previewCompiled, err := s.validateCreateCandidate(normalized, "global", workflowHash)
+	if err != nil {
+		return err
+	}
+	s.refreshMu.Lock()
+	defer s.refreshMu.Unlock()
+
+	version, err := s.store.EnsureManagedDefaultGlobal(ctx, normalized, workflowHash)
+	if err != nil {
+		return fmt.Errorf("ensure default global workflow: %w", err)
+	}
+	if version == nil {
+		if s.snapshot().byScope[scopeRef{}] == nil {
+			if err := s.refreshLocked(ctx); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	s.storeActivatedCompiledLocked(compiledWorkflowForVersion(previewCompiled, *version))
+	return nil
+}
+
+// Create inserts a new immutable workflow version and refreshes the
+// in-memory snapshot so future requests can match it immediately.
+func (s *Service) Create(ctx context.Context, input CreateInput) (*Version, error) {
+	if s == nil {
+		return nil, fmt.Errorf("workflow service is required")
+	}
+
+	normalized, scopeKey, workflowHash, err := normalizeCreateInput(input)
+	if err != nil {
+		return nil, err
+	}
+	previewCompiled, err := s.validateCreateCandidate(normalized, scopeKey, workflowHash)
+	if err != nil {
+		return nil, err
+	}
+
+	s.refreshMu.Lock()
+	defer s.refreshMu.Unlock()
+
+	version, err := s.store.Create(ctx, normalized)
+	if err != nil {
+		return nil, fmt.Errorf("create workflow: %w", err)
+	}
+	if version != nil && version.Active {
+		s.storeActivatedCompiledLocked(compiledWorkflowForVersion(previewCompiled, *version))
+	}
+	return version, nil
+}
+
+// Deactivate turns off one active workflow version and refreshes the
+// in-memory snapshot so future requests stop matching it immediately.
+func (s *Service) Deactivate(ctx context.Context, id string) error {
+	if s == nil {
+		return fmt.Errorf("workflow service is required")
+	}
+
+	version, err := s.store.Get(ctx, strings.TrimSpace(id))
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return err
+		}
+		return fmt.Errorf("load workflow %q: %w", id, err)
+	}
+	if version == nil {
+		return ErrNotFound
+	}
+
+	scope, scopeKey, err := normalizeScope(version.Scope)
+	if err != nil {
+		return fmt.Errorf("load workflow %q: %w", id, err)
+	}
+	version.Scope = scope
+	version.ScopeKey = scopeKey
+
+	if scope.Provider == "" && scope.Model == "" && scope.UserPath == "" {
+		return newValidationError("cannot deactivate the global workflow", nil)
+	}
+	if !version.Active {
+		return newValidationError("workflow is already inactive", nil)
+	}
+
+	s.refreshMu.Lock()
+	defer s.refreshMu.Unlock()
+
+	if err := s.store.Deactivate(ctx, version.ID); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return err
+		}
+		return fmt.Errorf("deactivate workflow %q: %w", version.ID, err)
+	}
+	s.storeDeactivatedVersionLocked(*version)
+	return nil
+}
+
+// GetView returns one workflow version view, including inactive historical versions.
+func (s *Service) GetView(ctx context.Context, id string) (View, error) {
+	if s == nil {
+		return View{}, fmt.Errorf("workflow service is required")
+	}
+
+	version, err := s.store.Get(ctx, strings.TrimSpace(id))
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return View{}, err
+		}
+		return View{}, fmt.Errorf("load workflow %q: %w", id, err)
+	}
+	if version == nil {
+		return View{}, ErrNotFound
+	}
+
+	return s.viewForVersion(*version)
+}
+
+// ListViews returns the active workflows together with their effective
+// runtime features after process-level caps are applied.
+func (s *Service) ListViews(ctx context.Context) ([]View, error) {
+	if s == nil {
+		return []View{}, nil
+	}
+
+	versions, err := s.store.ListActive(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list active workflows: %w", err)
+	}
+
+	views := make([]View, 0, len(versions))
+	for _, version := range versions {
+		view, err := s.viewForVersion(version)
+		if err != nil {
+			slog.Warn("workflow view build failed", "version_id", strings.TrimSpace(version.ID), "error", err)
+			views = append(views, viewWithError(version, err))
+			continue
+		}
+		views = append(views, view)
+	}
+
+	sort.SliceStable(views, func(i, j int) bool {
+		left, right := views[i], views[j]
+		if leftSpecificity, rightSpecificity := viewScopeSpecificity(left.ScopeType), viewScopeSpecificity(right.ScopeType); leftSpecificity != rightSpecificity {
+			return leftSpecificity < rightSpecificity
+		}
+		if left.ScopeDisplay != right.ScopeDisplay {
+			return left.ScopeDisplay < right.ScopeDisplay
+		}
+		if !left.CreatedAt.Equal(right.CreatedAt) {
+			return left.CreatedAt.After(right.CreatedAt)
+		}
+		return left.ID < right.ID
+	})
+
+	return views, nil
+}
+
+// Match returns the most-specific compiled workflow policy for one request.
+func (s *Service) Match(selector core.WorkflowSelector) (*core.ResolvedWorkflowPolicy, error) {
+	compiled, err := s.matchCompiled(selector)
+	if err != nil || compiled == nil {
+		return nil, err
+	}
+	policy := *compiled.Policy
+	return &policy, nil
+}
+
+// ChainsForContext resolves the active plugin chains for the request context.
+func (s *Service) ChainsForContext(ctx context.Context) *plugins.Chains {
+	if s == nil || ctx == nil {
+		return nil
+	}
+	workflow := core.GetWorkflow(ctx)
+	if workflow == nil {
+		return nil
+	}
+	return s.ChainsForWorkflow(workflow)
+}
+
+// ChainsForWorkflow resolves the active plugin chains for one request workflow.
+func (s *Service) ChainsForWorkflow(workflow *core.Workflow) *plugins.Chains {
+	if s == nil || workflow == nil || workflow.Policy == nil || !workflow.GuardrailsEnabled() {
+		return nil
+	}
+	versionID := strings.TrimSpace(workflow.Policy.VersionID)
+	if versionID == "" {
+		return nil
+	}
+	current := s.snapshot()
+	compiled := current.byVersionID[versionID]
+	if compiled == nil {
+		return nil
+	}
+	return compiled.Chains
+}
+
+// StartBackgroundRefresh periodically reloads active workflows until stopped.
+func (s *Service) StartBackgroundRefresh(interval time.Duration) func() {
+	if interval <= 0 {
+		interval = time.Minute
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	var once sync.Once
+
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				func() {
+					refreshCtx, refreshCancel := context.WithTimeout(ctx, 30*time.Second)
+					defer refreshCancel()
+					if err := s.Refresh(refreshCtx); err != nil {
+						slog.Warn("workflow refresh failed", "error", err)
+					}
+				}()
+			}
+		}
+	}()
+
+	return func() {
+		once.Do(func() {
+			cancel()
+			<-done
+		})
+	}
+}
+
+func (s *Service) matchCompiled(selector core.WorkflowSelector) (*CompiledWorkflow, error) {
+	if s == nil {
+		return nil, nil
+	}
+	selector = core.NewWorkflowSelector(selector.Provider, selector.Model, selector.UserPath)
+	current := s.snapshot()
+
+	// Most-specific wins: walk user-path ancestors deepest-first, then the
+	// path-less scopes; within each path try provider+model, provider, any.
+	// The final ("", "", "") probe is the global scope.
+	for _, userPath := range append(core.UserPathAncestors(selector.UserPath), "") {
+		for _, ref := range []scopeRef{
+			{provider: selector.Provider, model: selector.Model, userPath: userPath},
+			{provider: selector.Provider, userPath: userPath},
+			{userPath: userPath},
+		} {
+			if compiled := current.byScope[ref]; compiled != nil {
+				return compiled, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("missing active global workflow")
+}
+
+func (s *Service) validateCreateCandidate(input CreateInput, scopeKey, workflowHash string) (*CompiledWorkflow, error) {
+	version := Version{
+		ID:           "preview",
+		Scope:        input.Scope,
+		ScopeKey:     scopeKey,
+		Version:      1,
+		Active:       input.Activate,
+		Name:         input.Name,
+		Description:  input.Description,
+		Payload:      input.Payload,
+		WorkflowHash: workflowHash,
+		CreatedAt:    time.Unix(0, 0).UTC(),
+	}
+	compiled, err := s.compiler.Compile(version)
+	if err != nil {
+		return nil, newValidationError(err.Error(), err)
+	}
+	if compiled == nil || compiled.Policy == nil {
+		return nil, newValidationError("compiled workflow is empty or missing policy", nil)
+	}
+	return compiled, nil
+}
+
+func (s *Service) viewForVersion(version Version) (View, error) {
+	scope, scopeKey, err := normalizeScope(version.Scope)
+	if err != nil {
+		return View{}, fmt.Errorf("load workflow %q: %w", version.ID, err)
+	}
+	version.Scope = scope
+	if strings.TrimSpace(version.ScopeKey) == "" {
+		version.ScopeKey = scopeKey
+	}
+
+	compiled, err := s.compiler.Compile(version)
+	if err != nil {
+		return View{}, fmt.Errorf("compile workflow %q: %w", version.ID, err)
+	}
+	if compiled == nil || compiled.Policy == nil {
+		return View{}, fmt.Errorf("compile workflow %q: empty compiled workflow", version.ID)
+	}
+
+	view := NewViewFromVersion(version)
+	view.ScopeType = scopeType(scope)
+	view.ScopeDisplay = scopeDisplay(scope)
+	view.EffectiveFeatures = compiled.Policy.Features
+	view.GuardrailsHash = compiled.Policy.GuardrailsHash
+	view.ChainHashes = compiled.Policy.ChainHashes
+	return view, nil
+}
+
+func viewWithError(version Version, err error) View {
+	scope := Scope{
+		Provider: strings.TrimSpace(version.Scope.Provider),
+		Model:    strings.TrimSpace(version.Scope.Model),
+		UserPath: strings.TrimSpace(version.Scope.UserPath),
+	}
+	version.Scope = scope
+
+	view := NewViewFromVersion(version)
+	view.ScopeType = scopeType(scope)
+	view.ScopeDisplay = scopeDisplay(scope)
+	view.CompileError = err.Error()
+	return view
+}
+
+// scopeType and scopeDisplay tolerate unnormalized scopes so that
+// compile-failure views can still classify what was persisted.
+func scopeType(scope Scope) string {
+	switch {
+	case strings.TrimSpace(scope.Provider) == "" && strings.TrimSpace(scope.Model) == "" && strings.TrimSpace(scope.UserPath) == "":
+		return "global"
+	case strings.TrimSpace(scope.Provider) == "" && strings.TrimSpace(scope.UserPath) != "":
+		return "path"
+	case strings.TrimSpace(scope.Provider) != "" && strings.TrimSpace(scope.Model) == "":
+		if strings.TrimSpace(scope.UserPath) != "" {
+			return "provider_path"
+		}
+		return "provider"
+	case strings.TrimSpace(scope.UserPath) != "":
+		return "provider_model_path"
+	default:
+		return "provider_model"
+	}
+}
+
+func scopeDisplay(scope Scope) string {
+	provider := strings.TrimSpace(scope.Provider)
+	model := strings.TrimSpace(scope.Model)
+	userPath := strings.TrimSpace(scope.UserPath)
+
+	switch {
+	case provider == "" && model == "" && userPath == "":
+		return "global"
+	case provider == "" && userPath != "":
+		return userPath
+	case provider != "" && model == "" && userPath == "":
+		return provider
+	case provider != "" && model == "" && userPath != "":
+		return provider + " @ " + userPath
+	case provider == "" && model != "":
+		return model
+	case userPath != "":
+		return provider + "/" + model + " @ " + userPath
+	default:
+		return provider + "/" + model
+	}
+}
+
+func viewScopeSpecificity(scopeType string) int {
+	switch strings.TrimSpace(scopeType) {
+	case "global":
+		return 0
+	case "provider":
+		return 1
+	case "provider_model":
+		return 2
+	case "path":
+		return 3
+	case "provider_path":
+		return 4
+	default:
+		return 5
+	}
+}
+
+func (s *Service) snapshot() snapshot {
+	if s != nil {
+		if current, ok := s.current.Load().(snapshot); ok {
+			return current
+		}
+	}
+	return newSnapshot()
+}
+
+func cloneSnapshot(current snapshot) snapshot {
+	return snapshot{
+		byScope:     maps.Clone(current.byScope),
+		byVersionID: maps.Clone(current.byVersionID),
+	}
+}
+
+func compiledWorkflowForVersion(compiled *CompiledWorkflow, version Version) *CompiledWorkflow {
+	if compiled == nil {
+		return nil
+	}
+	next := &CompiledWorkflow{
+		Version: version,
+		Chains:  compiled.Chains,
+	}
+	if compiled.Policy != nil {
+		policy := *compiled.Policy
+		policy.VersionID = version.ID
+		policy.Version = version.Version
+		policy.ScopeProvider = version.Scope.Provider
+		policy.ScopeModel = version.Scope.Model
+		policy.ScopeUserPath = version.Scope.UserPath
+		policy.Name = version.Name
+		policy.WorkflowHash = version.WorkflowHash
+		next.Policy = &policy
+	}
+	return next
+}
+
+func (s *Service) storeActivatedCompiledLocked(compiled *CompiledWorkflow) {
+	if s == nil || compiled == nil {
+		return
+	}
+	next := cloneSnapshot(s.snapshot())
+	ref := refForScope(compiled.Version.Scope)
+	if existing := next.byScope[ref]; existing != nil {
+		delete(next.byVersionID, existing.Version.ID)
+	}
+	next.byScope[ref] = compiled
+	next.byVersionID[compiled.Version.ID] = compiled
+	s.install(next)
+}
+
+func (s *Service) storeDeactivatedVersionLocked(version Version) {
+	if s == nil {
+		return
+	}
+	next := cloneSnapshot(s.snapshot())
+	delete(next.byScope, refForScope(version.Scope))
+	delete(next.byVersionID, version.ID)
+	s.install(next)
+}

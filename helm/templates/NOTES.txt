@@ -1,0 +1,31 @@
+GoModel {{ .Values.image.tag | default .Chart.AppVersion }} is installed as release {{ .Release.Name }}.
+
+Reach the gateway:
+{{- if .Values.ingress.enabled }}
+{{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}{{ (first .paths).path }}
+{{- end }}
+{{- else if .Values.httpRoute.enabled }}
+{{- range .Values.httpRoute.hostnames }}
+  http://{{ . }}{{ include "gomodel.pathWithBasePath" (dict "root" $ "path" "/") }}
+{{- end }}
+{{- else }}
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "gomodel.fullname" . }} 8080:{{ .Values.service.port }}
+  curl http://127.0.0.1:8080{{ include "gomodel.pathWithBasePath" (dict "root" . "path" "/health/ready") }}
+{{- end }}
+
+Dashboard: {{ include "gomodel.pathWithBasePath" (dict "root" . "path" "/admin/dashboard") }}
+{{- if not (or (hasKey .Values.secretEnv "GOMODEL_MASTER_KEY") .Values.extraEnvFrom) }}
+
+WARNING: GOMODEL_MASTER_KEY is not set. The gateway accepts unauthenticated
+requests. Set secretEnv.GOMODEL_MASTER_KEY or load it with extraEnvFrom.
+{{- end }}
+{{- if and (eq .Values.storage.type "sqlite") (not .Values.persistence.enabled) }}
+
+WARNING: SQLite data is on an emptyDir volume. Audit logs, usage, budgets and
+dashboard-created keys are lost when the pod is replaced. Enable persistence
+or use storage.type postgresql / mongodb.
+{{- end }}
+
+Logs:
+  kubectl --namespace {{ .Release.Namespace }} logs -f deploy/{{ include "gomodel.fullname" . }}

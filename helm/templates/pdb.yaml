@@ -1,0 +1,17 @@
+{{- if and .Values.podDisruptionBudget.enabled (or (gt (int .Values.replicaCount) 1) .Values.autoscaling.enabled) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "gomodel.fullname" . }}
+  labels:
+    {{- include "gomodel.labels" . | nindent 4 }}
+spec:
+  {{- if not (kindIs "invalid" .Values.podDisruptionBudget.maxUnavailable) }}
+  maxUnavailable: {{ .Values.podDisruptionBudget.maxUnavailable }}
+  {{- else }}
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "gomodel.selectorLabels" . | nindent 6 }}
+{{- end }}

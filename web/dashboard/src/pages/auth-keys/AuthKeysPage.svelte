@@ -1,0 +1,147 @@
+<script>
+  // API Keys page: managed gateway API keys (create with one-time secret
+  // reveal, label editing, permanent deactivation).
+  import LoadingState from "$lib/components/molecules/LoadingState.svelte";
+  import Icon from "$lib/components/atoms/Icon.svelte";
+  import FilterInput from "$lib/components/molecules/FilterInput.svelte";
+  import InactiveToggle from "$lib/components/molecules/InactiveToggle.svelte";
+  import { router } from "$lib/stores/router.svelte.js";
+  import { auth } from "$lib/stores/auth.svelte.js";
+  import { authKeysStore as store } from "./authKeys.svelte.js";
+  import AuthKeyEditor from "./AuthKeyEditor.svelte";
+  import AuthKeyLabelsEditor from "./AuthKeyLabelsEditor.svelte";
+  import AuthKeyAllowedModelsEditor from "./AuthKeyAllowedModelsEditor.svelte";
+  import AuthKeyList from "./AuthKeyList.svelte";
+  import { Plus, X } from "lucide";
+  import * as m from "$lib/paraglide/messages.js";
+
+  const PAGE = "auth-keys";
+
+  // Re-fetch when the page becomes active or the API key / timezone changes.
+  $effect(() => {
+    void auth.refreshTick;
+    if (router.page === PAGE) store.fetchKeys();
+  });
+</script>
+
+<div>
+  <div class="page-header">
+    <h2>{m.api_keys_title()}</h2>
+    <div class="page-header-controls">
+      {#if store.available && !auth.authError}
+        <button
+          type="button"
+          class="btn btn-primary btn-with-icon"
+          disabled={store.formSubmitting}
+          onclick={() => {
+            if (!store.formSubmitting) store.openForm();
+          }}
+        >
+          <Icon icon={Plus} class="table-icon-svg" />
+          <span>{m.api_keys_create()}</span>
+        </button>
+      {/if}
+    </div>
+  </div>
+
+  {#if !store.available && !auth.authError}
+    <div class="alert alert-warning">{m.api_keys_unavailable()}</div>
+  {/if}
+  {#if store.error && !auth.authError && !store.formOpen}
+    <p class="form-error" role="alert" aria-live="assertive">{store.error}</p>
+  {/if}
+
+  {#if store.available && !auth.authError}
+    <p class="form-hint auth-keys-help-notice">
+      {m.api_keys_help()}
+    </p>
+  {/if}
+
+  <AuthKeyEditor />
+  <AuthKeyLabelsEditor />
+  <AuthKeyAllowedModelsEditor />
+
+  {#if store.loading && store.keys.length === 0}
+    <LoadingState label={m.api_keys_loading()} />
+  {/if}
+
+  {#if store.keys.length > 0 && store.available}
+    <div class="table-toolbar">
+      <div class="table-toolbar-main">
+        <FilterInput
+          placeholder={m.api_keys_filter_placeholder()}
+          label={m.api_keys_filter_label()}
+          bind:value={store.filter}
+        />
+      </div>
+      <div class="table-toolbar-actions">
+        {#if store.userPathFilter}
+          <span class="auth-keys-path-chip">
+            <code>{store.userPathFilter}</code>
+            <button
+              type="button"
+              class="auth-keys-path-chip-clear"
+              aria-label={m.api_keys_path_filter_clear()}
+              title={m.api_keys_path_filter_clear()}
+              onclick={() => store.clearUserPathFilter()}
+            >
+              <Icon icon={X} width="12" height="12" />
+            </button>
+          </span>
+        {/if}
+        <InactiveToggle
+          bind:checked={store.showInactive}
+          label={m.api_keys_show_inactive()}
+          count={store.inactiveCount}
+        />
+      </div>
+    </div>
+  {/if}
+
+  {#if store.visibleKeys.length > 0 && store.available}
+    <AuthKeyList />
+  {/if}
+
+  {#if store.keys.length > 0 && store.visibleKeys.length === 0 && store.available}
+    <p class="empty-state">
+      {m.api_keys_no_match()}{store.inactiveCount > 0 && !store.showInactive
+        ? " " + m.api_keys_hidden({ count: store.inactiveCount })
+        : ""}
+    </p>
+  {/if}
+
+  {#if store.keys.length === 0 && !store.loading && !auth.authError && !store.error && store.available}
+    <p class="empty-state">{m.api_keys_empty()}</p>
+  {/if}
+</div>
+
+<style>
+/* --- API Keys page --- */
+.auth-keys-help-notice {
+  margin-bottom: 20px;
+}
+
+.auth-keys-path-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+  font-size: 12px;
+}
+
+.auth-keys-path-chip-clear {
+  display: inline-flex;
+  padding: 2px;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.auth-keys-path-chip-clear:hover {
+  color: var(--text);
+}
+</style>

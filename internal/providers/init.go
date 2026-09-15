@@ -1,0 +1,366 @@
+package providers
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"sort"
+	"sync"
+	"time"
+
+	"github.com/enterpilot/gomodel/config"
+	"github.com/enterpilot/gomodel/internal/cache"
+	"github.com/enterpilot/gomodel/internal/cache/modelcache"
+	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/enterpilot/gomodel/internal/modeldata"
+	"github.com/enterpilot/gomodel/internal/platformdir"
+)
+
+// InitResult holds the initialized provider infrastructure and cleanup functions.
+type InitResult struct {
+	Registry *ModelRegistry
+	Router   *Router
+	Cache    modelcache.Cache
+	Factory  *ProviderFactory
+
+	// ConfiguredProviders is the effective, admin-safe provider inventory keyed
+	// by configured provider name.
+	ConfiguredProviders []SanitizedProviderConfig
+
+	// CredentialResolvedProviders is the env-merged, credential-filtered providers
+	// map (same keys as Router). Keys match top-level providers YAML names.
+	CredentialResolvedProviders map[string]config.RawProviderConfig
+
+	// stopRefresh is called to stop the background refresh goroutine
+	stopRefresh func()
+
+	closeOnce sync.Once
+	closeErr  error
+}
+
+// Close releases all resources and stops background goroutines.
+// Safe to call multiple times (but stopRefresh is only called once).
+func (r *InitResult) Close() error {
+	if r == nil {
+		return nil
+	}
+	r.closeOnce.Do(func() {
+		if r.stopRefresh != nil {
+			r.stopRefresh()
+			r.stopRefresh = nil
+		}
+		if r.Cache != nil {
+			r.closeErr = r.Cache.Close()
+		}
+	})
+	return r.closeErr
+}
+
+// Init initializes the provider registry, cache, and router.
+//
+// It performs:
+//  1. Provider config resolution (env var overlay, filtering, resilience merging)
+//  2. Cache initialization (Redis preferred, local fallback if Redis is down)
+//  3. Provider instantiation and registration
+//  4. Async model loading (from cache first, then network refresh)
+//  5. Best-effort background model-list fetch (goroutine with ~45s timeout;
+//     conditional via ETag, then enrich and SaveToCache when content changed)
+//  6. Background refresh scheduling (interval from cfg.Cache.RefreshInterval)
+//  7. Router creation
+//
+// The caller must call InitResult.Close() during shutdown.
+func Init(ctx context.Context, result *config.LoadResult, factory *ProviderFactory) (*InitResult, error) {
+	if result == nil {
+		return nil, fmt.Errorf("load result is required")
+	}
+	if factory == nil {
+		return nil, fmt.Errorf("factory is required")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	providerMap, credentialResolved := resolveProviders(result.RawProviders, result.Config.Resilience, factory.discoveryConfigsSnapshot())
+	// Validated after the env overlay so one rule covers both sources: a bad
+	// price cap must not start the gateway with a cost control that silently
+	// admits everything.
+	if err := validateProviderModelFilters(providerMap); err != nil {
+		return nil, err
+	}
+	fromFile, fromEnv := providerOrigins(result.RawProviders, providerMap)
+	slog.Info("providers resolved",
+		"total", len(providerMap),
+		"from_config_file", len(fromFile),
+		"from_env", len(fromEnv),
+		"config_file_providers", fromFile,
+		"env_providers", fromEnv)
+	if skipped := skippedProviderNames(result.RawProviders, credentialResolved); len(skipped) > 0 {
+		slog.Info("configured providers skipped: credentials or base_url did not resolve",
+			"providers", skipped)
+	}
+
+	modelCache, err := initCache(result.Config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize cache: %w", err)
+	}
+
+	registry := NewModelRegistry()
+	registry.SetCache(modelCache)
+	registry.SetConfiguredProviderModelsMode(result.Config.Models.ConfiguredProviderModelsMode)
+
+	count, err := initializeProviders(ctx, providerMap, factory, registry)
+	if err != nil {
+		modelCache.Close()
+		return nil, err
+	}
+	if count == 0 {
+		// No env var or config.yaml providers resolved. This is a supported
+		// startup state, not a failure: the gateway comes up with an empty
+		// catalog and operators add provider credentials from the dashboard
+		// (see CredentialsService), which registers them into this same
+		// registry without a restart.
+		slog.Warn("no providers configured via env vars or config.yaml; add provider credentials from the dashboard")
+	} else {
+		slog.Info("starting non-blocking model registry initialization...")
+		registry.InitializeAsync(ctx)
+	}
+
+	slog.Info("model registry configured",
+		"cached_models", registry.ModelCount(),
+		"providers", registry.ProviderCount(),
+	)
+
+	// Fetch model list in background (best-effort, non-blocking)
+	modelListURL := result.Config.Cache.Model.ModelList.URL
+	if modelListURL == "" {
+		slog.Info("model list downloads disabled; models rely on provider-reported, configured, and any previously cached catalog metadata")
+	} else {
+		go func() {
+			fetchCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
+			defer cancel()
+
+			result, err := modeldata.FetchIfChanged(fetchCtx, modelListURL, registry.currentModelListETag(modelListURL))
+			if err != nil {
+				slog.Warn("failed to fetch model list", "url", modelListURL, "error", err)
+				return
+			}
+			if result.NotModified {
+				registry.updateModelListValidator(result.ETag, modelListURL)
+				slog.Info("model list unchanged since last download, using cached copy")
+				return
+			}
+			if result.List == nil {
+				return
+			}
+
+			metadataStats := registry.setModelListAndEnrich(result.List, result.Raw, result.ETag, modelListURL)
+
+			if err := registry.SaveToCache(fetchCtx); err != nil {
+				slog.Warn("failed to save cache after model list fetch", "error", err)
+			}
+			attrs := []any{
+				"models", len(result.List.Models),
+				"providers", len(result.List.Providers),
+				"provider_models", len(result.List.ProviderModels),
+			}
+			attrs = append(attrs, metadataStats.slogAttrs()...)
+			slog.Info("model list loaded", attrs...)
+		}()
+	}
+
+	refreshInterval := time.Duration(result.Config.Cache.Model.RefreshInterval) * time.Second
+	if refreshInterval <= 0 {
+		refreshInterval = time.Hour
+	}
+	recheckInterval := time.Duration(result.Config.Cache.Model.RecheckInterval) * time.Second
+	stopRefresh := registry.StartBackgroundRefresh(refreshInterval, recheckInterval, modelListURL)
+
+	router, err := NewRouter(registry)
+	if err != nil {
+		stopRefresh()
+		modelCache.Close()
+		return nil, fmt.Errorf("failed to create router: %w", err)
+	}
+	router.SetUnqualifiedModelIDs(result.Config.Models.UnqualifiedModelIDsAtModelsEndpoint)
+	router.SetEmptyResponseHook(factory.emptyResponseHook())
+
+	return &InitResult{
+		ConfiguredProviders:         SanitizeProviderConfigs(providerMap),
+		Registry:                    registry,
+		Router:                      router,
+		Cache:                       modelCache,
+		Factory:                     factory,
+		CredentialResolvedProviders: credentialResolved,
+		stopRefresh:                 stopRefresh,
+	}, nil
+}
+
+// initCache initializes the appropriate cache backend based on configuration.
+// Redis is preferred when configured. If Redis is unreachable and a local
+// backend is also configured, startup continues on the local file cache.
+func initCache(cfg *config.Config) (modelcache.Cache, error) {
+	m := cfg.Cache.Model
+	local := newLocalModelCache(m.Local)
+	if m.Redis != nil && m.Redis.URL != "" {
+		ttl := time.Duration(m.Redis.TTL) * time.Second
+		if ttl == 0 {
+			ttl = cache.DefaultRedisTTL
+		}
+		redisCfg := modelcache.RedisModelCacheConfig{
+			URL: m.Redis.URL,
+			Key: m.Redis.Key,
+			TTL: ttl,
+		}
+		mc, err := modelcache.NewRedisModelCache(redisCfg)
+		if err != nil {
+			if local == nil {
+				return nil, err
+			}
+			slog.Warn("redis model cache unavailable; falling back to local file cache", "error", err, "path", localPath(m.Local))
+			return local, nil
+		}
+		key := m.Redis.Key
+		if key == "" {
+			key = modelcache.DefaultRedisKey
+		}
+		slog.Info("using redis cache", "key", key)
+		return mc, nil
+	}
+	if local != nil {
+		slog.Info("using local file cache", "path", localPath(m.Local))
+		return local, nil
+	}
+	return nil, fmt.Errorf("cache.model: must have either local or redis configured")
+}
+
+func newLocalModelCache(local *config.LocalCacheConfig) modelcache.Cache {
+	if local == nil {
+		return nil
+	}
+	return modelcache.NewLocalCache(localPath(local))
+}
+
+func localPath(local *config.LocalCacheConfig) string {
+	cacheDir := local.CacheDir
+	if cacheDir == "" {
+		cacheDir = defaultModelCacheDir()
+	}
+	return filepath.Join(cacheDir, "models.json")
+}
+
+// defaultModelCacheDir keeps the historical ./.cache location whenever it
+// already exists (existing deployments, the Docker image); fresh binary
+// installs get the OS-conventional per-user cache directory instead.
+func defaultModelCacheDir() string {
+	if info, err := os.Stat(".cache"); err == nil && info.IsDir() {
+		return ".cache"
+	}
+	dir, err := platformdir.CacheDir()
+	if err != nil {
+		return ".cache"
+	}
+	return dir
+}
+
+// initializeProviders instantiates and registers all resolved providers.
+// Returns the count of successfully registered providers.
+func initializeProviders(ctx context.Context, providerMap map[string]ProviderConfig, factory *ProviderFactory, registry *ModelRegistry) (int, error) {
+	// Sort provider names for deterministic initialization order
+	names := make([]string, 0, len(providerMap))
+	for name := range providerMap {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	type initializedProvider struct {
+		name            string
+		config          ProviderConfig
+		provider        core.Provider
+		createErr       error
+		availabilityErr error
+	}
+	results := make([]initializedProvider, len(names))
+	const maxConcurrentInitializations = 8
+	sem := make(chan struct{}, maxConcurrentInitializations)
+	var wg sync.WaitGroup
+	for i, name := range names {
+		// Acquire capacity before launching the worker so configurations with
+		// many providers do not retain one blocked goroutine per provider.
+		sem <- struct{}{}
+		wg.Add(1)
+		go func(i int, name string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			pCfg := providerMap[name]
+			p, err := factory.Create(pCfg)
+			if err != nil {
+				results[i] = initializedProvider{name: name, config: pCfg, createErr: err}
+				return
+			}
+
+			results[i] = initializedProvider{
+				name:            name,
+				config:          pCfg,
+				provider:        p,
+				availabilityErr: registry.probeAvailability(ctx, p, name, availabilityProbeTimeout),
+			}
+		}(i, name)
+	}
+	wg.Wait()
+
+	var count int
+	for _, result := range results {
+		name, pCfg, p := result.name, result.config, result.provider
+		if result.createErr != nil {
+			slog.Error("failed to initialize provider",
+				"name", name,
+				"type", pCfg.Type,
+				"error", result.createErr)
+			continue
+		}
+
+		// Availability checks are diagnostics only, and the probe already
+		// recorded its outcome. Providers stay registered so async
+		// initialization and periodic refresh can discover them later; only the
+		// warning is held back to here, to keep startup logs in name order.
+		if result.availabilityErr != nil {
+			slog.Warn("provider unavailable at startup; keeping registered for refresh",
+				"name", name,
+				"type", pCfg.Type,
+				"reason", result.availabilityErr.Error())
+		}
+
+		registry.RegisterProviderWithNameAndType(p, name, pCfg.Type)
+		if len(pCfg.Models) > 0 {
+			registry.SetProviderConfiguredModels(name, pCfg.Models)
+		}
+		if len(pCfg.ModelMetadataOverrides) > 0 {
+			registry.SetProviderMetadataOverrides(name, pCfg.ModelMetadataOverrides)
+		}
+		registry.SetProviderModelFilter(name, pCfg.ModelFilter)
+		count++
+		slog.Info("provider registered", "name", name, "type", pCfg.Type)
+	}
+
+	return count, nil
+}
+
+// validateProviderModelFilters rejects model filters that cannot express what
+// they were configured to express, naming the provider so the operator knows
+// which declaration (or `<PROVIDER>_MODEL_FILTER_*` variable) to fix.
+func validateProviderModelFilters(providerMap map[string]ProviderConfig) error {
+	names := make([]string, 0, len(providerMap))
+	for name := range providerMap {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if err := providerMap[name].ModelFilter.Validate("providers." + name + ".model_filter"); err != nil {
+			return err
+		}
+	}
+	return nil
+}

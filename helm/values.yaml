@@ -1,0 +1,198 @@
+# Default values for the GoModel Helm chart.
+#
+# GoModel is configured through environment variables. Every variable from
+# https://github.com/saifelyzal/nexusruntime/blob/main/.env.template can be set
+# with `env` (plain values) or `secretEnv` (API keys and other secrets).
+
+# -- Number of gateway pods. SQLite storage (the default) is per pod, so more
+# than one replica requires storage.type postgresql or mongodb.
+replicaCount: 1
+
+image:
+  repository: enterpilot/gomodel
+  # -- Image tag. Defaults to the chart appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# -- Plain environment variables, stored in a ConfigMap.
+# PORT, STORAGE_TYPE, and METRICS_ENABLED are owned by the chart and rejected here.
+env: {}
+#  LOG_LEVEL: info
+#  OPENAI_BASE_URL: https://my-proxy.example.com/v1
+#  REDIS_URL: redis://redis.cache.svc:6379
+
+# -- Sensitive environment variables, stored in a chart-managed Secret.
+# Set GOMODEL_MASTER_KEY here; without it the gateway runs without authentication.
+secretEnv: {}
+#  GOMODEL_MASTER_KEY: change-me
+#  OPENAI_API_KEY: sk-...
+#  ANTHROPIC_API_KEY: sk-ant-...
+
+# -- Existing Secrets or ConfigMaps whose keys become environment variables.
+# Use this to keep API keys out of Helm values (GitOps, external-secrets, ...).
+extraEnvFrom: []
+#  - secretRef:
+#      name: gomodel-provider-keys
+
+# -- Additional container env entries in Kubernetes form, for valueFrom lookups.
+extraEnv: []
+#  - name: POD_IP
+#    valueFrom:
+#      fieldRef:
+#        fieldPath: status.podIP
+
+# -- Optional config.yaml content, mounted at /app/config/config.yaml.
+# Environment variables always override values in this file.
+config: ""
+#  config: |
+#    providers:
+#      openai:
+#        api_key: ${OPENAI_API_KEY}
+
+# -- Name of an existing ConfigMap with a `config.yaml` key, used instead of `config`.
+existingConfigMap: ""
+
+storage:
+  # -- Storage backend: sqlite, postgresql, or mongodb.
+  # SQLite works for a single pod; use postgresql or mongodb for several replicas.
+  type: sqlite
+  # -- Connection URL for postgresql or mongodb, stored in the chart Secret.
+  # Alternatively supply POSTGRES_URL or MONGODB_URL through extraEnv or extraEnvFrom.
+  url: ""
+
+# Persistent volume for /app/data (SQLite database, install identity).
+# Only used with storage.type sqlite; other backends keep nothing on disk.
+persistence:
+  enabled: true
+  # -- Use an existing PersistentVolumeClaim instead of creating one.
+  existingClaim: ""
+  # -- StorageClass name. Empty uses the cluster default; "-" disables dynamic provisioning.
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 1Gi
+  annotations: {}
+
+# -- Deployment update strategy. Defaults to Recreate when SQLite data lives on a
+# ReadWriteOnce volume (two pods cannot share it), RollingUpdate otherwise.
+updateStrategy: {}
+
+metrics:
+  # -- Expose Prometheus metrics at /metrics (unauthenticated).
+  enabled: true
+  serviceMonitor:
+    # -- Create a ServiceMonitor for the Prometheus Operator.
+    enabled: false
+    interval: 30s
+    # -- Namespace for the ServiceMonitor. Empty uses the release namespace.
+    namespace: ""
+    labels: {}
+
+service:
+  type: ClusterIP
+  port: 8080
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: gomodel.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: gomodel-tls
+  #    hosts:
+  #      - gomodel.example.com
+
+# Gateway API HTTPRoute, an alternative to Ingress.
+httpRoute:
+  enabled: false
+  parentRefs: []
+  #  - name: my-gateway
+  #    namespace: gateway-system
+  hostnames: []
+  #  - gomodel.example.com
+
+serviceAccount:
+  create: true
+  # -- Annotations, for example cloud IAM bindings (AWS Bedrock, Google Vertex AI).
+  annotations: {}
+  name: ""
+  automountServiceAccountToken: false
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: null
+
+# Created only when more than one replica can run, so a single pod never blocks node drains.
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+  maxUnavailable: null
+
+# Probe paths are prefixed with env.BASE_PATH automatically.
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# /health/ready returns 503 while storage is unreachable.
+readinessProbe:
+  httpGet:
+    path: /health/ready
+    port: http
+  periodSeconds: 5
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# -- GoModel drains requests for 10s and finishes teardown within 30s after SIGTERM.
+terminationGracePeriodSeconds: 45
+
+# The image runs as the distroless nonroot user (UID 65532).
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+podAnnotations: {}
+podLabels: {}
+priorityClassName: ""
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+
+# -- Extra volumes and mounts, for example a CA bundle or a local model catalog file.
+extraVolumes: []
+extraVolumeMounts: []

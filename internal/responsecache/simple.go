@@ -1,0 +1,402 @@
+package responsecache
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"log/slog"
+	"net/http"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/goccy/go-json"
+
+	"github.com/labstack/echo/v5"
+	"github.com/tidwall/gjson"
+
+	"github.com/enterpilot/gomodel/internal/cache"
+	"github.com/enterpilot/gomodel/internal/core"
+)
+
+const embeddingsPath = "/v1/embeddings"
+
+var cacheablePaths = map[string]bool{
+	"/v1/chat/completions": true,
+	"/v1/responses":        true,
+	embeddingsPath:         true,
+}
+
+// semanticCacheablePath reports whether a path may be served from the semantic
+// layer. Embeddings are excluded on purpose: an embedding must represent the
+// exact text it was requested for, so replaying the vector of a merely similar
+// input would return a wrong answer rather than an equivalent one.
+func semanticCacheablePath(path string) bool {
+	return cacheablePaths[path] && path != embeddingsPath
+}
+
+const (
+	cacheWriteWorkerCount = 8
+	cacheWriteQueueSize   = 256
+)
+
+type cacheWriteJob struct {
+	key  string
+	data []byte
+}
+
+type simpleCacheMiddleware struct {
+	store cache.Store
+	ttl   time.Duration
+	wg    sync.WaitGroup
+	jobs  chan cacheWriteJob
+
+	hitRecorder func(exchange, []byte, string)
+
+	workers sync.WaitGroup
+	mu      sync.RWMutex
+	closed  bool
+	missMu  sync.Mutex
+	misses  map[string]*exactMissCall
+}
+
+type exactMissCall struct {
+	done chan struct{}
+	data []byte
+	err  error
+}
+
+func newSimpleCacheMiddleware(store cache.Store, ttl time.Duration, hitRecorder func(exchange, []byte, string)) *simpleCacheMiddleware {
+	m := &simpleCacheMiddleware{
+		store:       store,
+		ttl:         ttl,
+		jobs:        make(chan cacheWriteJob, cacheWriteQueueSize),
+		hitRecorder: hitRecorder,
+	}
+	m.startWorkers()
+	return m
+}
+
+// TryHit checks the exact-match cache. Returns (true, nil) and replays the
+// cached response if found. Returns (false, nil) on a miss.
+func (m *simpleCacheMiddleware) TryHit(ex exchange, body []byte) (bool, error) {
+	if m == nil || m.store == nil {
+		return false, nil
+	}
+	path := ex.Path()
+	key := exactCacheKey(ex, body)
+	cached, err := m.store.Get(ex.Context(), key)
+	if err != nil {
+		return false, nil
+	}
+	if len(cached) > 0 {
+		err := ex.ReplayHit(body, cached, CacheTypeExact)
+		if err != nil && !replayCommitted(err) {
+			slog.Warn("response cache replay failed", "path", path, "cache_type", CacheTypeExact, "err", err)
+			return false, nil
+		}
+		ex.MarkHit(CacheTypeExact)
+		if m.hitRecorder != nil {
+			m.hitRecorder(ex, cached, CacheTypeExact)
+		}
+		slog.Info("response cache hit (exact)",
+			"path", path,
+			"request_id", core.GetRequestID(ex.Context()),
+		)
+		return true, err
+	}
+	return false, nil
+}
+
+// StoreAfter calls next, captures the response, and asynchronously stores it on
+// a cacheable success response.
+func (m *simpleCacheMiddleware) StoreAfter(ex exchange, body []byte, next func() error) error {
+	if m == nil || m.store == nil {
+		return next()
+	}
+	key := exactCacheKey(ex, body)
+
+	call, leader := m.joinMiss(key)
+	if leader {
+		var data []byte
+		var err error
+		defer func() { m.finishMiss(key, call, data, err) }()
+		data, err = m.captureAndStore(ex, key, next)
+		return err
+	}
+
+	select {
+	case <-ex.Context().Done():
+		return ex.Context().Err()
+	case <-call.done:
+	}
+	// The leader produced a non-cacheable result (failure status, failover, or
+	// malformed body). Waiting followers must execute independently rather than
+	// replaying something the normal cache would refuse to store.
+	if call.err != nil || len(call.data) == 0 {
+		_, err := m.captureAndStore(ex, key, next)
+		return err
+	}
+	err := ex.ReplayHit(body, call.data, CacheTypeExact)
+	if err != nil && !replayCommitted(err) {
+		return next()
+	}
+	ex.MarkHit(CacheTypeExact)
+	if m.hitRecorder != nil {
+		m.hitRecorder(ex, call.data, CacheTypeExact)
+	}
+	return err
+}
+
+// exactCacheKey derives the exact-cache key for one exchange, scoping the entry
+// to the request's guardrail chain identity.
+func exactCacheKey(ex exchange, body []byte) string {
+	ctx := ex.Context()
+	return hashRequest(ex.Path(), body, core.GetWorkflow(ctx), core.GetGuardrailsHash(ctx))
+}
+
+// captureAndStore executes one cache miss without joining the coalescing
+// group. Followers use it after a leader produces no replayable response so
+// they proceed independently while retaining the normal cache-write behavior.
+func (m *simpleCacheMiddleware) captureAndStore(ex exchange, key string, next func() error) ([]byte, error) {
+	data, ok, err := ex.Capture("response cache: failed to capture cacheable response body", next)
+	if err != nil || !ok {
+		return nil, err
+	}
+	m.enqueueWrite(cacheWriteJob{key: key, data: data})
+	return data, nil
+}
+
+func (m *simpleCacheMiddleware) joinMiss(key string) (*exactMissCall, bool) {
+	m.missMu.Lock()
+	defer m.missMu.Unlock()
+	if call := m.misses[key]; call != nil {
+		return call, false
+	}
+	if m.misses == nil {
+		m.misses = make(map[string]*exactMissCall)
+	}
+	call := &exactMissCall{done: make(chan struct{})}
+	m.misses[key] = call
+	return call, true
+}
+
+func (m *simpleCacheMiddleware) finishMiss(key string, call *exactMissCall, data []byte, err error) {
+	m.missMu.Lock()
+	call.data, call.err = data, err
+	if m.misses[key] == call {
+		delete(m.misses, key)
+	}
+	close(call.done)
+	m.missMu.Unlock()
+}
+
+// close waits for all in-flight cache writes to complete, then closes the store.
+func (m *simpleCacheMiddleware) close() error {
+	m.mu.Lock()
+	if !m.closed {
+		m.closed = true
+		close(m.jobs)
+	}
+	m.mu.Unlock()
+	m.workers.Wait()
+	m.wg.Wait()
+	return m.store.Close()
+}
+
+func (m *simpleCacheMiddleware) startWorkers() {
+	for range cacheWriteWorkerCount {
+		m.workers.Go(func() {
+			for job := range m.jobs {
+				storeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				err := m.store.Set(storeCtx, job.key, job.data, m.ttl)
+				cancel()
+				if err != nil {
+					slog.Warn("response cache write failed", "key", job.key, "err", err)
+				}
+				m.wg.Done()
+			}
+		})
+	}
+}
+
+func (m *simpleCacheMiddleware) enqueueWrite(job cacheWriteJob) {
+	m.mu.RLock()
+	if m.closed {
+		m.mu.RUnlock()
+		return
+	}
+	// Hold the read lock across Add+send so Close cannot observe this write as
+	// untracked. If the non-blocking send misses, roll back the Add before
+	// releasing the lock and logging the dropped write.
+	m.wg.Add(1)
+	select {
+	case m.jobs <- job:
+		m.mu.RUnlock()
+	default:
+		m.wg.Done()
+		m.mu.RUnlock()
+		slog.Warn("response cache write queue full", "key", job.key)
+	}
+}
+
+func shouldSkipCacheControl(cc string) bool {
+	if cc == "" {
+		return false
+	}
+	directives := strings.SplitSeq(strings.ToLower(cc), ",")
+	for d := range directives {
+		d = strings.TrimSpace(d)
+		if d == "no-cache" || d == "no-store" {
+			return true
+		}
+	}
+	return false
+}
+
+func isStreamingRequest(path string, body []byte) bool {
+	return isStreamingRequestGJSON(path, body)
+}
+
+func isStreamingRequestGJSON(path string, body []byte) bool {
+	if path == embeddingsPath {
+		return false
+	}
+	// gjson returns the first matching top-level field. That differs from
+	// encoding/json on duplicate keys, but the cache hot path favors the cheaper
+	// first-match check because duplicate stream fields are not expected.
+	result := gjson.GetBytes(body, "stream")
+	if !result.Exists() || (result.Type != gjson.True && result.Type != gjson.False) {
+		return false
+	}
+	return result.Bool()
+}
+
+// hashRequest builds the exact-cache key. chainHash is the effective guardrail
+// chain identity (prompt, response and stream phases; see plugins.Chains.CacheHash),
+// already computed once per request by the workflow compiler and carried on the
+// context. Mixing it in scopes every entry to the chain that produced it, so a
+// request whose response or stream guardrails differ misses instead of being
+// served a body those guardrails never saw.
+func hashRequest(path string, body []byte, plan *core.Workflow, chainHash string) string {
+	h := sha256.New()
+	h.Write([]byte(path))
+	h.Write([]byte{0})
+	if plan != nil {
+		h.Write([]byte(plan.Mode))
+		h.Write([]byte{0})
+		h.Write([]byte(plan.ProviderType))
+		h.Write([]byte{0})
+		h.Write([]byte(plan.ResolvedQualifiedModel()))
+		h.Write([]byte{0})
+	}
+	h.Write([]byte(chainHash))
+	h.Write([]byte{0})
+	h.Write(cacheKeyRequestBody(path, body))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+type responseCapture struct {
+	http.ResponseWriter
+	body   *bytes.Buffer
+	status int
+}
+
+func (r *responseCapture) cachedBody(contentType string) ([]byte, bool) {
+	if r == nil || r.body == nil || r.body.Len() == 0 {
+		return nil, false
+	}
+	return cacheableResponseBody(bytes.Clone(r.body.Bytes()), contentType)
+}
+
+// cacheableResponseBody validates that raw is storable: well-formed SSE for
+// event streams, valid JSON otherwise.
+func cacheableResponseBody(raw []byte, contentType string) ([]byte, bool) {
+	if len(raw) == 0 {
+		return nil, false
+	}
+	if isEventStreamContentType(contentType) {
+		if !validateCacheableSSE(raw) {
+			return nil, false
+		}
+		return raw, true
+	}
+	if !json.Valid(raw) {
+		return nil, false
+	}
+	return raw, true
+}
+
+func (r *responseCapture) WriteHeader(code int) {
+	r.status = code
+	r.ResponseWriter.WriteHeader(code)
+}
+
+func (r *responseCapture) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (r *responseCapture) Unwrap() http.ResponseWriter {
+	return r.ResponseWriter
+}
+
+func shouldStoreCapturedResponse(status int) bool {
+	return status == http.StatusOK
+}
+
+func captureResponseForCache(c *echo.Context, path, warnMessage string, next func() error) ([]byte, bool, error) {
+	capture := &responseCapture{
+		ResponseWriter: c.Response(),
+		body:           &bytes.Buffer{},
+	}
+	c.SetResponse(capture)
+	if err := next(); err != nil {
+		return nil, false, err
+	}
+	if !shouldStoreCapturedResponse(capture.effectiveStatusCode()) || capture.body.Len() == 0 {
+		return nil, false, nil
+	}
+	if ctx := c.Request().Context(); core.GetFailoverUsed(ctx) || core.PluginNoStore(ctx) {
+		return nil, false, nil
+	}
+	data, ok := capture.cachedBody(c.Response().Header().Get("Content-Type"))
+	if !ok {
+		slog.Warn(warnMessage, "path", path)
+		return nil, false, nil
+	}
+	return data, true, nil
+}
+
+func (r *responseCapture) effectiveStatusCode() int {
+	if r == nil {
+		return 0
+	}
+	if r.status != 0 {
+		return r.status
+	}
+	if resp, err := echo.UnwrapResponse(r); err == nil && resp != nil {
+		return resp.Status
+	}
+	return 0
+}
+
+func (r *responseCapture) Write(b []byte) (int, error) {
+	// Write to the underlying ResponseWriter first so the client always receives
+	// the response. Buffer a copy separately for cache storage only.
+	// Note: b originates from upstream LLM API responses (JSON), not from
+	// client-controlled input, so there is no XSS risk here.
+	if r.status == 0 {
+		r.status = r.effectiveStatusCode()
+		if r.status == 0 {
+			r.status = http.StatusOK
+		}
+	}
+	n, err := r.ResponseWriter.Write(b)
+	if n > 0 {
+		r.body.Write(b[:n])
+	}
+	return n, err
+}

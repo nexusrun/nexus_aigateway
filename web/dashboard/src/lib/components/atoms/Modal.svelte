@@ -1,0 +1,139 @@
+<script>
+  // Overlay dialog whose backdrop/shell class names match dashboard.css
+  // selectors. Handles Escape, backdrop click, body scroll
+  // lock (via the modals store), and autofocus of [data-modal-autofocus].
+  // Children render inside the shell; give the top-level child the dialog
+  // role/class (e.g. <section class="model-editor" role="dialog">).
+  import { untrack } from "svelte";
+  import { modals } from "$lib/stores/ui.svelte.js";
+  import { autofocusWithin } from "$lib/utils/attachments.js";
+
+  let {
+    open = false,
+    onclose,
+    // Class pair: "editor" (editor-modal-*) or "auth" (auth-dialog-*).
+    variant = "editor",
+    closeOnBackdrop = true,
+    // Rendered on top of another open modal (e.g. the discard confirmation
+    // over an editor): the modal below already dims the page, so lighten
+    // the backdrop and lift the shell above the modal underneath.
+    stacked = false,
+    children,
+  } = $props();
+
+  const backdropClass = $derived([
+    variant === "auth" ? "auth-dialog-backdrop" : "editor-modal-backdrop",
+    ...(stacked ? ["modal-stacked-backdrop"] : []),
+  ]);
+  const shellClass = $derived([
+    variant === "auth" ? "auth-dialog-shell" : "editor-modal-shell",
+    ...(stacked ? ["modal-stacked-shell"] : []),
+  ]);
+
+  $effect(() => {
+    if (!open) return;
+    // untrack: opened() reads AND writes modals.stack; tracking that read
+    // would make the effect invalidate itself and loop (effect_update_depth).
+    const token = untrack(() => modals.opened());
+    const onKeydown = (event) => {
+      // Only the topmost dialog reacts to Escape (stacked dialogs, e.g. the
+      // auth dialog over an editor, must not both close).
+      if (event.key === "Escape" && modals.isTop(token)) {
+        onclose?.();
+      }
+    };
+    window.addEventListener("keydown", onKeydown);
+    return () => {
+      modals.closed(token);
+      window.removeEventListener("keydown", onKeydown);
+    };
+  });
+
+  // Only a click on the shell itself is a backdrop click; clicks inside the
+  // dialog bubble up to the same handler with a deeper target.
+  function onShellClick(event) {
+    if (closeOnBackdrop && event.target === event.currentTarget) {
+      onclose?.();
+    }
+  }
+</script>
+
+{#if open}
+  <div class={backdropClass} aria-hidden="true"></div>
+  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+  <div class={shellClass} onclick={onShellClick} {@attach autofocusWithin()}>
+    {@render children?.()}
+  </div>
+{/if}
+
+<style>
+  .auth-dialog-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.48);
+    z-index: 80;
+  }
+
+  .editor-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.48);
+    z-index: 80;
+  }
+
+  .auth-dialog-shell {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+  }
+
+  .editor-modal-shell {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    overflow-y: auto;
+  }
+
+  /* Stacked modal over another open modal: the modal below already dims
+     the page, so only dim a little more and sit above its shell. */
+  .modal-stacked-backdrop {
+    background: rgba(0, 0, 0, 0.16);
+    z-index: 95;
+  }
+
+  .modal-stacked-shell {
+    z-index: 100;
+  }
+
+  .editor-modal-shell > :global(*) {
+    width: min(760px, 100%);
+    max-height: min(calc(100vh - 40px), 960px);
+    margin: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.38);
+  }
+
+  @media (max-width: 768px) {
+    .auth-dialog-shell {
+        align-items: end;
+        padding: 12px;
+      }
+
+    .editor-modal-shell {
+        align-items: end;
+        padding: 12px;
+        padding-bottom: calc(12px + env(safe-area-inset-bottom));
+      }
+
+    .editor-modal-shell > :global(*) {
+        max-height: calc(100vh - 24px - env(safe-area-inset-bottom, 0px));
+      }
+  }
+</style>

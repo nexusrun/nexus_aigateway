@@ -1,0 +1,49 @@
+// Pure runtime-refresh report logic.
+
+import * as m from "../../lib/paraglide/messages.js";
+
+function runtimeRefreshStatus(report) {
+  return String((report && report.status) || "ok").toLowerCase();
+}
+
+export function runtimeRefreshSummary(report) {
+  if (!report || typeof report !== "object") {
+    return m.settings_runtime_refresh_completed();
+  }
+  const modelCount = Number(report.model_count || 0);
+  const providerCount = Number(report.provider_count || 0);
+  const status = runtimeRefreshStatus(report);
+  const prefix =
+    status === "ok"
+      ? m.settings_runtime_refreshed()
+      : status === "partial"
+        ? m.settings_runtime_refresh_warnings()
+        : m.settings_runtime_refresh_failed();
+  return m.settings_runtime_refresh_summary({
+    status: prefix,
+    models: m.settings_runtime_refresh_models({ count: modelCount }),
+    providers: m.settings_runtime_refresh_providers({ count: providerCount }),
+  });
+}
+
+export function runtimeRefreshSucceeded(report) {
+  return Boolean(report) && runtimeRefreshStatus(report) === "ok";
+}
+
+export function runtimeRefreshWarnings(report) {
+  return Boolean(report) && runtimeRefreshStatus(report) !== "ok";
+}
+
+export function runtimeRefreshSteps(report) {
+  const steps = report && report.steps;
+  return Array.isArray(steps) ? steps : [];
+}
+
+export function runtimeRefreshStepLabel(step) {
+  const name = String((step && step.name) || "").replace(/_/g, " ");
+  const status = String((step && step.status) || "").trim();
+  const detail = String((step && (step.error || step.message)) || "").trim();
+  if (!name) return detail || status || "";
+  if (!detail) return name + ": " + status;
+  return name + ": " + status + " - " + detail;
+}

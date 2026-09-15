@@ -1,0 +1,168 @@
+---
+title: "Anthropic"
+description: "Configure Anthropic (Claude) in GoModel and understand how reasoning effort maps to Claude's adaptive thinking and effort control."
+icon: "sparkles"
+keywords: ["Anthropic", "Claude", "reasoning effort", "extended thinking", "provider setup"]
+---
+
+Anthropic setup is just an API key. This page exists for one quirk: how
+GoModel maps the OpenAI-style `reasoning.effort` knob onto Claude's native
+thinking and effort controls, which differ by model generation.
+
+## Configure
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-...
+# ANTHROPIC_BASE_URL=https://api.anthropic.com/v1   # optional override
+# ANTHROPIC_DEFAULT_MAX_TOKENS=4096                 # injected when callers omit max_tokens
+```
+
+Or in `config.yaml`:
+
+```yaml
+providers:
+  anthropic:
+    type: anthropic
+    api_key: "${ANTHROPIC_API_KEY}"
+```
+
+<Note>
+  Anthropic's `/v1/messages` requires `max_tokens` on every request. GoModel
+  injects `ANTHROPIC_DEFAULT_MAX_TOKENS` (default `4096`) when a caller omits
+  it, keeping the OpenAI-compatible surface lenient.
+</Note>
+
+## Claude subscription (OAuth token)
+
+GoModel also accepts a Claude subscription OAuth token as the Anthropic
+credential. Generate one with `claude setup-token` (requires a Claude
+subscription — Pro, Max, Team, or Enterprise — and the Claude Code CLI) and
+set it as the provider key:
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-oat01-...
+```
+
+Tokens with the `sk-ant-oat` prefix are detected automatically: GoModel sends
+them as `Authorization: Bearer` with the `oauth-2025-04-20` beta instead of
+`x-api-key`. No extra configuration is needed.
+
+<Warning>
+  Anthropic authorizes subscription OAuth tokens **only for Claude Code
+  traffic**. Use this to route your own Claude Code through GoModel (see the
+  [Claude Code guide](/guides/claude-code)); requests from other clients are
+  rejected upstream with "This credential is only authorized for use with
+  Claude Code". Endpoints outside the Claude Code surface (such as model
+  listing) may also be rejected — if provider model discovery fails, configure
+  the `models` list for the provider explicitly.
+</Warning>
+
+## Reasoning effort mapping
+
+GoModel accepts the OpenAI-shaped `"reasoning": {"effort": "..."}` object as
+well as the Chat Completions string form `"reasoning_effort": "..."` (a
+non-empty `reasoning.effort` wins when both are present; an empty object falls
+back to the string form) and translates them to Claude's native controls. The
+five accepted levels are `low`, `medium`, `high`, `xhigh`, and `max`; values
+are matched case-insensitively and any other value is downgraded to `low` and
+logged. The translation
+depends on whether the model supports **adaptive thinking**.
+
+| Model generation | Thinking config | Effort destination |
+| ---------------- | --------------- | ------------------ |
+| Adaptive — `claude-fable-5`, `claude-fable-5-1`, `claude-mythos-5`, `claude-mythos-5-1`, `claude-opus-5`, `claude-sonnet-5`, `claude-opus-4-8`, `claude-opus-4-7`, `claude-opus-4-6`, `claude-sonnet-4-6` (and dated snapshots of each) | `thinking: {type: "adaptive"}` | `output_config.effort` (passed through) |
+| Legacy (everything else, e.g. `claude-opus-4-5`, `claude-3-5-sonnet`) | `thinking: {type: "enabled", budget_tokens: N}` | mapped to a token budget |
+
+<Note>
+  Adaptive routing is an explicit allowlist, not a version comparison. New
+  model IDs are treated as legacy until added to the list. For pre-4.7 models
+  the legacy fallback keeps working via `budget_tokens`; models from Opus 4.7
+  onward reject `budget_tokens` outright, so a new adaptive-only model ID
+  fails with an upstream 400 until it is added to the allowlist.
+</Note>
+
+For legacy models the effort string maps to a thinking budget; `max_tokens` is
+bumped above the budget when needed. `xhigh` and `max` are adaptive-only levels,
+so on legacy models they are capped at the `high` budget rather than inflating
+`max_tokens` past what those models can emit:
+
+| Effort | Budget tokens |
+| ------ | ------------- |
+| `low` | 5000 |
+| `medium` | 10000 |
+| `high` / `xhigh` / `max` | 20000 |
+
+<Note>
+  Omit `reasoning` to leave thinking at the model's default. GoModel only sets
+  `thinking: {type: "adaptive"}` when you pass `reasoning.effort` (or
+  `reasoning_effort`). Without it,
+  Opus 4.6 to 4.8 and Sonnet 4.6/5 do not engage extended thinking, while
+  Fable 5/5.1, Mythos 5/5.1, and Opus 5 think adaptively on their own (see the
+  always-on note below). Effort is a separate
+  control that governs overall token spend (text and tool calls) whether or not
+  thinking is engaged, and Anthropic defaults it to `high` when unset. It is a
+  behavioral signal for depth and verbosity, not a hard budget — actual usage
+  varies per request and is bounded by `max_tokens`.
+</Note>
+
+<Note>
+  Effort levels are model-gated upstream: `xhigh` is available on Fable 5/5.1,
+  Opus 5, Sonnet 5, and Opus 4.8/4.7; `max` on those plus Opus 4.6 and
+  Sonnet 4.6. GoModel forwards the level you send; Anthropic rejects it with a
+  400 if the target model does not support it. Manual `budget_tokens` thinking
+  is rejected from Opus 4.7 onward, which is why GoModel uses adaptive thinking
+  for those models.
+</Note>
+
+<Note>
+  On Fable 5/5.1, Mythos 5/5.1, and Opus 5 thinking is always on, whether or
+  not you send `reasoning`; `reasoning.effort` only tunes its depth. The tokens
+  it spends are reported as `usage.completion_reasoning_tokens` in Chat
+  Completions responses. The reasoning text itself is not returned; only the
+  token count is.
+</Note>
+
+## Sampling parameters
+
+Anthropic removed `temperature` and `top_p` from Fable 5/5.1, Mythos 5/5.1,
+Opus 5, Sonnet 5, and Opus 4.8/4.7 — any value, including the OpenAI SDK
+default of `temperature: 1`, is rejected upstream with a 400. GoModel drops
+both fields for those models and logs the discarded values, so clients that
+always send a temperature keep working. Older models still receive them as
+sent, with one exception below.
+
+Anthropic treats `temperature` and `top_p` as mutually exclusive on every
+model: a request carrying both is rejected with ``400 "`temperature` and
+`top_p` cannot both be specified for this model"``. Since OpenAI-compatible
+clients routinely fill in both defaults, GoModel forwards `temperature` and
+drops `top_p` (logging the discarded value) when it sees both. Send only
+`top_p` if that is the knob you want to control.
+
+Independently of the model, when extended thinking is engaged Anthropic
+requires `temperature = 1`. GoModel drops any other temperature value (and logs
+it) rather than failing the request.
+
+## Forced tool choice on Fable 5.1
+
+Fable 5.1 and Mythos 5.1 accept only `tool_choice: "auto"` and `"none"`;
+forcing a call with `"required"` or `{"type": "function", ...}` returns a 400
+from Anthropic. GoModel follows Anthropic's documented replacement: the choice
+is downgraded to `auto` and an instruction is appended to the system prompt —
+"You must respond by calling one of the provided tools." for `required`, or
+"You must respond by calling the tool named `<name>`." for a named function.
+The downgrade is logged. `parallel_tool_calls: false` is still honored. Fable 5
+and every other Claude model keep forced tool use unchanged.
+
+<Warning>
+  The instruction is strong guidance, not a hard guarantee: the model can still
+  answer in text. If you relied on forced tool choice to obtain JSON, check
+  `finish_reason` and retry, or use the
+  [native passthrough](#native-passthrough) with Anthropic's structured
+  outputs instead.
+</Warning>
+
+## Native passthrough
+
+To send Claude-native request fields that have no OpenAI-compatible equivalent
+(for example inline mid-task `system` entries in the `messages` array), use the
+passthrough route `/p/anthropic/messages`, which forwards the body verbatim.

@@ -1,0 +1,147 @@
+package gateway
+
+import (
+	"context"
+	"io"
+	"time"
+
+	"github.com/enterpilot/gomodel/internal/core"
+	"github.com/enterpilot/gomodel/internal/streaming"
+	"github.com/enterpilot/gomodel/internal/usage"
+)
+
+// RouteGate reports whether a provider/model route currently has rate-limit
+// capacity. Failover uses it to skip saturated targets; admission at the
+// handler layer stays the authoritative check.
+type RouteGate interface {
+	RouteAvailable(providerName, model string) bool
+}
+
+// InferenceConfig configures translated inference orchestration.
+type InferenceConfig struct {
+	Provider                 core.RoutableProvider
+	ModelResolver            ModelResolver
+	ModelAuthorizer          ModelAuthorizer
+	WorkflowPolicyResolver   WorkflowPolicyResolver
+	FailoverResolver         FailoverResolver
+	FailoverPolicy           *FailoverPolicy // Optional: nil applies the default failover policy
+	TranslatedRequestPatcher TranslatedRequestPatcher
+	ResponsesAttemptPatcher  ResponsesAttemptPatcher  // Optional: per-attempt Responses request adaptation
+	ResponsesHistoryResolver ResponsesHistoryResolver // Optional: expands Responses history before the prompt phase
+	UsageLogger              usage.LoggerInterface
+	PricingResolver          usage.PricingResolver
+	RouteGate                RouteGate
+	GuardrailsHash           string
+}
+
+// InferenceOrchestrator owns translated inference workflow resolution, request
+// patching, provider dispatch, failover, usage logging, and cache metadata.
+type InferenceOrchestrator struct {
+	provider                 core.RoutableProvider
+	modelResolver            ModelResolver
+	modelAuthorizer          ModelAuthorizer
+	workflowPolicyResolver   WorkflowPolicyResolver
+	failoverResolver         FailoverResolver
+	failoverPolicy           *FailoverPolicy
+	translatedRequestPatcher TranslatedRequestPatcher
+	responsesAttemptPatcher  ResponsesAttemptPatcher
+	responsesHistoryResolver ResponsesHistoryResolver
+	usageLogger              usage.LoggerInterface
+	pricingResolver          usage.PricingResolver
+	routeGate                RouteGate
+	guardrailsHash           string
+}
+
+// NewInferenceOrchestrator creates a translated inference orchestrator.
+func NewInferenceOrchestrator(cfg InferenceConfig) *InferenceOrchestrator {
+	return &InferenceOrchestrator{
+		provider:                 cfg.Provider,
+		modelResolver:            cfg.ModelResolver,
+		modelAuthorizer:          cfg.ModelAuthorizer,
+		workflowPolicyResolver:   cfg.WorkflowPolicyResolver,
+		failoverResolver:         cfg.FailoverResolver,
+		failoverPolicy:           cfg.FailoverPolicy,
+		translatedRequestPatcher: cfg.TranslatedRequestPatcher,
+		responsesAttemptPatcher:  cfg.ResponsesAttemptPatcher,
+		responsesHistoryResolver: cfg.ResponsesHistoryResolver,
+		usageLogger:              cfg.UsageLogger,
+		pricingResolver:          cfg.PricingResolver,
+		routeGate:                cfg.RouteGate,
+		guardrailsHash:           cfg.GuardrailsHash,
+	}
+}
+
+// RequestMeta carries transport-derived metadata into gateway use cases.
+type RequestMeta struct {
+	RequestID string
+	Endpoint  core.EndpointDescriptor
+	Workflow  *core.Workflow
+}
+
+// PreparedChatRequest is a translated chat request ready for cache lookup or execution.
+type PreparedChatRequest struct {
+	Context  context.Context
+	Request  *core.ChatRequest
+	Workflow *core.Workflow
+}
+
+// PreparedResponsesRequest is a translated Responses request ready for cache lookup or execution.
+type PreparedResponsesRequest struct {
+	Context  context.Context
+	Request  *core.ResponsesRequest
+	Workflow *core.Workflow
+}
+
+// PreparedEmbeddingRequest is a translated embeddings request ready for execution.
+type PreparedEmbeddingRequest struct {
+	Context  context.Context
+	Request  *core.EmbeddingRequest
+	Workflow *core.Workflow
+}
+
+// ExecutionMeta describes the concrete route used for provider execution.
+type ExecutionMeta struct {
+	ProviderType  string
+	ProviderName  string
+	Model         string
+	FailoverModel string
+	UsedFailover  bool
+}
+
+// ChatCompletionResult is the non-streaming chat completion result.
+type ChatCompletionResult struct {
+	Response *core.ChatResponse
+	Meta     ExecutionMeta
+}
+
+// ResponsesResult is the non-streaming Responses API result.
+type ResponsesResult struct {
+	Response *core.ResponsesResponse
+	Meta     ExecutionMeta
+}
+
+// EmbeddingResult is the embeddings result.
+type EmbeddingResult struct {
+	Response *core.EmbeddingResponse
+	Meta     ExecutionMeta
+}
+
+// StreamResult is a provider SSE stream plus route metadata for observers.
+// Stream is intentionally unbuffered so accounting observers can consume the
+// provider events before WrapDeliveryStream applies any client-facing delay.
+type StreamResult struct {
+	Stream io.ReadCloser
+	Meta   ExecutionMeta
+
+	slowdownFactor   float64
+	inferenceStarted time.Time
+}
+
+// WrapDeliveryStream applies this result's client-facing slowdown after any
+// accounting or persistence wrappers have been attached to stream.
+func (r *StreamResult) WrapDeliveryStream(ctx context.Context, stream io.ReadCloser) io.ReadCloser {
+	if r == nil {
+		return stream
+	}
+	return streaming.NewSlowdownStream(ctx, stream, r.slowdownFactor, r.inferenceStarted)
+}

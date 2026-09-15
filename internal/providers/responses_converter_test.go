@@ -1,0 +1,1468 @@
+package providers
+
+import (
+	"encoding/json"
+	"io"
+	"reflect"
+	"slices"
+	"strings"
+	"testing"
+)
+
+type testSSEEvent struct {
+	Name    string
+	Payload map[string]any
+	Done    bool
+}
+
+func TestOpenAIResponsesStreamConverter_WithToolCalls(t *testing.T) {
+	mockStream := `data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"test-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_123","type":"function","function":{"name":"lookup_weather","arguments":""}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"test-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"city\":\"War"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"test-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"saw\"}"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"test-model","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
+
+data: [DONE]
+`
+
+	reader := io.NopCloser(strings.NewReader(mockStream))
+	converter := NewOpenAIResponsesStreamConverter(reader, "test-model", "groq")
+
+	raw, err := io.ReadAll(converter)
+	if err != nil {
+		t.Fatalf("failed to read from converter: %v", err)
+	}
+
+	events := parseTestSSEEvents(t, string(raw))
+	foundAdded := false
+	foundArgumentsDone := false
+	foundItemDone := false
+	var argumentDeltas []string
+
+	for _, event := range events {
+		if event.Done {
+			continue
+		}
+		switch event.Name {
+		case "response.output_item.added":
+			item, _ := event.Payload["item"].(map[string]any)
+			if item["type"] == "function_call" && item["call_id"] == "call_123" && item["name"] == "lookup_weather" {
+				foundAdded = true
+			}
+		case "response.function_call_arguments.delta":
+			if delta, _ := event.Payload["delta"].(string); delta != "" {
+				argumentDeltas = append(argumentDeltas, delta)
+			}
+		case "response.function_call_arguments.done":
+			if event.Payload["arguments"] == `{"city":"Warsaw"}` {
+				foundArgumentsDone = true
+			}
+		case "response.output_item.done":
+			item, _ := event.Payload["item"].(map[string]any)
+			if item["type"] == "function_call" && item["arguments"] == `{"city":"Warsaw"}` {
+				foundItemDone = true
+			}
+		}
+	}
+
+	if !foundAdded {
+		t.Fatal("expected response.output_item.added for function_call")
+	}
+	if len(argumentDeltas) != 2 || argumentDeltas[0] != "{\"city\":\"War" || argumentDeltas[1] != "saw\"}" {
+		t.Fatalf("response.function_call_arguments.delta sequence = %#v, want two ordered fragments", argumentDeltas)
+	}
+	if !foundArgumentsDone {
+		t.Fatal("expected response.function_call_arguments.done for function_call")
+	}
+	if !foundItemDone {
+		t.Fatal("expected response.output_item.done for function_call")
+	}
+}
+
+// TestOpenAIResponsesStreamConverter_ToolCallExtraContent keeps a provider's
+// extra_content (Gemini's thought signature) on the function_call item so a
+// client that echoes the item restores it.
+func TestOpenAIResponsesStreamConverter_ToolCallExtraContent(t *testing.T) {
+	mockStream := `data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"test-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_123","type":"function","function":{"name":"lookup_weather","arguments":"{}"},"extra_content":{"google":{"thought_signature":"sig-1"}}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"test-model","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
+
+data: [DONE]
+`
+
+	converter := NewOpenAIResponsesStreamConverter(io.NopCloser(strings.NewReader(mockStream)), "test-model", "gemini")
+	raw, err := io.ReadAll(converter)
+	if err != nil {
+		t.Fatalf("failed to read from converter: %v", err)
+	}
+
+	want := map[string]any{"google": map[string]any{"thought_signature": "sig-1"}}
+	seen := 0
+	for _, event := range parseTestSSEEvents(t, string(raw)) {
+		if event.Name != "response.output_item.added" && event.Name != "response.output_item.done" {
+			continue
+		}
+		item, _ := event.Payload["item"].(map[string]any)
+		if item["type"] != "function_call" {
+			continue
+		}
+		seen++
+		if got := item["extra_content"]; !reflect.DeepEqual(got, want) {
+			t.Fatalf("%s extra_content = %#v, want %#v", event.Name, got, want)
+		}
+	}
+	if seen != 2 {
+		t.Fatalf("function_call item events = %d, want added and done", seen)
+	}
+}
+
+// TestOpenAIResponsesStreamConverter_NullExtraContentDeltaKeepsSignature: a
+// later argument delta carrying extra_content: null must not erase the
+// signature the first delta set.
+func TestOpenAIResponsesStreamConverter_NullExtraContentDeltaKeepsSignature(t *testing.T) {
+	mockStream := `data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"test-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_123","type":"function","function":{"name":"lookup_weather","arguments":"{"},"extra_content":{"google":{"thought_signature":"sig-1"}}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"test-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"}"},"extra_content":null}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"test-model","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
+
+data: [DONE]
+`
+
+	converter := NewOpenAIResponsesStreamConverter(io.NopCloser(strings.NewReader(mockStream)), "test-model", "gemini")
+	raw, err := io.ReadAll(converter)
+	if err != nil {
+		t.Fatalf("failed to read from converter: %v", err)
+	}
+
+	want := map[string]any{"google": map[string]any{"thought_signature": "sig-1"}}
+	for _, event := range parseTestSSEEvents(t, string(raw)) {
+		if event.Name != "response.output_item.done" {
+			continue
+		}
+		item, _ := event.Payload["item"].(map[string]any)
+		if item["type"] != "function_call" {
+			continue
+		}
+		if got := item["extra_content"]; !reflect.DeepEqual(got, want) {
+			t.Fatalf("extra_content after null delta = %#v, want %#v", got, want)
+		}
+		return
+	}
+	t.Fatal("expected a function_call output_item.done event")
+}
+
+// TestOpenAIResponsesStreamConverter_ReasoningContent covers DeepSeek-style
+// reasoning_content deltas. reasoning_content is raw reasoning, so it must be
+// exposed as reasoning_text rather than mislabeled as a readable summary. The
+// item must be registered before its first delta and the assistant message must
+// shift to output_index 1.
+func TestOpenAIResponsesStreamConverter_ReasoningContent(t *testing.T) {
+	mockStream := `data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"deepseek-v4-pro","choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":""},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"deepseek-v4-pro","choices":[{"index":0,"delta":{"reasoning_content":"Think"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"deepseek-v4-pro","choices":[{"index":0,"delta":{"reasoning_content":"ing..."},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"deepseek-v4-pro","choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"deepseek-v4-pro","choices":[{"index":0,"delta":{"content":"!"},"finish_reason":"stop"}]}
+
+data: [DONE]
+`
+
+	reader := io.NopCloser(strings.NewReader(mockStream))
+	converter := NewOpenAIResponsesStreamConverter(reader, "deepseek-v4-pro", "deepseek")
+
+	raw, err := io.ReadAll(converter)
+	if err != nil {
+		t.Fatalf("failed to read from converter: %v", err)
+	}
+	rawStr := string(raw)
+
+	events := parseTestSSEEvents(t, rawStr)
+	activeItems := map[string]bool{}
+	var reasoningItemID string
+	var messageOutputIndex float64 = -1
+	var reasoningDeltas strings.Builder
+	sawReasoningDone := false
+	sawSummaryEvent := false
+
+	for _, event := range events {
+		if event.Done {
+			continue
+		}
+		switch event.Name {
+		case "response.output_item.added":
+			item, _ := event.Payload["item"].(map[string]any)
+			id, _ := item["id"].(string)
+			activeItems[id] = true
+			if item["type"] == "reasoning" {
+				reasoningItemID = id
+				summary, ok := item["summary"].([]any)
+				if !ok || len(summary) != 0 {
+					t.Fatalf("reasoning output_item.added must carry an empty summary array, got %#v", item["summary"])
+				}
+				if item["status"] != "in_progress" {
+					t.Fatalf("reasoning output_item.added status = %#v, want in_progress", item["status"])
+				}
+				if idx, _ := event.Payload["output_index"].(float64); idx != 0 {
+					t.Fatalf("reasoning output_index = %v, want 0", event.Payload["output_index"])
+				}
+			}
+			if item["type"] == "message" {
+				messageOutputIndex, _ = event.Payload["output_index"].(float64)
+			}
+		case "response.output_item.done":
+			item, _ := event.Payload["item"].(map[string]any)
+			id, _ := item["id"].(string)
+			if item["type"] == "reasoning" {
+				content, _ := item["content"].([]any)
+				if len(content) != 1 {
+					t.Fatalf("completed reasoning content = %#v, want one reasoning_text part", item["content"])
+				}
+				part, _ := content[0].(map[string]any)
+				if part["type"] != "reasoning_text" || part["text"] != "Thinking..." {
+					t.Fatalf("completed reasoning part = %#v", part)
+				}
+			}
+			delete(activeItems, id)
+		case "response.reasoning_text.delta":
+			itemID, _ := event.Payload["item_id"].(string)
+			if !activeItems[itemID] {
+				t.Fatalf("%s referenced item %q before its response.output_item.added", event.Name, itemID)
+			}
+			delta, _ := event.Payload["delta"].(string)
+			reasoningDeltas.WriteString(delta)
+		case "response.reasoning_text.done":
+			itemID, _ := event.Payload["item_id"].(string)
+			if !activeItems[itemID] {
+				t.Fatalf("%s referenced item %q after it closed", event.Name, itemID)
+			}
+			if event.Payload["text"] != "Thinking..." {
+				t.Fatalf("reasoning_text.done text = %#v", event.Payload["text"])
+			}
+			sawReasoningDone = true
+		case "response.reasoning_summary_part.added", "response.reasoning_summary_text.delta",
+			"response.reasoning_summary_text.done", "response.reasoning_summary_part.done":
+			sawSummaryEvent = true
+		case "response.output_text.delta":
+			// Assistant text must only stream after the reasoning item closed.
+			if reasoningItemID != "" && activeItems[reasoningItemID] {
+				t.Fatalf("response.output_text.delta arrived while the reasoning item was still open")
+			}
+		}
+	}
+
+	if reasoningItemID == "" {
+		t.Fatal("expected a reasoning output_item.added event")
+	}
+	if messageOutputIndex != 1 {
+		t.Fatalf("message output_index = %v, want 1 (after the reasoning item at index 0)", messageOutputIndex)
+	}
+	if reasoningDeltas.String() != "Thinking..." || !sawReasoningDone {
+		t.Fatalf("reasoning stream = %q, done=%v", reasoningDeltas.String(), sawReasoningDone)
+	}
+	if sawSummaryEvent {
+		t.Fatalf("raw reasoning_content must not emit reasoning summary events:\n%s", rawStr)
+	}
+	if len(activeItems) != 0 {
+		t.Fatalf("expected every output item to close by end of stream, still open: %#v", activeItems)
+	}
+}
+
+func TestOpenAIResponsesStreamConverter_DropsLateReasoningWithoutCorruptingIndexes(t *testing.T) {
+	mockStream := `data: {"choices":[{"delta":{"content":"answer"},"finish_reason":null}]}
+
+data: {"choices":[{"delta":{"reasoning_content":"late trace"},"finish_reason":"stop"}]}
+
+data: [DONE]
+`
+
+	converter := NewOpenAIResponsesStreamConverter(io.NopCloser(strings.NewReader(mockStream)), "test-model", "mock")
+	raw, err := io.ReadAll(converter)
+	if err != nil {
+		t.Fatalf("ReadAll() error = %v", err)
+	}
+
+	for _, event := range parseTestSSEEvents(t, string(raw)) {
+		if strings.HasPrefix(event.Name, "response.reasoning_") {
+			t.Fatalf("late reasoning produced %s:\n%s", event.Name, raw)
+		}
+		if event.Name != "response.output_item.added" && event.Name != "response.output_item.done" {
+			continue
+		}
+		item, _ := event.Payload["item"].(map[string]any)
+		if item["type"] == "message" && event.Payload["output_index"] != float64(0) {
+			t.Fatalf("assistant %s output_index = %#v, want 0", event.Name, event.Payload["output_index"])
+		}
+	}
+}
+
+func TestOpenAIResponsesStreamConverter_ReasoningToolOutputOrder(t *testing.T) {
+	tests := []struct {
+		name         string
+		mockStream   string
+		wantIndexes  map[string]float64
+		wantSequence []string
+	}{
+		{
+			name: "reasoning then tool call",
+			mockStream: `data: {"choices":[{"delta":{"reasoning_content":"Need the weather."},"finish_reason":null}]}
+
+data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"lookup_weather","arguments":"{\"city\":\"Warsaw\"}"}}]},"finish_reason":null}]}
+
+data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}
+
+data: [DONE]
+`,
+			wantIndexes:  map[string]float64{"reasoning": 0, "function_call": 1},
+			wantSequence: []string{"reasoning", "function_call"},
+		},
+		{
+			name: "assistant after started tool call",
+			mockStream: `data: {"choices":[{"delta":{"reasoning_content":"Need a tool."},"finish_reason":null}]}
+
+data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"lookup","arguments":"{}"}}]},"finish_reason":null}]}
+
+data: {"choices":[{"delta":{"content":"Tool selected."},"finish_reason":"stop"}]}
+
+data: [DONE]
+`,
+			wantIndexes:  map[string]float64{"reasoning": 0, "function_call": 1, "message": 2},
+			wantSequence: []string{"reasoning", "function_call", "message"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			converter := NewOpenAIResponsesStreamConverter(io.NopCloser(strings.NewReader(tt.mockStream)), "test-model", "mock")
+			raw, err := io.ReadAll(converter)
+			if err != nil {
+				t.Fatalf("ReadAll() error = %v", err)
+			}
+
+			addedIndexes := make(map[string]float64)
+			var addedSequence []string
+			reasoningDone := false
+			reasoningDoneBeforeTool := false
+			for _, event := range parseTestSSEEvents(t, string(raw)) {
+				item, _ := event.Payload["item"].(map[string]any)
+				itemType, _ := item["type"].(string)
+				switch event.Name {
+				case "response.output_item.done":
+					if itemType == "reasoning" {
+						reasoningDone = event.Payload["output_index"] == float64(0)
+					}
+				case "response.output_item.added":
+					addedIndexes[itemType], _ = event.Payload["output_index"].(float64)
+					addedSequence = append(addedSequence, itemType)
+					if itemType == "function_call" {
+						reasoningDoneBeforeTool = reasoningDone
+					}
+				}
+			}
+
+			if len(addedIndexes) != len(tt.wantIndexes) {
+				t.Fatalf("output indexes = %#v, want %#v", addedIndexes, tt.wantIndexes)
+			}
+			for itemType, wantIndex := range tt.wantIndexes {
+				if addedIndexes[itemType] != wantIndex {
+					t.Fatalf("%s output_index = %v, want %v", itemType, addedIndexes[itemType], wantIndex)
+				}
+			}
+			if !slices.Equal(addedSequence, tt.wantSequence) {
+				t.Fatalf("output item sequence = %#v, want %#v", addedSequence, tt.wantSequence)
+			}
+			if !reasoningDoneBeforeTool {
+				t.Fatal("expected the reasoning item to close before the function_call item opened")
+			}
+		})
+	}
+}
+
+// TestOpenAIResponsesStreamConverter_CompletedIncludesOutput verifies the
+// terminal response.completed event carries the full output array (reasoning,
+// message, function_call in stream order), matching OpenAI's native behavior —
+// strict SDK clients index into response.output.
+func TestOpenAIResponsesStreamConverter_CompletedIncludesOutput(t *testing.T) {
+	mockStream := `data: {"choices":[{"delta":{"reasoning_content":"Need the weather."},"finish_reason":null}]}
+
+data: {"choices":[{"delta":{"content":"Checking."},"finish_reason":null}]}
+
+data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"lookup_weather","arguments":"{\"city\":\"Warsaw\"}"}}]},"finish_reason":null}]}
+
+data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}
+
+data: [DONE]
+`
+
+	converter := NewOpenAIResponsesStreamConverter(io.NopCloser(strings.NewReader(mockStream)), "test-model", "mock")
+	raw, err := io.ReadAll(converter)
+	if err != nil {
+		t.Fatalf("ReadAll() error = %v", err)
+	}
+
+	var output []any
+	for _, event := range parseTestSSEEvents(t, string(raw)) {
+		if event.Done || event.Name != "response.completed" {
+			continue
+		}
+		response, _ := event.Payload["response"].(map[string]any)
+		output, _ = response["output"].([]any)
+	}
+
+	if len(output) != 3 {
+		t.Fatalf("response.completed output has %d items, want 3: %#v", len(output), output)
+	}
+
+	reasoning, _ := output[0].(map[string]any)
+	if reasoning["type"] != "reasoning" || reasoning["status"] != "completed" {
+		t.Fatalf("output[0] = %#v, want completed reasoning item", reasoning)
+	}
+	reasoningContent, _ := reasoning["content"].([]any)
+	if len(reasoningContent) != 1 {
+		t.Fatalf("reasoning content = %#v, want one reasoning_text part", reasoning["content"])
+	}
+	if part, _ := reasoningContent[0].(map[string]any); part["type"] != "reasoning_text" || part["text"] != "Need the weather." {
+		t.Fatalf("reasoning part = %#v, want reasoning_text %q", reasoningContent[0], "Need the weather.")
+	}
+
+	message, _ := output[1].(map[string]any)
+	if message["type"] != "message" || message["role"] != "assistant" || message["status"] != "completed" {
+		t.Fatalf("output[1] = %#v, want completed assistant message", message)
+	}
+	messageContent, _ := message["content"].([]any)
+	if len(messageContent) != 1 {
+		t.Fatalf("message content = %#v, want one output_text part", message["content"])
+	}
+	if part, _ := messageContent[0].(map[string]any); part["type"] != "output_text" || part["text"] != "Checking." {
+		t.Fatalf("message part = %#v, want output_text %q", messageContent[0], "Checking.")
+	}
+
+	toolCall, _ := output[2].(map[string]any)
+	if toolCall["type"] != "function_call" || toolCall["status"] != "completed" {
+		t.Fatalf("output[2] = %#v, want completed function_call", toolCall)
+	}
+	if toolCall["call_id"] != "call_1" || toolCall["name"] != "lookup_weather" || toolCall["arguments"] != `{"city":"Warsaw"}` {
+		t.Fatalf("function_call = %#v, want call_1 lookup_weather with recorded arguments", toolCall)
+	}
+}
+
+// TestOpenAIResponsesStreamConverter_CompletedEmptyOutputIsArray verifies a
+// stream with no output items still yields output: [] rather than omitting the
+// field or emitting null.
+func TestOpenAIResponsesStreamConverter_CompletedEmptyOutputIsArray(t *testing.T) {
+	mockStream := "data: [DONE]\n"
+
+	converter := NewOpenAIResponsesStreamConverter(io.NopCloser(strings.NewReader(mockStream)), "test-model", "mock")
+	raw, err := io.ReadAll(converter)
+	if err != nil {
+		t.Fatalf("ReadAll() error = %v", err)
+	}
+
+	found := false
+	for _, event := range parseTestSSEEvents(t, string(raw)) {
+		if event.Done || event.Name != "response.completed" {
+			continue
+		}
+		found = true
+		response, _ := event.Payload["response"].(map[string]any)
+		output, ok := response["output"].([]any)
+		if !ok {
+			t.Fatalf("response.completed output = %#v, want an array", response["output"])
+		}
+		if len(output) != 0 {
+			t.Fatalf("response.completed output = %#v, want empty array", output)
+		}
+	}
+	if !found {
+		t.Fatal("expected response.completed event")
+	}
+}
+
+// TestOpenAIResponsesStreamConverter_TruncatedStreamEndsIncomplete covers an
+// upstream stream that dies without a finish_reason or [DONE]. The converter
+// must close open items with status "incomplete" and end the stream with
+// response.incomplete instead of fabricating completion.
+func TestOpenAIResponsesStreamConverter_TruncatedStreamEndsIncomplete(t *testing.T) {
+	mockStream := `data: {"choices":[{"delta":{"content":"Hel"},"finish_reason":null}]}
+
+data: {"choices":[{"delta":{"content":"lo"},"finish_reason":null}]}
+`
+
+	converter := NewOpenAIResponsesStreamConverter(io.NopCloser(strings.NewReader(mockStream)), "test-model", "mock")
+	raw, err := io.ReadAll(converter)
+	if err != nil {
+		t.Fatalf("ReadAll() error = %v", err)
+	}
+
+	itemDoneStatus := ""
+	foundCompleted := false
+	var response map[string]any
+	sawDone := false
+	for _, event := range parseTestSSEEvents(t, string(raw)) {
+		if event.Done {
+			if response == nil {
+				t.Fatal("[DONE] arrived before the response.incomplete terminal event")
+			}
+			sawDone = true
+			continue
+		}
+		switch event.Name {
+		case "response.output_item.done":
+			item, _ := event.Payload["item"].(map[string]any)
+			if item["type"] == "message" {
+				itemDoneStatus, _ = item["status"].(string)
+			}
+		case "response.completed":
+			foundCompleted = true
+		case "response.incomplete":
+			response, _ = event.Payload["response"].(map[string]any)
+		}
+	}
+
+	if foundCompleted {
+		t.Fatal("truncated stream must not end with response.completed")
+	}
+	if response == nil {
+		t.Fatal("expected response.incomplete terminal event on truncated stream")
+	}
+	if !sawDone {
+		t.Fatal("expected trailing [DONE] after response.incomplete")
+	}
+	if itemDoneStatus != "incomplete" {
+		t.Fatalf("message output_item.done status = %q, want %q", itemDoneStatus, "incomplete")
+	}
+	if response["status"] != "incomplete" {
+		t.Fatalf("response.status = %v, want incomplete", response["status"])
+	}
+	details, _ := response["incomplete_details"].(map[string]any)
+	if details["reason"] != "interrupted" {
+		t.Fatalf("incomplete_details = %#v, want reason interrupted", response["incomplete_details"])
+	}
+	output, _ := response["output"].([]any)
+	if len(output) != 1 {
+		t.Fatalf("response.incomplete output has %d items, want 1: %#v", len(output), output)
+	}
+	message, _ := output[0].(map[string]any)
+	if message["type"] != "message" || message["status"] != "incomplete" {
+		t.Fatalf("output[0] = %#v, want incomplete assistant message", message)
+	}
+	messageContent, _ := message["content"].([]any)
+	if len(messageContent) != 1 {
+		t.Fatalf("message content = %#v, want one output_text part", message["content"])
+	}
+	if part, _ := messageContent[0].(map[string]any); part["text"] != "Hello" {
+		t.Fatalf("partial text = %#v, want %q", part["text"], "Hello")
+	}
+}
+
+// failingReadCloser returns its data on the first read and the configured
+// error afterwards, mimicking an upstream body that dies mid-transfer.
+type failingReadCloser struct {
+	data []byte
+	err  error
+	read bool
+}
+
+func (r *failingReadCloser) Read(p []byte) (int, error) {
+	if !r.read {
+		r.read = true
+		return copy(p, r.data), nil
+	}
+	return 0, r.err
+}
+
+func (r *failingReadCloser) Close() error { return nil }
+
+// TestOpenAIResponsesStreamConverter_NonEOFReadErrorEndsIncomplete covers an
+// upstream body that fails with a non-EOF error (io.ErrUnexpectedEOF from a
+// chunked body cut mid-transfer, a connection reset). The client must still
+// receive the response.incomplete terminal event and [DONE] before the error
+// surfaces.
+func TestOpenAIResponsesStreamConverter_NonEOFReadErrorEndsIncomplete(t *testing.T) {
+	reader := &failingReadCloser{
+		data: []byte("data: {\"choices\":[{\"delta\":{\"content\":\"Hel\"},\"finish_reason\":null}]}\n\n"),
+		err:  io.ErrUnexpectedEOF,
+	}
+
+	converter := NewOpenAIResponsesStreamConverter(reader, "test-model", "mock")
+	raw, err := io.ReadAll(converter)
+	if err != io.ErrUnexpectedEOF {
+		t.Fatalf("ReadAll() error = %v, want io.ErrUnexpectedEOF surfaced after terminal events", err)
+	}
+
+	var response map[string]any
+	sawDone := false
+	for _, event := range parseTestSSEEvents(t, string(raw)) {
+		if event.Done {
+			sawDone = true
+			continue
+		}
+		if event.Name == "response.incomplete" {
+			response, _ = event.Payload["response"].(map[string]any)
+		}
+	}
+
+	if response == nil {
+		t.Fatal("expected response.incomplete terminal event before the read error")
+	}
+	if !sawDone {
+		t.Fatal("expected trailing [DONE] before the read error")
+	}
+	if response["status"] != "incomplete" {
+		t.Fatalf("response.status = %v, want incomplete", response["status"])
+	}
+}
+
+// TestOpenAIResponsesStreamConverter_IgnoresDeltaAfterToolCallClosed covers a
+// stray argument delta arriving after finish_reason "tool_calls" closed the
+// call: it must not mutate the arguments the output_item.done event declared,
+// so the terminal output array stays identical to the emitted done events.
+func TestOpenAIResponsesStreamConverter_IgnoresDeltaAfterToolCallClosed(t *testing.T) {
+	mockStream := `data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"lookup","arguments":"{\"city\":\"Warsaw\"}"}}]},"finish_reason":null}]}
+
+data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}
+
+data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"garbage"}}]},"finish_reason":null}]}
+
+data: [DONE]
+`
+
+	converter := NewOpenAIResponsesStreamConverter(io.NopCloser(strings.NewReader(mockStream)), "test-model", "mock")
+	raw, err := io.ReadAll(converter)
+	if err != nil {
+		t.Fatalf("ReadAll() error = %v", err)
+	}
+
+	doneArguments := ""
+	var output []any
+	for _, event := range parseTestSSEEvents(t, string(raw)) {
+		if event.Done {
+			continue
+		}
+		switch event.Name {
+		case "response.output_item.done":
+			item, _ := event.Payload["item"].(map[string]any)
+			if item["type"] == "function_call" {
+				doneArguments, _ = item["arguments"].(string)
+			}
+		case "response.completed":
+			response, _ := event.Payload["response"].(map[string]any)
+			output, _ = response["output"].([]any)
+		}
+	}
+
+	if doneArguments != `{"city":"Warsaw"}` {
+		t.Fatalf("output_item.done arguments = %q, want %q", doneArguments, `{"city":"Warsaw"}`)
+	}
+	if len(output) != 1 {
+		t.Fatalf("response.completed output has %d items, want 1: %#v", len(output), output)
+	}
+	if toolCall, _ := output[0].(map[string]any); toolCall["arguments"] != `{"city":"Warsaw"}` {
+		t.Fatalf("terminal output arguments = %v, want the arguments the done event declared", toolCall["arguments"])
+	}
+}
+
+// TestOpenAIResponsesStreamConverter_FinishReasonWithoutDoneCompletes covers
+// providers that close the stream after the finish_reason chunk without a
+// trailing [DONE] marker: the model finished, so the stream must still end
+// with response.completed.
+func TestOpenAIResponsesStreamConverter_FinishReasonWithoutDoneCompletes(t *testing.T) {
+	mockStream := `data: {"choices":[{"delta":{"content":"Hello"},"finish_reason":null}]}
+
+data: {"choices":[{"delta":{},"finish_reason":"stop"}]}
+`
+
+	converter := NewOpenAIResponsesStreamConverter(io.NopCloser(strings.NewReader(mockStream)), "test-model", "mock")
+	raw, err := io.ReadAll(converter)
+	if err != nil {
+		t.Fatalf("ReadAll() error = %v", err)
+	}
+
+	var response map[string]any
+	for _, event := range parseTestSSEEvents(t, string(raw)) {
+		if event.Done || event.Name != "response.completed" {
+			continue
+		}
+		response, _ = event.Payload["response"].(map[string]any)
+	}
+
+	if response == nil {
+		t.Fatal("expected response.completed when the stream ends after finish_reason without [DONE]")
+	}
+	if response["status"] != "completed" {
+		t.Fatalf("response.status = %v, want completed", response["status"])
+	}
+	output, _ := response["output"].([]any)
+	if len(output) != 1 {
+		t.Fatalf("response.completed output has %d items, want 1: %#v", len(output), output)
+	}
+	if message, _ := output[0].(map[string]any); message["status"] != "completed" {
+		t.Fatalf("output[0] = %#v, want completed assistant message", message)
+	}
+}
+
+func TestOpenAIResponsesStreamConverter_OutOfOrderToolCallsKeepUniqueIndexes(t *testing.T) {
+	mockStream := `data: {"choices":[{"delta":{"reasoning_content":"Plan."},"finish_reason":null}]}
+
+data: {"choices":[{"delta":{"tool_calls":[{"index":1,"id":"call_second","type":"function","function":{"name":"second","arguments":"{}"}}]},"finish_reason":null}]}
+
+data: {"choices":[{"delta":{"content":"Calling tools."},"finish_reason":null}]}
+
+data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_first","type":"function","function":{"name":"first","arguments":"{}"}}]},"finish_reason":null}]}
+
+data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}
+
+data: [DONE]
+`
+
+	converter := NewOpenAIResponsesStreamConverter(io.NopCloser(strings.NewReader(mockStream)), "test-model", "mock")
+	raw, err := io.ReadAll(converter)
+	if err != nil {
+		t.Fatalf("ReadAll() error = %v", err)
+	}
+
+	indexes := make(map[float64]string)
+	callIndexes := make(map[string]float64)
+	var addedIndexes []float64
+	for _, event := range parseTestSSEEvents(t, string(raw)) {
+		if event.Name != "response.output_item.added" {
+			continue
+		}
+		index, ok := event.Payload["output_index"].(float64)
+		if !ok {
+			t.Fatalf("output_index = %#v, want number", event.Payload["output_index"])
+		}
+		item, _ := event.Payload["item"].(map[string]any)
+		itemID, _ := item["id"].(string)
+		if previous, exists := indexes[index]; exists {
+			t.Fatalf("output_index %v reused by %q and %q", index, previous, itemID)
+		}
+		addedIndexes = append(addedIndexes, index)
+		indexes[index] = itemID
+		if callID, _ := item["call_id"].(string); callID != "" {
+			callIndexes[callID] = index
+		}
+	}
+
+	if len(indexes) != 4 {
+		t.Fatalf("output items = %#v, want reasoning, two calls, and message", indexes)
+	}
+	if !slices.Equal(addedIndexes, []float64{0, 1, 2, 3}) {
+		t.Fatalf("output indexes = %#v, want [0 1 2 3]", addedIndexes)
+	}
+	if callIndexes["call_second"] != 1 || callIndexes["call_first"] != 3 {
+		t.Fatalf("function-call indexes = %#v, want emission-order indexes 1 and 3", callIndexes)
+	}
+}
+
+func TestOpenAIResponsesStreamConverter_WithTextBeforeToolCall(t *testing.T) {
+	mockStream := `data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"test-model","choices":[{"index":0,"delta":{"content":"I'll check that for you."},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"test-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_123","type":"function","function":{"name":"lookup_weather","arguments":"{\"city\":\"Warsaw\"}"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"test-model","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
+
+data: [DONE]
+`
+
+	reader := io.NopCloser(strings.NewReader(mockStream))
+	converter := NewOpenAIResponsesStreamConverter(reader, "test-model", "groq")
+
+	raw, err := io.ReadAll(converter)
+	if err != nil {
+		t.Fatalf("failed to read from converter: %v", err)
+	}
+
+	events := parseTestSSEEvents(t, string(raw))
+	foundTextDelta := false
+	foundAssistantAdded := false
+	foundAssistantDone := false
+	foundToolAddedAtIndexOne := false
+
+	for _, event := range events {
+		if event.Done {
+			continue
+		}
+		switch event.Name {
+		case "response.output_item.added":
+			item, _ := event.Payload["item"].(map[string]any)
+			if item["type"] == "message" && item["role"] == "assistant" && event.Payload["output_index"] == float64(0) {
+				foundAssistantAdded = true
+			}
+			if item["type"] == "function_call" && item["call_id"] == "call_123" && event.Payload["output_index"] == float64(1) {
+				foundToolAddedAtIndexOne = true
+			}
+		case "response.output_item.done":
+			item, _ := event.Payload["item"].(map[string]any)
+			if item["type"] == "message" && item["role"] == "assistant" && event.Payload["output_index"] == float64(0) {
+				foundAssistantDone = true
+			}
+		case "response.output_text.delta":
+			if event.Payload["delta"] == "I'll check that for you." {
+				foundTextDelta = true
+			}
+		}
+	}
+
+	if !foundTextDelta {
+		t.Fatal("expected response.output_text.delta for assistant preamble")
+	}
+	if !foundAssistantAdded {
+		t.Fatal("expected assistant message response.output_item.added at output_index 0")
+	}
+	if !foundAssistantDone {
+		t.Fatal("expected assistant message response.output_item.done at output_index 0")
+	}
+	if !foundToolAddedAtIndexOne {
+		t.Fatal("expected function_call output_index to be 1 after assistant text")
+	}
+}
+
+func TestOpenAIResponsesStreamConverter_WaitsForToolMetadata(t *testing.T) {
+	mockStream := `data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"test-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"city\":\"Warsaw\"}"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"test-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_123","type":"function","function":{"name":"lookup_weather"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"test-model","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
+
+data: [DONE]
+`
+
+	reader := io.NopCloser(strings.NewReader(mockStream))
+	converter := NewOpenAIResponsesStreamConverter(reader, "test-model", "groq")
+
+	raw, err := io.ReadAll(converter)
+	if err != nil {
+		t.Fatalf("failed to read from converter: %v", err)
+	}
+
+	events := parseTestSSEEvents(t, string(raw))
+	addedCount := 0
+	var argumentDeltas []string
+
+	for _, event := range events {
+		if event.Done {
+			continue
+		}
+		switch event.Name {
+		case "response.output_item.added":
+			item, _ := event.Payload["item"].(map[string]any)
+			if item["type"] == "function_call" {
+				addedCount++
+				if item["call_id"] != "call_123" {
+					t.Fatalf("function_call call_id = %v, want call_123", item["call_id"])
+				}
+				if item["name"] != "lookup_weather" {
+					t.Fatalf("function_call name = %v, want lookup_weather", item["name"])
+				}
+			}
+		case "response.function_call_arguments.delta":
+			if delta, _ := event.Payload["delta"].(string); delta != "" {
+				argumentDeltas = append(argumentDeltas, delta)
+			}
+		}
+	}
+
+	if addedCount != 1 {
+		t.Fatalf("function_call added event count = %d, want 1", addedCount)
+	}
+	if len(argumentDeltas) != 1 || argumentDeltas[0] != `{"city":"Warsaw"}` {
+		t.Fatalf("response.function_call_arguments.delta = %#v, want buffered JSON after metadata", argumentDeltas)
+	}
+}
+
+func parseTestSSEEvents(t *testing.T, raw string) []testSSEEvent {
+	t.Helper()
+
+	lines := strings.Split(raw, "\n")
+	events := make([]testSSEEvent, 0)
+	currentEventName := ""
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if after, ok := strings.CutPrefix(line, "event:"); ok {
+			currentEventName = strings.TrimSpace(after)
+			continue
+		}
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+
+		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if data == "[DONE]" {
+			events = append(events, testSSEEvent{Name: currentEventName, Done: true})
+			currentEventName = ""
+			continue
+		}
+
+		var payload map[string]any
+		if err := json.Unmarshal([]byte(data), &payload); err != nil {
+			t.Fatalf("failed to unmarshal SSE payload %q: %v", data, err)
+		}
+
+		events = append(events, testSSEEvent{
+			Name:    currentEventName,
+			Payload: payload,
+		})
+		currentEventName = ""
+	}
+
+	return events
+}
+
+// TestOpenAIResponsesStreamConverter_TolerantChunkFallback covers chunks that
+// fail the typed fast-path decode: one off-spec member must only skip itself,
+// not discard the chunk's remaining deltas or usage.
+func TestOpenAIResponsesStreamConverter_TolerantChunkFallback(t *testing.T) {
+	// content is an off-spec parts array; usage and finish_reason must survive.
+	// The second chunk carries a float tool-call index (Python-style encoders)
+	// alongside junk entries (non-object, index missing) that must be skipped
+	// without discarding the valid call.
+	mockStream := `data: {"choices":[{"delta":{"content":[{"type":"text","text":"ignored"}]},"finish_reason":null}],"usage":{"prompt_tokens":3,"completion_tokens":4,"total_tokens":7,"prompt_tokens_details":{"cached_tokens":2},"completion_tokens_details":{"reasoning_tokens":1}}}
+
+data: {"choices":[{"delta":{"tool_calls":["junk",{"id":"call_no_index"},{"index":0.0,"id":"call_f","type":"function","function":{"name":"lookup","arguments":"{}"}}]},"finish_reason":null}]}
+
+data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}
+
+data: [DONE]
+`
+
+	converter := NewOpenAIResponsesStreamConverter(io.NopCloser(strings.NewReader(mockStream)), "test-model", "groq")
+	raw, err := io.ReadAll(converter)
+	if err != nil {
+		t.Fatalf("failed to read from converter: %v", err)
+	}
+
+	events := parseTestSSEEvents(t, string(raw))
+	var completed map[string]any
+	foundToolAdded := false
+	for _, event := range events {
+		if event.Done {
+			continue
+		}
+		switch event.Name {
+		case "response.completed":
+			completed, _ = event.Payload["response"].(map[string]any)
+		case "response.output_item.added":
+			item, _ := event.Payload["item"].(map[string]any)
+			if item["type"] == "function_call" && item["name"] == "lookup" {
+				foundToolAdded = true
+			}
+		}
+	}
+
+	if completed == nil {
+		t.Fatal("expected response.completed event")
+	}
+	usage, ok := completed["usage"].(map[string]any)
+	if !ok {
+		t.Fatalf("response.completed usage = %#v, want object captured from off-spec chunk", completed["usage"])
+	}
+	if usage["total_tokens"] != float64(7) {
+		t.Fatalf("usage total_tokens = %v, want 7", usage["total_tokens"])
+	}
+	if usage["input_tokens"] != float64(3) || usage["output_tokens"] != float64(4) {
+		t.Fatalf("Responses usage counts = %#v", usage)
+	}
+	inputDetails, _ := usage["input_tokens_details"].(map[string]any)
+	outputDetails, _ := usage["output_tokens_details"].(map[string]any)
+	if inputDetails["cached_tokens"] != float64(2) || outputDetails["reasoning_tokens"] != float64(1) {
+		t.Fatalf("Responses usage details = %#v", usage)
+	}
+	if _, present := usage["prompt_tokens"]; present {
+		t.Fatalf("usage retained Chat field names: %#v", usage)
+	}
+	if !foundToolAdded {
+		t.Fatal("expected function_call output item from float-index tool call delta")
+	}
+}
+
+func TestOpenAIResponsesStreamConverter_DropsInvalidUsage(t *testing.T) {
+	tests := []struct {
+		name  string
+		usage string
+	}{
+		{name: "non-object", usage: `"n/a"`},
+		{name: "malformed required field", usage: `{"prompt_tokens":"unknown","completion_tokens":1,"total_tokens":1}`},
+		{name: "required field nested", usage: `{"metadata":{"prompt_tokens":3},"completion_tokens":1,"total_tokens":1}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockStream := `data: {"choices":[{"delta":{"content":"hi"},"finish_reason":"stop"}],"usage":` + tt.usage + `}
+
+data: [DONE]
+`
+			converter := NewOpenAIResponsesStreamConverter(io.NopCloser(strings.NewReader(mockStream)), "test-model", "groq")
+			raw, err := io.ReadAll(converter)
+			if err != nil {
+				t.Fatalf("ReadAll() error = %v", err)
+			}
+
+			for _, event := range parseTestSSEEvents(t, string(raw)) {
+				if event.Done || event.Name != "response.completed" {
+					continue
+				}
+				response, _ := event.Payload["response"].(map[string]any)
+				if response == nil {
+					t.Fatal("response.completed missing response object")
+				}
+				if usage, present := response["usage"]; present {
+					t.Fatalf("invalid usage leaked into response.completed: %#v", usage)
+				}
+				return
+			}
+			t.Fatal("expected response.completed event")
+		})
+	}
+}
+
+func TestOpenAIResponsesStreamConverter_PropagatesStreamError(t *testing.T) {
+	tests := []struct {
+		name        string
+		errorChunk  string
+		wantCode    string
+		wantMessage string
+	}{
+		{
+			name:        "object error",
+			errorChunk:  `{"error":{"type":"provider_error","message":"upstream generation timed out","param":null,"code":null}}`,
+			wantCode:    "provider_error",
+			wantMessage: "upstream generation timed out",
+		},
+		{
+			name:        "scalar error",
+			errorChunk:  `{"error":"capacity exhausted"}`,
+			wantCode:    "provider_error",
+			wantMessage: "capacity exhausted",
+		},
+		{
+			name:        "tolerant fallback",
+			errorChunk:  `{"error":{"message":"malformed companion field","code":"upstream_error"},"choices":"invalid"}`,
+			wantCode:    "upstream_error",
+			wantMessage: "malformed companion field",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockStream := `data: {"choices":[{"delta":{"content":"partial"},"finish_reason":null}]}
+
+data: ` + tt.errorChunk + `
+
+data: [DONE]
+`
+
+			converter := NewOpenAIResponsesStreamConverter(
+				io.NopCloser(strings.NewReader(mockStream)),
+				"test-model",
+				"cohere",
+			)
+			raw, err := io.ReadAll(converter)
+			if err != nil {
+				t.Fatalf("failed to read from converter: %v", err)
+			}
+
+			var failed map[string]any
+			for _, event := range parseTestSSEEvents(t, string(raw)) {
+				switch event.Name {
+				case "response.completed":
+					t.Fatalf("stream emitted response.completed after provider error:\n%s", raw)
+				case "response.failed":
+					failed, _ = event.Payload["response"].(map[string]any)
+				}
+			}
+			if failed == nil {
+				t.Fatalf("stream missing response.failed event:\n%s", raw)
+			}
+			if failed["status"] != "failed" || failed["provider"] != "cohere" {
+				t.Fatalf("response.failed response = %#v", failed)
+			}
+			responseErr, _ := failed["error"].(map[string]any)
+			if responseErr["code"] != tt.wantCode ||
+				responseErr["message"] != tt.wantMessage {
+				t.Fatalf("response.failed error = %#v", responseErr)
+			}
+		})
+	}
+}
+
+// A Gemini 3 text turn streams its thought signature on the last delta, after
+// the text has started, as message-level extra_content. The reasoning slot is
+// gone by then, so the signature rides on the assistant message item: its
+// output_item.done and the terminal output, which is what the client echoes
+// back. A later null delta must not clear it.
+func TestOpenAIResponsesStreamConverter_MessageExtraContentOnMessageItem(t *testing.T) {
+	mockStream := `data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"gemini-3.5-flash","choices":[{"index":0,"delta":{"role":"assistant","content":"Hi"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"gemini-3.5-flash","choices":[{"index":0,"delta":{"content":"!","extra_content":{"google":{"thought_signature":"sig-text"}}},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"gemini-3.5-flash","choices":[{"index":0,"delta":{"extra_content":null},"finish_reason":"stop"}]}
+
+data: [DONE]
+`
+	converter := NewOpenAIResponsesStreamConverter(io.NopCloser(strings.NewReader(mockStream)), "gemini-3.5-flash", "gemini")
+	raw, err := io.ReadAll(converter)
+	if err != nil {
+		t.Fatalf("failed to read from converter: %v", err)
+	}
+
+	want := map[string]any{"google": map[string]any{"thought_signature": "sig-text"}}
+	sawDone := false
+	for _, event := range parseTestSSEEvents(t, string(raw)) {
+		if event.Done {
+			continue
+		}
+		switch event.Name {
+		case "response.output_item.added":
+			if item, _ := event.Payload["item"].(map[string]any); item["type"] == "reasoning" {
+				t.Error("a text turn with no reasoning text must not gain a reasoning item")
+			}
+		case "response.output_item.done":
+			item, _ := event.Payload["item"].(map[string]any)
+			if item["type"] != "message" {
+				continue
+			}
+			sawDone = true
+			if got := item["extra_content"]; !reflect.DeepEqual(got, want) {
+				t.Errorf("message output_item.done extra_content = %#v, want %#v", got, want)
+			}
+		case "response.completed":
+			output, _ := event.Payload["response"].(map[string]any)["output"].([]any)
+			if len(output) != 1 {
+				t.Fatalf("terminal output = %#v, want the message item alone", output)
+			}
+			if got := output[0].(map[string]any)["extra_content"]; !reflect.DeepEqual(got, want) {
+				t.Errorf("terminal message extra_content = %#v, want %#v", got, want)
+			}
+		}
+	}
+	if !sawDone {
+		t.Fatal("expected a message output_item.done event")
+	}
+}
+
+// The tolerant decode path, taken for off-spec chunks, must carry the member
+// as well.
+func TestOpenAIResponsesStreamConverter_MessageExtraContentTolerantPath(t *testing.T) {
+	mockStream := `data: {"choices":[{"delta":{"content":[{"type":"text","text":"ignored"}],"extra_content":{"google":{"thought_signature":"sig-text"}}},"finish_reason":null}]}
+
+data: {"choices":[{"delta":{"content":"Hi"},"finish_reason":"stop"}]}
+
+data: [DONE]
+`
+	converter := NewOpenAIResponsesStreamConverter(io.NopCloser(strings.NewReader(mockStream)), "gemini-3.5-flash", "gemini")
+	raw, err := io.ReadAll(converter)
+	if err != nil {
+		t.Fatalf("failed to read from converter: %v", err)
+	}
+	want := map[string]any{"google": map[string]any{"thought_signature": "sig-text"}}
+	for _, event := range parseTestSSEEvents(t, string(raw)) {
+		if event.Name != "response.completed" {
+			continue
+		}
+		output, _ := event.Payload["response"].(map[string]any)["output"].([]any)
+		if len(output) != 1 {
+			t.Fatalf("terminal output = %#v, want the message item alone", output)
+		}
+		if got := output[0].(map[string]any)["extra_content"]; !reflect.DeepEqual(got, want) {
+			t.Fatalf("terminal message extra_content = %#v, want %#v", got, want)
+		}
+		return
+	}
+	t.Fatal("expected a response.completed event")
+}
+
+// A tool-call-only turn has no message item to carry a trailing message-level
+// signature. Each call already carries its own, which is the one Gemini
+// requires back, so the trailing one is dropped and the stream stays valid.
+func TestOpenAIResponsesStreamConverter_MessageExtraContentWithoutMessage(t *testing.T) {
+	mockStream := `data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"gemini-3.5-flash","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"lookup_weather","arguments":"{}"},"extra_content":{"google":{"thought_signature":"sig-1"}}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"gemini-3.5-flash","choices":[{"index":0,"delta":{"extra_content":{"google":{"thought_signature":"sig-text"}}},"finish_reason":"tool_calls"}]}
+
+data: [DONE]
+`
+	converter := NewOpenAIResponsesStreamConverter(io.NopCloser(strings.NewReader(mockStream)), "gemini-3.5-flash", "gemini")
+	raw, err := io.ReadAll(converter)
+	if err != nil {
+		t.Fatalf("failed to read from converter: %v", err)
+	}
+	for _, event := range parseTestSSEEvents(t, string(raw)) {
+		if event.Name != "response.completed" {
+			continue
+		}
+		output, _ := event.Payload["response"].(map[string]any)["output"].([]any)
+		if len(output) != 1 || output[0].(map[string]any)["type"] != "function_call" {
+			t.Fatalf("terminal output = %#v, want the function_call alone", output)
+		}
+		want := map[string]any{"google": map[string]any{"thought_signature": "sig-1"}}
+		if got := output[0].(map[string]any)["extra_content"]; !reflect.DeepEqual(got, want) {
+			t.Errorf("function_call extra_content = %#v, want its own signature", got)
+		}
+		return
+	}
+	t.Fatal("expected a response.completed event")
+}
+
+// One delta can carry text, a tool call, and the message-level signature at
+// once. The tool call closes the message item immediately, so the signature
+// must be recorded before that happens or the message's output_item.done
+// disagrees with the terminal output.
+func TestOpenAIResponsesStreamConverter_MessageExtraContentBeforeToolCallCloses(t *testing.T) {
+	mockStream := `data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"gemini-3.5-flash","choices":[{"index":0,"delta":{"role":"assistant","content":"Checking.","tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"lookup_weather","arguments":"{}"},"extra_content":{"google":{"thought_signature":"sig-1"}}}],"extra_content":{"google":{"thought_signature":"sig-text"}}},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"gemini-3.5-flash","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
+
+data: [DONE]
+`
+	converter := NewOpenAIResponsesStreamConverter(io.NopCloser(strings.NewReader(mockStream)), "gemini-3.5-flash", "gemini")
+	raw, err := io.ReadAll(converter)
+	if err != nil {
+		t.Fatalf("failed to read from converter: %v", err)
+	}
+	want := map[string]any{"google": map[string]any{"thought_signature": "sig-text"}}
+	for _, event := range parseTestSSEEvents(t, string(raw)) {
+		if event.Name != "response.output_item.done" {
+			continue
+		}
+		item, _ := event.Payload["item"].(map[string]any)
+		if item["type"] != "message" {
+			continue
+		}
+		if got := item["extra_content"]; !reflect.DeepEqual(got, want) {
+			t.Fatalf("message output_item.done extra_content = %#v, want %#v", got, want)
+		}
+		return
+	}
+	t.Fatal("expected a message output_item.done event")
+}
+
+// eventNames lists the SSE event names in stream order, with "[DONE]" for the
+// trailing marker.
+func eventNames(events []testSSEEvent) []string {
+	names := make([]string, 0, len(events))
+	for _, event := range events {
+		if event.Done {
+			names = append(names, "[DONE]")
+			continue
+		}
+		names = append(names, event.Name)
+	}
+	return names
+}
+
+// requireNormalizedResponsesStream checks the members OpenAI's Responses
+// stream schema requires on every translated stream: a sequence_number that
+// counts from zero across all events, response.created followed by
+// response.in_progress, and the type member matching the SSE event name.
+func requireNormalizedResponsesStream(t *testing.T, events []testSSEEvent) {
+	t.Helper()
+	if len(events) < 3 {
+		t.Fatalf("events = %v, want at least created, in_progress and a terminal event", eventNames(events))
+	}
+	if events[0].Name != "response.created" || events[1].Name != "response.in_progress" {
+		t.Fatalf("stream opens with %v, want response.created then response.in_progress", eventNames(events)[:2])
+	}
+	for i, name := range []string{"response.created", "response.in_progress"} {
+		response, _ := events[i].Payload["response"].(map[string]any)
+		if response["status"] != "in_progress" {
+			t.Fatalf("%s response.status = %#v, want in_progress", name, response["status"])
+		}
+		// SDK stream helpers snapshot this object and append output items to it.
+		if output, ok := response["output"].([]any); !ok || len(output) != 0 {
+			t.Fatalf("%s response.output = %#v, want empty array", name, response["output"])
+		}
+	}
+	next := 0
+	for _, event := range events {
+		if event.Done {
+			continue
+		}
+		if event.Payload["type"] != event.Name {
+			t.Fatalf("event %s carries type %#v", event.Name, event.Payload["type"])
+		}
+		seq, ok := event.Payload["sequence_number"].(float64)
+		if !ok {
+			t.Fatalf("event %s has no sequence_number: %v", event.Name, event.Payload)
+		}
+		if int(seq) != next {
+			t.Fatalf("event %s sequence_number = %d, want %d", event.Name, int(seq), next)
+		}
+		next++
+	}
+}
+
+// TestOpenAIResponsesStreamConverter_NormalizedTextStream pins the full
+// event lifecycle of a streamed text message to the shape OpenAI emits, so a
+// strict typed SDK sees the same stream whichever provider was routed.
+func TestOpenAIResponsesStreamConverter_NormalizedTextStream(t *testing.T) {
+	mockStream := `data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"test-model","choices":[{"index":0,"delta":{"role":"assistant","content":"Hello"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"test-model","choices":[{"index":0,"delta":{"content":" world"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"test-model","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: [DONE]
+`
+	converter := NewOpenAIResponsesStreamConverter(io.NopCloser(strings.NewReader(mockStream)), "test-model", "gemini")
+	raw, err := io.ReadAll(converter)
+	if err != nil {
+		t.Fatalf("failed to read from converter: %v", err)
+	}
+	events := parseTestSSEEvents(t, string(raw))
+	requireNormalizedResponsesStream(t, events)
+
+	want := []string{
+		"response.created",
+		"response.in_progress",
+		"response.output_item.added",
+		"response.content_part.added",
+		"response.output_text.delta",
+		"response.output_text.delta",
+		"response.output_text.done",
+		"response.content_part.done",
+		"response.output_item.done",
+		"response.completed",
+		"[DONE]",
+	}
+	if got := eventNames(events); !reflect.DeepEqual(got, want) {
+		t.Fatalf("event order = %v, want %v", got, want)
+	}
+
+	item, _ := events[2].Payload["item"].(map[string]any)
+	itemID, _ := item["id"].(string)
+	if itemID == "" {
+		t.Fatalf("output_item.added item has no id: %v", item)
+	}
+	for _, event := range events[3:8] {
+		if event.Payload["item_id"] != itemID {
+			t.Fatalf("%s item_id = %#v, want %q", event.Name, event.Payload["item_id"], itemID)
+		}
+		if event.Payload["output_index"] != float64(0) || event.Payload["content_index"] != float64(0) {
+			t.Fatalf("%s indexes = %#v/%#v, want 0/0", event.Name, event.Payload["output_index"], event.Payload["content_index"])
+		}
+	}
+	partAdded, _ := events[3].Payload["part"].(map[string]any)
+	if partAdded["type"] != "output_text" || partAdded["text"] != "" {
+		t.Fatalf("content_part.added part = %#v, want empty output_text", partAdded)
+	}
+	if events[4].Payload["delta"] != "Hello" || events[5].Payload["delta"] != " world" {
+		t.Fatalf("deltas = %#v, %#v", events[4].Payload["delta"], events[5].Payload["delta"])
+	}
+	if events[6].Payload["text"] != "Hello world" {
+		t.Fatalf("output_text.done text = %#v, want %q", events[6].Payload["text"], "Hello world")
+	}
+	partDone, _ := events[7].Payload["part"].(map[string]any)
+	if partDone["type"] != "output_text" || partDone["text"] != "Hello world" {
+		t.Fatalf("content_part.done part = %#v, want full output_text", partDone)
+	}
+	if _, ok := partDone["annotations"].([]any); !ok {
+		t.Fatalf("content_part.done part has no annotations array: %#v", partDone)
+	}
+}
+
+// TestOpenAIResponsesStreamConverter_NormalizedToolCallStream keeps the
+// stream schema members on a reasoning-plus-tool-call turn, which has no
+// message item and therefore no content part.
+func TestOpenAIResponsesStreamConverter_NormalizedToolCallStream(t *testing.T) {
+	mockStream := `data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"test-model","choices":[{"index":0,"delta":{"reasoning_content":"Think"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"test-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_123","type":"function","function":{"name":"lookup_weather","arguments":"{\"city\":\"Warsaw\"}"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"test-model","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
+
+data: [DONE]
+`
+	converter := NewOpenAIResponsesStreamConverter(io.NopCloser(strings.NewReader(mockStream)), "test-model", "gemini")
+	raw, err := io.ReadAll(converter)
+	if err != nil {
+		t.Fatalf("failed to read from converter: %v", err)
+	}
+	events := parseTestSSEEvents(t, string(raw))
+	requireNormalizedResponsesStream(t, events)
+
+	want := []string{
+		"response.created",
+		"response.in_progress",
+		"response.output_item.added",
+		"response.reasoning_text.delta",
+		"response.reasoning_text.done",
+		"response.output_item.done",
+		"response.output_item.added",
+		"response.function_call_arguments.delta",
+		"response.function_call_arguments.done",
+		"response.output_item.done",
+		"response.completed",
+		"[DONE]",
+	}
+	if got := eventNames(events); !reflect.DeepEqual(got, want) {
+		t.Fatalf("event order = %v, want %v", got, want)
+	}
+}
+
+// TestOpenAIResponsesStreamConverter_InterruptedStreamClosesContentPart
+// closes the open content part before the incomplete message item, so the
+// partial text is restated the way OpenAI does on an interrupted stream.
+func TestOpenAIResponsesStreamConverter_InterruptedStreamClosesContentPart(t *testing.T) {
+	mockStream := `data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"test-model","choices":[{"index":0,"delta":{"role":"assistant","content":"Hel"},"finish_reason":null}]}
+
+`
+	converter := NewOpenAIResponsesStreamConverter(io.NopCloser(strings.NewReader(mockStream)), "test-model", "gemini")
+	raw, err := io.ReadAll(converter)
+	if err != nil {
+		t.Fatalf("failed to read from converter: %v", err)
+	}
+	events := parseTestSSEEvents(t, string(raw))
+	requireNormalizedResponsesStream(t, events)
+
+	want := []string{
+		"response.created",
+		"response.in_progress",
+		"response.output_item.added",
+		"response.content_part.added",
+		"response.output_text.delta",
+		"response.output_text.done",
+		"response.content_part.done",
+		"response.output_item.done",
+		"response.incomplete",
+		"[DONE]",
+	}
+	if got := eventNames(events); !reflect.DeepEqual(got, want) {
+		t.Fatalf("event order = %v, want %v", got, want)
+	}
+	if events[5].Payload["text"] != "Hel" {
+		t.Fatalf("output_text.done text = %#v, want partial text", events[5].Payload["text"])
+	}
+	item, _ := events[7].Payload["item"].(map[string]any)
+	if item["status"] != "incomplete" {
+		t.Fatalf("message item status = %#v, want incomplete", item["status"])
+	}
+}
+
+// TestOpenAIResponsesStreamConverter_FailedEventIsSequenced keeps the
+// sequence_number on the response.failed terminal event.
+func TestOpenAIResponsesStreamConverter_FailedEventIsSequenced(t *testing.T) {
+	mockStream := `data: {"error":{"message":"upstream exploded","type":"server_error"}}
+
+`
+	converter := NewOpenAIResponsesStreamConverter(io.NopCloser(strings.NewReader(mockStream)), "test-model", "gemini")
+	raw, err := io.ReadAll(converter)
+	if err != nil {
+		t.Fatalf("failed to read from converter: %v", err)
+	}
+	events := parseTestSSEEvents(t, string(raw))
+	requireNormalizedResponsesStream(t, events)
+	want := []string{"response.created", "response.in_progress", "response.failed", "[DONE]"}
+	if got := eventNames(events); !reflect.DeepEqual(got, want) {
+		t.Fatalf("event order = %v, want %v", got, want)
+	}
+}

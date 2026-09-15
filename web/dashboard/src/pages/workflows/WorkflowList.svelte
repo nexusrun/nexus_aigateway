@@ -1,0 +1,43 @@
+<script>
+  import * as m from "$lib/paraglide/messages.js";
+  // Active workflow card grid with loading/empty states.
+  import LoadingState from "$lib/components/molecules/LoadingState.svelte";
+  import { auth } from "$lib/stores/auth.svelte.js";
+  import { workflowsStore as wf } from "./workflows.svelte.js";
+  import WorkflowCard from "./WorkflowCard.svelte";
+</script>
+
+<section class="workflows-list">
+  {#if wf.loading && !auth.authError}
+    <LoadingState label={m.workflows_loading()} />
+  {/if}
+
+  {#if wf.filteredWorkflows.length > 0}
+    <div class="workflow-card-grid">
+      {#each wf.filteredWorkflows as workflow (workflow.id)}
+        <WorkflowCard {workflow} />
+      {/each}
+    </div>
+  {/if}
+
+  {#if wf.workflows.length === 0 && !wf.loading && !auth.authError && wf.available}
+    <p class="empty-state">{m.workflows_empty()}</p>
+  {/if}
+  {#if wf.workflows.length > 0 && wf.filteredWorkflows.length === 0 && !wf.loading}
+    <p class="empty-state">{m.workflows_no_match()}</p>
+  {/if}
+</section>
+
+<style>
+.workflows-list {
+  min-width: 0;
+}
+
+.workflow-card-grid {
+  display: grid;
+  /* minmax(0, …) lets a card shrink below its pipeline's natural width so the
+     pipeline row scrolls instead of the whole page. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+</style>

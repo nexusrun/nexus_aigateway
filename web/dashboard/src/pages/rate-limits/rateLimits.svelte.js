@@ -1,0 +1,630 @@
+// Rate-limits singleton store. The Models page imports this store for its
+// gauge buttons and the effective-limits inspector. Pure logic lives in
+// ./rateLimitsLogic.js.
+
+import { loadAdminList, sendAdminMutation } from "$lib/api/adminCrud.js";
+import { flash } from "$lib/stores/flash.svelte.js";
+import { confirmDialog } from "$lib/stores/confirm.svelte.js";
+import { runtimeConfig } from "$lib/stores/runtimeConfig.svelte.js";
+import { access } from "$lib/stores/access.svelte.js";
+import { scopedSubjectAllowed } from "$lib/stores/accessScope.js";
+import * as m from "$lib/paraglide/messages.js";
+import * as logic from "./rateLimitsLogic.js";
+import { Trash2 } from "lucide";
+
+class RateLimitsStore {
+  rateLimits = $state([]);
+  rateLimitsAvailable = $state(true);
+  rateLimitsLoading = $state(false);
+  rateLimitFetchPromise = null;
+  rateLimitFilter = $state("");
+  // Load failures only; mutation feedback goes through the flash store.
+  rateLimitError = $state("");
+  rateLimitFormOpen = $state(false);
+  rateLimitFormSubmitting = $state(false);
+  rateLimitFormError = $state("");
+  rateLimitEditing = $state(false);
+  rateLimitEditingOriginal = null;
+  rateLimitFormReturnToInspector = false;
+  rateLimitResettingKey = $state("");
+  rateLimitDeletingKey = $state("");
+  rateLimitInspectorOpen = $state(false);
+  rateLimitInspector = $state({ kind: "", provider: "", model: "", title: "" });
+  rateLimitForm = $state(logic.defaultRateLimitForm());
+  // Active scope tab (user_path / provider / model). Drives the tab strip
+  // and the single-group view that replaces the previous all-three-groups
+  // layout. Default lands on the first scope with rules, so the page never
+  // opens on an empty tab while other scopes are populated.
+  rateLimitActiveScope = $state("user_path");
+
+  rateLimitsEnabled() {
+    return runtimeConfig.rateLimitsVisible();
+  }
+
+  quotaTemplatesEnabled() {
+    return runtimeConfig.quotaTemplatesVisible();
+  }
+
+  defaultRateLimitForm() {
+    return logic.defaultRateLimitForm();
+  }
+
+  rateLimitScopeMeta(scope) {
+    return logic.rateLimitScopeMeta(scope);
+  }
+
+  // Provider and model rules are gateway-wide, so a key scoped to a user
+  // path only creates user-path rules inside its subtree.
+  rateLimitScopeOptions() {
+    const options = logic.rateLimitScopeOptions();
+    return access.scoped
+      ? options.filter((option) => option.value === "user_path")
+      : options;
+  }
+
+  rateLimitScope(item) {
+    return logic.rateLimitScope(item);
+  }
+
+  rateLimitSubject(item) {
+    return logic.rateLimitSubject(item);
+  }
+
+  rateLimitScopeLabel(item) {
+    return logic.rateLimitScopeLabel(item);
+  }
+
+  rateLimitSubjectFieldLabel() {
+    return logic.rateLimitSubjectFieldLabel(this.rateLimitForm);
+  }
+
+  rateLimitSubjectPlaceholder() {
+    return logic.rateLimitSubjectPlaceholder(this.rateLimitForm);
+  }
+
+  // Changing scope resets the subject: a user path never carries
+  // over to a provider or model rule.
+  syncRateLimitScope() {
+    logic.syncRateLimitScope(this.rateLimitForm);
+  }
+
+  rateLimitPeriodOptions() {
+    return logic.rateLimitPeriodOptions();
+  }
+
+  rateLimitPeriodSeconds(period) {
+    return logic.rateLimitPeriodSeconds(period);
+  }
+
+  rateLimitPeriodFromSeconds(seconds) {
+    return logic.rateLimitPeriodFromSeconds(seconds);
+  }
+
+  syncRateLimitPeriodSeconds() {
+    logic.syncRateLimitPeriodSeconds(this.rateLimitForm);
+  }
+
+  rateLimitKey(item) {
+    return logic.rateLimitKey(item);
+  }
+
+  rateLimitIsConcurrent(item) {
+    return logic.rateLimitIsConcurrent(item);
+  }
+
+  rateLimitPeriodLabel(item) {
+    return logic.rateLimitPeriodLabel(item);
+  }
+
+  rateLimitSourceLabel(item) {
+    return logic.rateLimitSourceLabel(item);
+  }
+
+  rateLimitIsReadOnly(item) {
+    return logic.rateLimitIsReadOnly(item);
+  }
+
+  formatRateLimitNumber(value) {
+    return logic.formatRateLimitNumber(value);
+  }
+
+  rateLimitUsagePercent(used, limit) {
+    return logic.rateLimitUsagePercent(used, limit);
+  }
+
+  filteredRateLimits() {
+    return logic.filteredRateLimits(this.rateLimits, this.rateLimitFilter);
+  }
+
+  // Normalize the active tab whenever the rule list is replaced so the
+  // strip never lands on an empty scope while another scope has rules
+  // (greptile P1: initial selection + stale selection after deletion).
+  // Called from every code path that assigns this.rateLimits.
+  normalizeActiveScope() {
+    this.rateLimitActiveScope = logic.pickRateLimitActiveScope(
+      this.rateLimits,
+      this.rateLimitActiveScope,
+    );
+  }
+
+  // groupedRateLimits partitions the filtered list into the three scope
+  // buckets (user_path → provider → model) for the page's group headers.
+  groupedRateLimits() {
+    return logic.groupRateLimits(this.filteredRateLimits());
+  }
+
+  // visibleGroup returns just the bucket for the active scope tab. The
+  // single-group view replaces the previous three-up layout once a tab is
+  // active; the tab strip still surfaces counts for the inactive scopes via
+  // tabCounts().
+  visibleGroup() {
+    const groups = this.groupedRateLimits();
+    return (
+      groups.find((group) => group.scope === this.rateLimitActiveScope) ||
+      groups[0]
+    );
+  }
+
+  // tabCounts surfaces all three scope counts in the canonical order so the
+  // tab strip stays stable when the active tab changes.
+  tabCounts() {
+    return this.groupedRateLimits().map((group) => ({
+      scope: group.scope,
+      count: group.count,
+    }));
+  }
+
+  setActiveScope(scope) {
+    if (
+      scope === "user_path" ||
+      scope === "provider" ||
+      scope === "model"
+    ) {
+      this.rateLimitActiveScope = scope;
+    }
+  }
+
+  normalizeRateLimitListPayload(payload) {
+    return logic.normalizeRateLimitListPayload(payload);
+  }
+
+  async fetchRateLimitsPage() {
+    // Wait for the runtime flags before touching a possibly disabled endpoint.
+    await runtimeConfig.ensureLoaded();
+    if (!this.rateLimitsEnabled()) {
+      this.rateLimits = [];
+      this.rateLimitsAvailable = false;
+      this.rateLimitError = "";
+      this.normalizeActiveScope();
+      return;
+    }
+    if (this.rateLimitFetchPromise) {
+      return this.rateLimitFetchPromise;
+    }
+    this.rateLimitFetchPromise = this.fetchRateLimits().finally(() => {
+      this.rateLimitFetchPromise = null;
+    });
+    return this.rateLimitFetchPromise;
+  }
+
+  async fetchRateLimits() {
+    this.rateLimitsLoading = true;
+    this.rateLimitError = "";
+    const outcome = await loadAdminList("/admin/rate-limits", {
+      label: "rate limits",
+      errorFallback: m.rate_limits_load_failed(),
+      normalize: logic.normalizeRateLimitListPayload,
+    });
+    this.rateLimitsLoading = false;
+    if (outcome.status === "stale") {
+      return;
+    }
+    if (outcome.status === "unavailable") {
+      this.rateLimitsAvailable = false;
+      this.rateLimits = [];
+      this.normalizeActiveScope();
+      return;
+    }
+    if (!outcome.result) {
+      // Network failure: clear the rows, keep the availability flag as-is.
+      this.rateLimits = [];
+      this.rateLimitError = outcome.error;
+      this.normalizeActiveScope();
+      return;
+    }
+    this.rateLimitsAvailable = true;
+    if (outcome.status === "error") {
+      this.rateLimitError = outcome.error;
+      return;
+    }
+    this.rateLimits = outcome.items;
+    this.normalizeActiveScope();
+  }
+
+  openRateLimitForm(item) {
+    this.rateLimitEditing = !!item;
+    this.rateLimitFormError = "";
+    if (item) {
+      const periodSeconds = Number(item.period_seconds || 0);
+      this.rateLimitEditingOriginal = {
+        scope: logic.rateLimitScope(item),
+        subject: logic.rateLimitSubject(item),
+        period_seconds: periodSeconds,
+      };
+      this.rateLimitForm = {
+        scope: logic.rateLimitScope(item),
+        subject: logic.rateLimitSubject(item),
+        period: logic.rateLimitPeriodFromSeconds(periodSeconds),
+        period_seconds: periodSeconds,
+        max_requests:
+          item.max_requests === null || item.max_requests === undefined
+            ? ""
+            : String(item.max_requests),
+        max_tokens:
+          item.max_tokens === null || item.max_tokens === undefined
+            ? ""
+            : String(item.max_tokens),
+        per_child: Boolean(item.per_child),
+        source: String(item.source || "manual"),
+      };
+    } else {
+      this.rateLimitEditingOriginal = null;
+      this.rateLimitForm = logic.defaultRateLimitForm();
+      // A scoped key can only limit its own subtree: start there.
+      this.rateLimitForm.subject = access.defaultPath(this.rateLimitForm.subject);
+    }
+    this.rateLimitFormOpen = true;
+  }
+
+  closeRateLimitForm() {
+    this.rateLimitFormOpen = false;
+    this.rateLimitFormSubmitting = false;
+    this.rateLimitFormError = "";
+    this.rateLimitEditing = false;
+    this.rateLimitEditingOriginal = null;
+    this.rateLimitForm = logic.defaultRateLimitForm();
+    if (this.rateLimitFormReturnToInspector) {
+      this.rateLimitFormReturnToInspector = false;
+      this.rateLimitInspectorOpen = true;
+    }
+  }
+
+  rateLimitNormalizedIdentity(scope, subject, periodSeconds) {
+    return logic.rateLimitNormalizedIdentity(scope, subject, periodSeconds);
+  }
+
+  rateLimitIdentityMoved(payload) {
+    return logic.rateLimitIdentityMoved(this.rateLimitEditingOriginal, payload);
+  }
+
+  setRateLimitFormSubject(value) {
+    this.rateLimitForm.subject = String(value || "");
+  }
+
+  rateLimitFormPayload() {
+    return logic.rateLimitFormPayload(this.rateLimitForm);
+  }
+
+  async submitRateLimitForm() {
+    // A key change can leave the scope pending; settle it before reading the
+    // form, so the payload, the scope check, and the submit lock all see
+    // one consistent snapshot.
+    await access.ensureLoaded();
+    if (this.rateLimitFormSubmitting) {
+      return;
+    }
+    const { payload, error } = this.rateLimitFormPayload();
+    if (error) {
+      this.rateLimitFormError = error;
+      return;
+    }
+    if (
+      !scopedSubjectAllowed(
+        access.scoped,
+        access.userPath,
+        this.rateLimitForm.scope,
+        this.rateLimitForm.subject,
+      )
+    ) {
+      this.rateLimitFormError = m.access_scope_path_outside({ root: access.userPath });
+      return;
+    }
+    const moved = this.rateLimitIdentityMoved(payload);
+    const original = this.rateLimitEditingOriginal;
+    this.rateLimitFormSubmitting = true;
+    this.rateLimitFormError = "";
+    try {
+      const outcome = await sendAdminMutation(
+        "/admin/rate-limits",
+        "PUT",
+        payload,
+        {
+          label: "save rate limit",
+          errorFallback: m.rate_limits_save_failed(),
+          // Rate-limit mutations never had a dedicated 503 branch; keep 503 an error.
+          unavailableStatuses: [],
+        },
+      );
+      if (outcome.status === "stale") {
+        return;
+      }
+      if (outcome.status !== "ok") {
+        this.rateLimitFormError = outcome.error;
+        return;
+      }
+      this.rateLimits = logic.normalizeRateLimitListPayload(
+        outcome.result.data,
+      );
+      this.normalizeActiveScope();
+      // Identity change = move: the new rule exists, now drop
+      // the one it replaces. The new rule is created first so a
+      // failed delete can never lose the rule.
+      if (moved && !(await this.deleteMovedRateLimitOriginal(original))) {
+        return;
+      }
+      this.closeRateLimitForm();
+      flash.success(
+        moved
+          ? m.rate_limits_moved()
+          : m.rate_limits_saved(),
+      );
+    } finally {
+      this.rateLimitFormSubmitting = false;
+    }
+  }
+
+  async deleteMovedRateLimitOriginal(original) {
+    const outcome = await sendAdminMutation(
+      "/admin/rate-limits",
+      "DELETE",
+      {
+        scope: original.scope,
+        subject: original.subject,
+        limit_key: { period_seconds: Number(original.period_seconds || 0) },
+      },
+      {
+        label: "remove the moved rate limit",
+        errorFallback: m.rate_limits_move_cleanup_failed(),
+        unavailableStatuses: [],
+      },
+    );
+    if (outcome.status === "stale") {
+      return false;
+    }
+    if (outcome.status !== "ok") {
+      this.rateLimitFormError = outcome.error;
+      return false;
+    }
+    this.rateLimits = logic.normalizeRateLimitListPayload(outcome.result.data);
+    this.normalizeActiveScope();
+    return true;
+  }
+
+  // requestDeleteRateLimit drives the shared typed-confirmation dialog
+  // rather than deleting outright: a stray click on the list row can no
+  // longer remove a rule (#900). The operator types the rule's subject to
+  // confirm.
+  requestDeleteRateLimit(item) {
+    const subject = logic.rateLimitSubject(item) || "/";
+    confirmDialog.open({
+      title: m.rate_limits_delete_title(),
+      titleId: "rateLimitDeleteDialogTitle",
+      inputId: "rate-limit-delete-confirmation",
+      message: m.rate_limits_delete_message({ subject }),
+      requiredText: subject,
+      confirmLabel: m.rate_limits_delete(),
+      icon: Trash2,
+      dialogClass: "budget-reset-dialog",
+      onConfirm: () => this.deleteRateLimit(item),
+    });
+  }
+
+  async deleteRateLimit(item) {
+    const key = logic.rateLimitKey(item);
+    if (this.rateLimitDeletingKey === key) {
+      return;
+    }
+    this.rateLimitDeletingKey = key;
+    const outcome = await sendAdminMutation(
+      "/admin/rate-limits",
+      "DELETE",
+      {
+        scope: logic.rateLimitScope(item),
+        subject: logic.rateLimitSubject(item),
+        limit_key: { period_seconds: Number(item.period_seconds || 0) },
+      },
+      {
+        label: "delete rate limit",
+        errorFallback: m.rate_limits_delete_failed(),
+        unavailableStatuses: [],
+      },
+    );
+    this.rateLimitDeletingKey = "";
+    if (outcome.status === "stale") {
+      return;
+    }
+    if (outcome.status !== "ok") {
+      // The failure stays inside the confirmation dialog, which is still
+      // open (like the provider-credential delete).
+      confirmDialog.error = outcome.error;
+      return;
+    }
+    this.rateLimits = logic.normalizeRateLimitListPayload(outcome.result.data);
+    this.normalizeActiveScope();
+    flash.success(m.rate_limits_deleted());
+    confirmDialog.close();
+  }
+
+  async resetRateLimit(item) {
+    const key = logic.rateLimitKey(item);
+    if (this.rateLimitResettingKey === key) {
+      return;
+    }
+    this.rateLimitResettingKey = key;
+    const outcome = await sendAdminMutation(
+      "/admin/rate-limits/reset-one",
+      "POST",
+      {
+        scope: logic.rateLimitScope(item),
+        subject: logic.rateLimitSubject(item),
+        period_seconds: Number(item.period_seconds || 0),
+      },
+      {
+        label: "reset rate limit",
+        errorFallback: m.rate_limits_reset_failed(),
+        unavailableStatuses: [],
+      },
+    );
+    this.rateLimitResettingKey = "";
+    if (outcome.status === "stale") {
+      return;
+    }
+    if (outcome.status !== "ok") {
+      flash.error(outcome.error);
+      return;
+    }
+    this.rateLimits = logic.normalizeRateLimitListPayload(outcome.result.data);
+    this.normalizeActiveScope();
+    flash.success(m.rate_limits_reset_success());
+  }
+
+  // --- Effective-limits inspector (Models page) ---
+
+  rateLimitInspectorModelID(row) {
+    return String((row && row.model && row.model.id) || "").trim();
+  }
+
+  openRateLimitInspectorForModel(row) {
+    const model = this.rateLimitInspectorModelID(row);
+    const provider = String((row && row.provider_name) || "")
+      .trim()
+      .toLowerCase();
+    this.rateLimitInspector = {
+      kind: "model",
+      provider: provider,
+      model: model,
+      title: String((row && row.display_name) || model),
+    };
+    this.showRateLimitInspector();
+  }
+
+  openRateLimitInspectorForProvider(group) {
+    const provider = String((group && group.provider_name) || "")
+      .trim()
+      .toLowerCase();
+    this.rateLimitInspector = {
+      kind: "provider",
+      provider: provider,
+      model: "",
+      title: String((group && group.display_name) || provider),
+    };
+    this.showRateLimitInspector();
+  }
+
+  showRateLimitInspector() {
+    this.rateLimitInspectorOpen = true;
+    this.fetchRateLimitsPage();
+  }
+
+  closeRateLimitInspector() {
+    this.rateLimitInspectorOpen = false;
+  }
+
+  rateLimitRuleMatchesModel(rule, provider, model) {
+    return logic.rateLimitRuleMatchesModel(rule, provider, model);
+  }
+
+  rateLimitRuleMatchesProvider(rule, provider) {
+    return logic.rateLimitRuleMatchesProvider(rule, provider);
+  }
+
+  rateLimitInspectorQualifiedModel() {
+    return logic.rateLimitInspectorQualifiedModel(this.rateLimitInspector);
+  }
+
+  rateLimitInspectorSections() {
+    return logic.rateLimitInspectorSections(
+      this.rateLimitInspector,
+      this.rateLimits,
+    );
+  }
+
+  rateLimitPressurePercent(item) {
+    return logic.rateLimitPressurePercent(item);
+  }
+
+  rateLimitPressureStyle(item) {
+    return logic.rateLimitPressureStyle(item);
+  }
+
+  rateLimitPressureClass(item) {
+    return logic.rateLimitPressureClass(item);
+  }
+
+  // Gauge indicator states on the Models page: fully painted when the subject
+  // has its own rules, half painted when only provider or global rules
+  // throttle it, plain otherwise. The class bindings run several times per
+  // row on every render, so results are memoized until the rules list is
+  // replaced (fetches always assign a new array).
+  rateLimitGaugeCache = { rules: null, states: {} };
+
+  rateLimitGaugeMemo(key, compute) {
+    if (this.rateLimitGaugeCache.rules !== this.rateLimits) {
+      this.rateLimitGaugeCache = { rules: this.rateLimits, states: {} };
+    }
+    const states = this.rateLimitGaugeCache.states;
+    if (!(key in states)) {
+      states[key] = compute();
+    }
+    return states[key];
+  }
+
+  rateLimitGaugeClassForModel(row) {
+    const model = this.rateLimitInspectorModelID(row);
+    const provider = String((row && row.provider_name) || "")
+      .trim()
+      .toLowerCase();
+    // Read the reactive list outside the memo so bindings re-run on refetch.
+    const rules = this.rateLimits;
+    return this.rateLimitGaugeMemo("model:" + provider + "/" + model, () =>
+      logic.rateLimitGaugeClassForModel(rules, provider, model),
+    );
+  }
+
+  rateLimitGaugeClassForProvider(group) {
+    const provider = String((group && group.provider_name) || "")
+      .trim()
+      .toLowerCase();
+    const rules = this.rateLimits;
+    return this.rateLimitGaugeMemo("provider:" + provider, () =>
+      logic.rateLimitGaugeClassForProvider(rules, provider),
+    );
+  }
+
+  hasGlobalRateLimits() {
+    const rules = this.rateLimits;
+    return this.rateLimitGaugeMemo("global", () =>
+      logic.hasGlobalRateLimits(rules),
+    );
+  }
+
+  rateLimitGaugeTitle(subject, gaugeClass) {
+    return logic.rateLimitGaugeTitle(subject, gaugeClass);
+  }
+
+  rateLimitInspectorSummary(item) {
+    return logic.rateLimitInspectorSummary(item);
+  }
+
+  openRateLimitFormFromInspector(scope, subject, item) {
+    this.rateLimitInspectorOpen = false;
+    this.rateLimitFormReturnToInspector = true;
+    this.openRateLimitForm(item || undefined);
+    if (!item) {
+      this.rateLimitForm.scope = scope;
+      this.rateLimitForm.subject = subject;
+    }
+  }
+}
+
+export const rateLimits = new RateLimitsStore();
