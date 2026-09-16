@@ -1,2 +1,8 @@
 docs/
 helm/
+.git/
+.env
+**/node_modules/
+**/dist/
+**/.cache/
+**/data/
