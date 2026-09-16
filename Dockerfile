@@ -1,12 +1,11 @@
 FROM golang:1.27.1-alpine3.24 AS builder
 RUN apk add --no-cache git ca-certificates nodejs npm
-ARG REPO_URL=https://github.com/nexusrun/nexus_aigateway.git
-ARG REPO_REF=main
 ARG VERSION=nexus
+ARG COMMIT=none
 WORKDIR /src
-RUN git clone --depth 1 --branch "${REPO_REF}" "${REPO_URL}" .
+COPY . .
 RUN cd web/dashboard && npm install --include=dev --package-lock=false --no-audit --no-fund --ignore-scripts && npm run build
-RUN CGO_ENABLED=0 go build -tags=swagger -ldflags="-s -w -X github.com/nexusrun/nexus_aigateway/internal/version.Version=${VERSION} -X github.com/nexusrun/nexus_aigateway/internal/version.Commit=$(git rev-parse --short HEAD)" -o /usr/local/bin/gomodel ./cmd/gomodel
+RUN CGO_ENABLED=0 go build -tags=swagger -ldflags="-s -w -X github.com/nexusrun/nexus_aigateway/internal/version.Version=${VERSION} -X github.com/nexusrun/nexus_aigateway/internal/version.Commit=${COMMIT}" -o /usr/local/bin/gomodel ./cmd/gomodel
 
 RUN mkdir -p /out/config /out/.cache /out/data \
 	&& cp /src/config/*.yaml /out/config/ \
