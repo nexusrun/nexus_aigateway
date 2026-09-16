@@ -13,8 +13,7 @@
   <div class="login-glow login-glow-two"></div>
   <section class="login-card" aria-labelledby="login-title">
     <div class="login-brand">
-      <div class="login-logo"><GoModelLogo /></div>
-      <span>NEXUS AI Gateway</span>
+      <div class="login-logo"><GoModelLogo variant="full" /></div>
     </div>
     <div class="login-heading">
       <p class="login-kicker">SECURE CONTROL PLANE</p>
@@ -128,7 +127,7 @@
   .login-brand {
     display: flex;
     align-items: center;
-    gap: 10px;
+    justify-content: center;
     color: var(--text);
     font-size: 13px;
     font-weight: 700;
@@ -137,9 +136,9 @@
   }
 
   .login-logo {
-    width: 30px;
-    height: 30px;
-    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent) 50%, transparent));
+    width: 190px;
+    height: 190px;
+    filter: drop-shadow(0 0 18px color-mix(in srgb, var(--accent) 44%, transparent));
   }
 
   .login-logo :global(img) {
@@ -149,7 +148,7 @@
   }
 
   .login-heading {
-    margin: 42px 0 26px;
+    margin: 22px 0 26px;
   }
 
   .login-kicker {

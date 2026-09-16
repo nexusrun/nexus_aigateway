@@ -1,4 +1,4 @@
-/* GoModel Dashboard Styles */
+/* NEXUS AI Gateway design tokens. */
 /* The light palette below is deliberately written twice: once for an explicit
    [data-theme="light"] and once for the system preference, because
    themeStore.apply() *removes* data-theme in "system" mode, so neither block
@@ -6,18 +6,23 @@
    reads these variables back through getComputedStyle, and an unregistered
    custom property computes to its token stream — Chart.js would receive the
    literal "light-dark(...)" text instead of a color. */
-/* Dark mode (default) — matches gomodel.enterpilot.io */
+/* Dark mode (default) — mirrors the NEXUS AI authenticated workspace. */
 :root {
-  --bg: #0e1013;
-  --bg-surface: #181b20;
-  --bg-surface-hover: #232830;
-  --border: #2a2f38;
-  --text: #e8ecf1;
-  --text-muted: #939aa6;
-  --accent: #22e5ee;
-  --accent-hover: #6ff2f8;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: "Space Grotesk", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --bg: #060a12;
+  --bg-surface: #0b1423;
+  --bg-surface-hover: #14233a;
+  --border: #20324a;
+  --text: #f8fafc;
+  --text-muted: #94a3b8;
+  --accent: #1a6aff;
+  --accent-hover: #4d90ff;
+  --accent-secondary: #00cfff;
+  --brand-gradient: linear-gradient(135deg, #00cfff 0%, #0a60ff 100%);
+  --brand-gradient-hover: linear-gradient(135deg, #00b8e0 0%, #0050e0 100%);
   --success: #34d399;
-  --info: #3b82f6;
+  --info: #38bdf8;
   --warning: #f59e0b;
   --danger: #ef4444;
   --prompt-cache-color: color-mix(in srgb, var(--info) 72%, #ffffff);
@@ -39,16 +44,16 @@
   --token-prompt: color-mix(in srgb, var(--info) 60%, transparent);
   --token-local: color-mix(in srgb, var(--info) 20%, transparent);
   --sidebar-width: 240px;
-  --radius: 8px;
-  --chart-grid: #2a2f38;
-  --chart-text: #939aa6;
+  --radius: 12px;
+  --chart-grid: #20324a;
+  --chart-text: #94a3b8;
   /* High-contrast color for chart day-boundary markers (divider line + date
      label) so they stand out from the muted axis text: bright on dark,
      dark on light. */
   --chart-day-marker: var(--text);
-  --chart-tooltip-bg: #181b20;
-  --chart-tooltip-border: #2a2f38;
-  --chart-tooltip-text: #e8ecf1;
+  --chart-tooltip-bg: #0b1423;
+  --chart-tooltip-border: #20324a;
+  --chart-tooltip-text: #f8fafc;
   /* Activity-calendar ramp — graduated blue derived from the prompt-cache blue
      (--info) so the chart reads like the cache visuals. Dark theme climbs from a
      dark navy through --info and into a brighter tint, giving 10 distinguishable
@@ -77,28 +82,31 @@
   color-scheme: dark;
 }
 
-/* Light mode — matches gomodel.enterpilot.io */
+/* Light mode — the blue-tinted NEXUS AI workspace. */
 [data-theme="light"] {
-  --bg: #f4f6f8;
+  --bg: #edf4ff;
   --bg-surface: #ffffff;
-  --bg-surface-hover: #ebeef2;
-  --border: #e2e6ea;
-  --text: #171a1f;
-  --text-muted: #666e7a;
-  --accent: #0891b2;
-  --accent-hover: #06b6d4;
+  --bg-surface-hover: #eef4ff;
+  --border: #d9e8ff;
+  --text: #171a20;
+  --text-muted: #5c5e62;
+  --accent: #0a60ff;
+  --accent-hover: #1a6aff;
+  --accent-secondary: #00b8e0;
+  --brand-gradient: linear-gradient(135deg, #00cfff 0%, #0a60ff 100%);
+  --brand-gradient-hover: linear-gradient(135deg, #00b8e0 0%, #0050e0 100%);
   --success: #34d399;
-  --info: #2563eb;
+  --info: #1a6aff;
   --warning: #d97706;
   --danger: #dc2626;
   --prompt-cache-color: color-mix(in srgb, var(--info) 84%, #0f172a);
   --prompt-cache-color-bg: color-mix(in srgb, var(--token-prompt) 18%, var(--bg-surface));
-  --chart-grid: #e2e6ea;
-  --chart-text: #666e7a;
+  --chart-grid: #d9e8ff;
+  --chart-text: #5c5e62;
   --chart-day-marker: var(--text);
   --chart-tooltip-bg: #ffffff;
-  --chart-tooltip-border: #e2e6ea;
-  --chart-tooltip-text: #171a1f;
+  --chart-tooltip-border: #d9e8ff;
+  --chart-tooltip-text: #171a20;
   /* Light theme: graduated blue climbing from a pale tint through --info into a
      deep navy, keeping 10 distinguishable steps (see :root for the dark ramp). */
   --cal-level-0: #ebedf0;
@@ -128,26 +136,29 @@
 /* System preference: light */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-      --bg: #f4f6f8;
+      --bg: #edf4ff;
       --bg-surface: #ffffff;
-      --bg-surface-hover: #ebeef2;
-      --border: #e2e6ea;
-      --text: #171a1f;
-      --text-muted: #666e7a;
-      --accent: #0891b2;
-      --accent-hover: #06b6d4;
+      --bg-surface-hover: #eef4ff;
+      --border: #d9e8ff;
+      --text: #171a20;
+      --text-muted: #5c5e62;
+      --accent: #0a60ff;
+      --accent-hover: #1a6aff;
+      --accent-secondary: #00b8e0;
+      --brand-gradient: linear-gradient(135deg, #00cfff 0%, #0a60ff 100%);
+      --brand-gradient-hover: linear-gradient(135deg, #00b8e0 0%, #0050e0 100%);
       --success: #34d399;
-      --info: #2563eb;
+      --info: #1a6aff;
       --warning: #d97706;
       --danger: #dc2626;
       --prompt-cache-color: color-mix(in srgb, var(--info) 84%, #0f172a);
       --prompt-cache-color-bg: color-mix(in srgb, var(--token-prompt) 18%, var(--bg-surface));
-      --chart-grid: #e2e6ea;
-      --chart-text: #666e7a;
+      --chart-grid: #d9e8ff;
+      --chart-text: #5c5e62;
       --chart-day-marker: var(--text);
       --chart-tooltip-bg: #ffffff;
-      --chart-tooltip-border: #e2e6ea;
-      --chart-tooltip-text: #171a1f;
+      --chart-tooltip-border: #d9e8ff;
+      --chart-tooltip-text: #171a20;
       /* Light theme (system preference): mirror the [data-theme="light"] blue ramp. */
       --cal-level-0: #ebedf0;
       --cal-level-1: color-mix(in srgb, var(--info) 12%, #ffffff);
