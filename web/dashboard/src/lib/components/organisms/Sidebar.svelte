@@ -95,7 +95,7 @@
     <div class="sidebar-logo">
       <GoModelLogo />
     </div>
-    <h1>NEXUS AI Gateway</h1>
+    <h1 class="sidebar-brand-name">NEXUS AI Gateway</h1>
   </div>
   <nav class="sidebar-nav">
     {#each navItems as item (item.page)}
@@ -200,10 +200,11 @@
 .sidebar {
     flex: 0 0 var(--sidebar-width);
     width: var(--sidebar-width);
-    background:
-      linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 96%, var(--accent) 4%), var(--bg-surface));
-    border-right: 1px solid color-mix(in srgb, var(--border) 70%, var(--accent) 30%);
-    box-shadow: 12px 0 36px color-mix(in srgb, #000 18%, transparent);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--bg-surface) 84%, transparent), color-mix(in srgb, var(--bg) 92%, transparent));
+    border-right: 1px solid color-mix(in srgb, var(--border) 72%, #fff 10%);
+    box-shadow: 18px 0 60px -40px color-mix(in srgb, #000 86%, transparent), inset -1px 0 0 color-mix(in srgb, #fff 5%, transparent);
+    backdrop-filter: blur(24px) saturate(145%);
+    -webkit-backdrop-filter: blur(24px) saturate(145%);
     display: flex;
     flex-direction: column;
     position: sticky;
@@ -223,7 +224,7 @@
   }
 
 .sidebar-header {
-    padding: 20px;
+    padding: 18px 20px;
     border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, var(--accent) 30%);
     box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 12%, transparent);
     display: flex;
@@ -235,7 +236,8 @@
     width: 28px;
     height: 28px;
     flex-shrink: 0;
-    color: var(--accent);
+    color: var(--accent-secondary);
+    filter: drop-shadow(0 0 12px color-mix(in srgb, var(--accent-secondary) 36%, transparent));
   }
 
 .sidebar-logo :global(img) {
@@ -244,11 +246,14 @@
     object-fit: contain;
   }
 
-.sidebar-header :global(h1) {
+.sidebar-brand-name {
+    min-width: 0;
+    font-family: var(--font-display);
     font-size: 15px;
     font-weight: 700;
-    letter-spacing: -0.2px;
-    line-height: 1.25;
+    line-height: 1.2;
+    letter-spacing: -0.35px;
+    white-space: nowrap;
   }
 
 .sidebar-nav {
@@ -278,9 +283,9 @@
   }
 
 .nav-item.active {
-    background: var(--accent);
+    background: var(--brand-gradient);
     color: #fff;
-    box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 28%, transparent), inset 0 1px 0 color-mix(in srgb, #fff 22%, transparent);
+    box-shadow: 0 10px 28px color-mix(in srgb, var(--accent) 30%, transparent), inset 0 1px 0 color-mix(in srgb, #fff 28%, transparent);
   }
 
 /* Anchors the notification dot, which sits over the icon when the sidebar is
@@ -445,7 +450,7 @@
     padding: 16px;
   }
 
-.sidebar.sidebar-collapsed .sidebar-header :global(h1) {
+.sidebar.sidebar-collapsed .sidebar-brand-name {
     display: none;
   }
 
@@ -481,7 +486,7 @@
           padding: 16px;
         }
 
-  .sidebar-header :global(h1) {
+  .sidebar-brand-name {
           display: none;
         }
 

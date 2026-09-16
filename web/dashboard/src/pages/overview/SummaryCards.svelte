@@ -64,26 +64,29 @@
       {#if busy}
         <Spinner size={18} label={m.usage_loading()} />
       {:else}
-      <span
-        class="cache-token-part"
-        title={tokenCountTitle(m.overview_input_tokens(), inputTokens)}
-      >
-        <span>{formatTokensShort(inputTokens)}</span><span
-          class="cache-token-marker">i</span>
-      </span>
-      <span class="cache-token-operator">+</span>
-      <span
-        class="cache-token-part"
-        title={tokenCountTitle(m.overview_output_tokens(), outputTokens)}
-      >
-        <span>{formatTokensShort(outputTokens)}</span><span
-          class="cache-token-marker">o</span>
-      </span>
-      <span class="cache-token-operator">=</span>
-      <span
-        class="cache-token-part"
-        title={tokenCountTitle(m.overview_total_tokens(), totalTokens)}
-      >{formatTokensShort(totalTokens)}</span>
+        <span
+          class="cache-token-part"
+          title={tokenCountTitle(m.overview_input_tokens(), inputTokens)}
+        >
+          <span class="cache-token-number">{formatTokensShort(inputTokens)}</span>
+          <span class="cache-token-caption">{m.overview_input_tokens()}</span>
+        </span>
+        <span class="cache-token-operator" aria-hidden="true">+</span>
+        <span
+          class="cache-token-part"
+          title={tokenCountTitle(m.overview_output_tokens(), outputTokens)}
+        >
+          <span class="cache-token-number">{formatTokensShort(outputTokens)}</span>
+          <span class="cache-token-caption">{m.overview_output_tokens()}</span>
+        </span>
+        <span class="cache-token-operator" aria-hidden="true">=</span>
+        <span
+          class="cache-token-part cache-token-total"
+          title={tokenCountTitle(m.overview_total_tokens(), totalTokens)}
+        >
+          <span class="cache-token-number">{formatTokensShort(totalTokens)}</span>
+          <span class="cache-token-caption">{m.overview_total_tokens()}</span>
+        </span>
       {/if}
     </div>
   </div>
@@ -280,32 +283,52 @@
 
   .cache-token-value {
     align-items: center;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: clamp(6px, 1.4vw, 14px);
     line-height: 1;
+    width: 100%;
   }
 
   .cache-token-part {
     align-items: center;
-    display: inline-flex;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    min-width: 0;
+    padding: 4px 0;
+  }
+
+  .cache-token-number {
+    max-width: 100%;
+    overflow: hidden;
+    font-size: clamp(22px, 2.2vw, 28px);
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cache-token-caption {
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    line-height: 1.2;
+    text-align: center;
+    text-transform: uppercase;
+  }
+
+  .cache-token-total .cache-token-number {
+    color: var(--accent-hover);
   }
 
   .cache-token-operator {
     color: var(--text-muted);
-    font-size: 24px;
-    font-weight: 600;
+    font-size: 18px;
+    font-weight: 500;
     letter-spacing: 0;
     line-height: 1;
-  }
-
-  .cache-token-marker {
-    color: var(--text-muted);
-    font-size: 14px;
-    font-weight: 700;
-    letter-spacing: 0;
-    margin-left: 2px;
-    text-transform: uppercase;
+    transform: translateY(-9px);
   }
 
   /* Prompt cache rate gauge (compact half-circle in a stat card). A 180° doughnut's
