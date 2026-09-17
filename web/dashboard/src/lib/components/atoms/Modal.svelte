@@ -70,14 +70,18 @@
   .auth-dialog-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.48);
+    background: color-mix(in srgb, var(--bg) 52%, rgba(0, 0, 0, 0.38));
+    backdrop-filter: blur(12px) saturate(125%);
+    -webkit-backdrop-filter: blur(12px) saturate(125%);
     z-index: 80;
   }
 
   .editor-modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.48);
+    background: color-mix(in srgb, var(--bg) 52%, rgba(0, 0, 0, 0.38));
+    backdrop-filter: blur(12px) saturate(125%);
+    -webkit-backdrop-filter: blur(12px) saturate(125%);
     z-index: 80;
   }
 
@@ -103,7 +107,9 @@
   /* Stacked modal over another open modal: the modal below already dims
      the page, so only dim a little more and sit above its shell. */
   .modal-stacked-backdrop {
-    background: rgba(0, 0, 0, 0.16);
+    background: color-mix(in srgb, var(--accent) 7%, rgba(0, 0, 0, 0.18));
+    backdrop-filter: blur(7px) saturate(120%);
+    -webkit-backdrop-filter: blur(7px) saturate(120%);
     z-index: 95;
   }
 

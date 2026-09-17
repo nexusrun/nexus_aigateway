@@ -652,6 +652,8 @@
   "models_remove_override": "Remove Override",
   "api_keys_title": "API Keys",
   "api_keys_create": "Create API Key",
+  "api_keys_created": "API key \"{name}\" created.",
+  "api_keys_created_title": "API key created",
   "api_keys_unavailable": "API key management is unavailable.",
   "api_keys_help": "Managed API keys authenticate requests to the gateway. Deactivation is permanent — create a new key if access needs to be restored.",
   "api_keys_loading": "Loading API keys",

@@ -113,7 +113,6 @@ class AuthKeysStore {
 
   openFormForUserPath(userPath) {
     router.navigate("auth-keys");
-    this.issuedValue = "";
     this.formOpen = false;
     this.openForm();
     this.form.user_path = String(userPath || "").trim();
@@ -125,12 +124,9 @@ class AuthKeysStore {
     }
     this.formOpen = true;
     this.error = "";
-    if (!this.issuedValue) {
-      this.copyState.reset();
-      this.form = defaultAuthKeyForm();
-      // A scoped key can only issue keys inside its own subtree: start there.
-      this.form.user_path = access.defaultPath(this.form.user_path);
-    }
+    this.form = defaultAuthKeyForm();
+    // A scoped key can only issue keys inside its own subtree: start there.
+    this.form.user_path = access.defaultPath(this.form.user_path);
   }
 
   closeForm() {
@@ -139,8 +135,7 @@ class AuthKeysStore {
     }
     this.formOpen = false;
     this.error = "";
-    this.copyState.reset();
-    if (!this.formSubmitting && !this.issuedValue) {
+    if (!this.formSubmitting) {
       this.form = defaultAuthKeyForm();
     }
   }
@@ -194,11 +189,14 @@ class AuthKeysStore {
       }
       const issued = outcome.result.data || {};
       this.issuedValue = issued.value || "";
-      // Reopen the editor if issuance finished after a manual close so the
-      // one-time secret is always shown.
-      this.formOpen = true;
+      // Creation is complete: close and reset the create editor immediately.
+      // The one-time secret remains available in the page-level success
+      // banner until the operator explicitly dismisses it.
+      this.formOpen = false;
+      this.error = "";
       this.copyState.reset();
       this.form = defaultAuthKeyForm();
+      flash.success(m.api_keys_created({ name: built.payload.name }));
       void this.fetchKeys();
     } finally {
       this.formSubmitting = false;

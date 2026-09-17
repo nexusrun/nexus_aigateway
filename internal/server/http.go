@@ -541,6 +541,11 @@ func New(provider core.RoutableProvider, cfg *Config) *Server {
 		e.GET("/admin/dashboard", cfg.DashboardHandler.Index)
 		e.GET("/admin/dashboard/*", cfg.DashboardHandler.Index)
 		e.GET("/admin/static/*", cfg.DashboardHandler.Static)
+		// Land visitors on the dashboard (which shows its own login screen
+		// when unauthenticated) instead of a bare 404 at "/".
+		e.GET("/", func(c *echo.Context) error {
+			return c.Redirect(http.StatusFound, "/admin/dashboard")
+		})
 	}
 
 	// Extension routes register after all core routes.

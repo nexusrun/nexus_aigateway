@@ -1,8 +1,6 @@
 <script>
-  // Create-API-key modal (EditorDialog shell): form fields plus the one-time
-  // issued-secret banner with clipboard copy. Once a key is issued the footer
-  // submit turns into the "Done, I've stored it" dismissal.
-  import CopyButton from "$lib/components/atoms/CopyButton.svelte";
+  // Create-API-key modal (EditorDialog shell). A successful creation closes
+  // this editor; the one-time value is shown by the page-level success banner.
   import EditorDialog from "$lib/components/organisms/EditorDialog.svelte";
   import FormField from "$lib/components/molecules/FormField.svelte";
   import InlineHelpSection from "$lib/components/molecules/InlineHelpSection.svelte";
@@ -10,7 +8,7 @@
   import { modelsStore } from "$lib/stores/models.svelte.js";
   import { authKeysStore as store } from "./authKeys.svelte.js";
   import { authKeySelectorOptions } from "./authKeysLogic.js";
-  import { Check, Plus } from "lucide";
+  import { Plus } from "lucide";
   import * as m from "$lib/paraglide/messages.js";
 
   const selectorOptions = $derived(authKeySelectorOptions(modelsStore.models));
@@ -20,37 +18,16 @@
   open={store.formOpen}
   title={m.api_keys_create()}
   ariaLabel={m.api_keys_editor()}
-  error={store.issuedValue ? "" : store.error}
+  error={store.error}
   submitting={store.formSubmitting}
-  submitLabel={store.issuedValue ? m.api_keys_done() : m.api_keys_create()}
+  submitLabel={m.api_keys_create()}
   submittingLabel={m.api_keys_creating()}
-  submitIcon={store.issuedValue ? Check : Plus}
-  cancel={false}
+  submitIcon={Plus}
   dialogClass="auth-key-editor"
   onclose={() => store.closeForm()}
-  onsubmit={() =>
-    store.issuedValue ? store.dismissIssuedKey() : store.submitForm()}
+  onsubmit={() => store.submitForm()}
 >
-  {#if store.issuedValue}
-    <div class="auth-key-issued-banner">
-      <p class="auth-key-issued-warning">
-        {m.api_keys_store_warning()}
-      </p>
-      <div class="auth-key-issued-value-row">
-        <code class="auth-key-issued-token">{store.issuedValue}</code>
-        <CopyButton
-          state={store.copyState}
-          onclick={() => store.copyIssuedValue()}
-        />
-      </div>
-      {#if store.copyState.error}
-        <p class="form-error" role="alert" aria-live="assertive">
-          {m.api_keys_copy_failed()}
-        </p>
-      {/if}
-    </div>
-  {:else}
-    <div class="auth-key-form-fields">
+  <div class="auth-key-form-fields">
       <div class="form-grid">
         <div class="form-field">
           <label class="form-field-label" for="auth-key-name">
@@ -160,8 +137,7 @@
           bind:value={store.form.description}
         ></textarea>
       </FormField>
-    </div>
-  {/if}
+  </div>
 </EditorDialog>
 
 <style>
@@ -182,38 +158,4 @@
     cursor: pointer;
   }
 
-  .auth-key-issued-banner {
-    background: color-mix(in srgb, var(--success) 8%, var(--bg-surface));
-    border: 1px solid color-mix(in srgb, var(--success) 30%, var(--border));
-    border-radius: var(--radius);
-    padding: 16px;
-    margin-bottom: 20px;
-  }
-
-  .auth-key-issued-warning {
-    font-size: 13px;
-    font-weight: 600;
-    margin-bottom: 12px;
-    color: color-mix(in srgb, var(--success) 80%, var(--text));
-  }
-
-  .auth-key-issued-value-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 12px;
-    flex-wrap: wrap;
-  }
-
-  .auth-key-issued-token {
-    flex: 1;
-    min-width: 0;
-    overflow-x: auto;
-    padding: 8px 12px;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    font-size: 13px;
-    word-break: break-all;
-  }
 </style>

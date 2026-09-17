@@ -3,6 +3,7 @@
   // reveal, label editing, permanent deactivation).
   import LoadingState from "$lib/components/molecules/LoadingState.svelte";
   import Icon from "$lib/components/atoms/Icon.svelte";
+  import CopyButton from "$lib/components/atoms/CopyButton.svelte";
   import FilterInput from "$lib/components/molecules/FilterInput.svelte";
   import InactiveToggle from "$lib/components/molecules/InactiveToggle.svelte";
   import { router } from "$lib/stores/router.svelte.js";
@@ -55,6 +56,38 @@
     <p class="form-hint auth-keys-help-notice">
       {m.api_keys_help()}
     </p>
+  {/if}
+
+  {#if store.issuedValue}
+    <section class="auth-key-issued-banner" role="status" aria-live="polite">
+      <div class="auth-key-issued-header">
+        <div>
+          <strong>{m.api_keys_created_title()}</strong>
+          <p>{m.api_keys_store_warning()}</p>
+        </div>
+        <button
+          type="button"
+          class="auth-key-issued-dismiss"
+          aria-label={m.api_keys_done()}
+          title={m.api_keys_done()}
+          onclick={() => store.dismissIssuedKey()}
+        >
+          <Icon icon={X} width="18" height="18" />
+        </button>
+      </div>
+      <div class="auth-key-issued-value-row">
+        <code class="auth-key-issued-token">{store.issuedValue}</code>
+        <CopyButton
+          state={store.copyState}
+          onclick={() => store.copyIssuedValue()}
+        />
+      </div>
+      {#if store.copyState.error}
+        <p class="form-error" role="alert" aria-live="assertive">
+          {m.api_keys_copy_failed()}
+        </p>
+      {/if}
+    </section>
   {/if}
 
   <AuthKeyEditor />
@@ -119,6 +152,71 @@
 /* --- API Keys page --- */
 .auth-keys-help-notice {
   margin-bottom: 20px;
+}
+
+.auth-key-issued-banner {
+  margin-bottom: 20px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--success) 38%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--success) 9%, var(--bg-surface));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 10%, transparent);
+}
+
+.auth-key-issued-header,
+.auth-key-issued-value-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.auth-key-issued-header {
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.auth-key-issued-header strong {
+  color: color-mix(in srgb, var(--success) 78%, var(--text));
+  font-size: 14px;
+}
+
+.auth-key-issued-header p {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.auth-key-issued-dismiss {
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding: 5px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.auth-key-issued-dismiss:hover {
+  color: var(--text);
+}
+
+.auth-key-issued-token {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  font-size: 13px;
+  word-break: break-all;
+}
+
+@media (max-width: 520px) {
+  .auth-key-issued-value-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 
 .auth-keys-path-chip {
