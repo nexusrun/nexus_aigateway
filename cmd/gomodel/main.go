@@ -18,7 +18,7 @@ import (
 // @name           Authorization
 func main() {
 	err := run.Run(context.Background(), run.Options{
-		ProductName:          "NEXUS AI Gatway",
+		ProductName:          "NEXUS AI Gateway",
 		ConfigureSwaggerDocs: configureSwaggerDocs,
 	})
 	if code := run.ExitCode(err); code != 0 {
