@@ -652,6 +652,8 @@
   "models_remove_override": "Override entfernen",
   "api_keys_title": "API-Schlüssel",
   "api_keys_create": "API-Schlüssel erstellen",
+  "api_keys_created": "API-Schlüssel „{name}“ wurde erstellt.",
+  "api_keys_created_title": "API-Schlüssel erstellt",
   "api_keys_unavailable": "API-Schlüsselverwaltung ist nicht verfügbar.",
   "api_keys_help": "Verwaltete API-Schlüssel authentifizieren Anfragen am Gateway. Deaktivierung ist endgültig — erstelle einen neuen Schlüssel, wenn der Zugriff wiederhergestellt werden muss.",
   "api_keys_loading": "API-Schlüssel werden geladen",

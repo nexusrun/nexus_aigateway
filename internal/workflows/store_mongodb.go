@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -11,6 +12,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
+
+	"github.com/nexusrun/nexus_aigateway/internal/storage"
 )
 
 type mongoVersionDocument struct {
@@ -124,49 +127,27 @@ func (s *MongoDBStore) Create(ctx context.Context, input CreateInput) (*Version,
 	defer session.EndSession(ctx)
 
 	result, err := session.WithTransaction(ctx, func(sessionCtx context.Context) (any, error) {
-		var latest struct {
-			Version int `bson:"version"`
-		}
-		findOpts := options.FindOne().SetSort(bson.D{{Key: "version", Value: -1}})
-		err := s.collection.FindOne(sessionCtx, bson.D{{Key: "scope_key", Value: scopeKey}}, findOpts).Decode(&latest)
-		if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
-			return nil, fmt.Errorf("load latest workflow version: %w", err)
-		}
-
-		if input.Activate {
-			if _, err := s.collection.UpdateMany(sessionCtx,
-				bson.D{{Key: "scope_key", Value: scopeKey}, {Key: "active", Value: true}},
-				bson.D{{Key: "$set", Value: bson.D{{Key: "active", Value: false}}}},
-			); err != nil {
-				return nil, fmt.Errorf("deactivate current workflow version: %w", err)
+		version, err := s.createVersion(sessionCtx, input, scopeKey, workflowHash)
+		if err != nil {
+			if storage.IsMongoTransactionCapabilityError(err) {
+				return nil, storage.NewMongoTransactionFallbackError(err)
 			}
+			return nil, err
 		}
-
-		now := time.Now().UTC()
-		version := &Version{
-			ID:           uuid.NewString(),
-			Scope:        input.Scope,
-			ScopeKey:     scopeKey,
-			Version:      latest.Version + 1,
-			Active:       input.Activate,
-			Managed:      input.Managed,
-			Name:         input.Name,
-			Description:  input.Description,
-			Payload:      input.Payload,
-			WorkflowHash: workflowHash,
-			CreatedAt:    now,
-		}
-
-		if err := s.insertVersion(sessionCtx, version); err != nil {
-			if mongo.IsDuplicateKeyError(err) {
-				return nil, fmt.Errorf("insert workflow version: duplicate key: %w", err)
-			}
-			return nil, fmt.Errorf("insert workflow version: %w", err)
-		}
-
 		return version, nil
 	})
 	if err != nil {
+		if fallbackErr := storage.MongoTransactionFallbackCause(err); fallbackErr != nil || storage.IsMongoTransactionCapabilityError(err) {
+			if fallbackErr == nil {
+				fallbackErr = err
+			}
+			slog.Warn("MongoDB transactions unavailable for workflow create; falling back to non-transactional write", "error", fallbackErr)
+			version, err := s.createVersion(ctx, input, scopeKey, workflowHash)
+			if err != nil {
+				return nil, fmt.Errorf("create workflow version without transaction: %w", errors.Join(fallbackErr, err))
+			}
+			return version, nil
+		}
 		return nil, err
 	}
 
@@ -174,6 +155,50 @@ func (s *MongoDBStore) Create(ctx context.Context, input CreateInput) (*Version,
 	if !ok {
 		return nil, fmt.Errorf("unexpected workflow transaction result: %T", result)
 	}
+	return version, nil
+}
+
+func (s *MongoDBStore) createVersion(ctx context.Context, input CreateInput, scopeKey, workflowHash string) (*Version, error) {
+	var latest struct {
+		Version int `bson:"version"`
+	}
+	findOpts := options.FindOne().SetSort(bson.D{{Key: "version", Value: -1}})
+	err := s.collection.FindOne(ctx, bson.D{{Key: "scope_key", Value: scopeKey}}, findOpts).Decode(&latest)
+	if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
+		return nil, fmt.Errorf("load latest workflow version: %w", err)
+	}
+
+	if input.Activate {
+		if _, err := s.collection.UpdateMany(ctx,
+			bson.D{{Key: "scope_key", Value: scopeKey}, {Key: "active", Value: true}},
+			bson.D{{Key: "$set", Value: bson.D{{Key: "active", Value: false}}}},
+		); err != nil {
+			return nil, fmt.Errorf("deactivate current workflow version: %w", err)
+		}
+	}
+
+	now := time.Now().UTC()
+	version := &Version{
+		ID:           uuid.NewString(),
+		Scope:        input.Scope,
+		ScopeKey:     scopeKey,
+		Version:      latest.Version + 1,
+		Active:       input.Activate,
+		Managed:      input.Managed,
+		Name:         input.Name,
+		Description:  input.Description,
+		Payload:      input.Payload,
+		WorkflowHash: workflowHash,
+		CreatedAt:    now,
+	}
+
+	if err := s.insertVersion(ctx, version); err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			return nil, fmt.Errorf("insert workflow version: duplicate key: %w", err)
+		}
+		return nil, fmt.Errorf("insert workflow version: %w", err)
+	}
+
 	return version, nil
 }
 
@@ -218,74 +243,30 @@ func (s *MongoDBStore) ensureManagedDefaultGlobal(ctx context.Context, input Cre
 	defer session.EndSession(ctx)
 
 	result, err := session.WithTransaction(ctx, func(sessionCtx context.Context) (any, error) {
-		var activeDoc mongoVersionDocument
-		err := s.collection.FindOne(sessionCtx,
-			bson.D{{Key: "scope_key", Value: "global"}, {Key: "active", Value: true}},
-			options.FindOne().SetSort(bson.D{{Key: "created_at", Value: -1}, {Key: "_id", Value: -1}}),
-		).Decode(&activeDoc)
-		hasActive := true
+		version, err := s.upsertManagedDefaultGlobal(sessionCtx, input, workflowHash)
 		if err != nil {
-			if errors.Is(err, mongo.ErrNoDocuments) {
-				hasActive = false
-			} else {
-				return nil, fmt.Errorf("load active global workflow: %w", err)
+			if storage.IsMongoTransactionCapabilityError(err) {
+				return nil, storage.NewMongoTransactionFallbackError(err)
 			}
+			return nil, err
 		}
-
-		if hasActive {
-			if !activeDoc.Managed {
-				return nil, nil
-			}
-			if strings.TrimSpace(activeDoc.Name) == input.Name &&
-				strings.TrimSpace(activeDoc.Description) == input.Description &&
-				strings.TrimSpace(activeDoc.WorkflowHash) == workflowHash {
-				return nil, nil
-			}
+		if version == nil {
+			return nil, nil
 		}
-
-		var latest struct {
-			Version int `bson:"version"`
-		}
-		findOpts := options.FindOne().SetSort(bson.D{{Key: "version", Value: -1}})
-		err = s.collection.FindOne(sessionCtx, bson.D{{Key: "scope_key", Value: "global"}}, findOpts).Decode(&latest)
-		if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
-			return nil, fmt.Errorf("load latest workflow version: %w", err)
-		}
-
-		if hasActive {
-			if _, err := s.collection.UpdateOne(sessionCtx,
-				bson.D{{Key: "_id", Value: activeDoc.ID}, {Key: "active", Value: true}},
-				bson.D{{Key: "$set", Value: bson.D{{Key: "active", Value: false}}}},
-			); err != nil {
-				return nil, fmt.Errorf("deactivate current workflow version: %w", err)
-			}
-		}
-
-		now := time.Now().UTC()
-		version := &Version{
-			ID:           uuid.NewString(),
-			Scope:        input.Scope,
-			ScopeKey:     "global",
-			Version:      latest.Version + 1,
-			Active:       true,
-			Managed:      true,
-			Name:         input.Name,
-			Description:  input.Description,
-			Payload:      input.Payload,
-			WorkflowHash: workflowHash,
-			CreatedAt:    now,
-		}
-
-		if err := s.insertVersion(sessionCtx, version); err != nil {
-			if mongo.IsDuplicateKeyError(err) {
-				return nil, fmt.Errorf("insert workflow version: duplicate key: %w", err)
-			}
-			return nil, fmt.Errorf("insert workflow version: %w", err)
-		}
-
 		return version, nil
 	})
 	if err != nil {
+		if fallbackErr := storage.MongoTransactionFallbackCause(err); fallbackErr != nil || storage.IsMongoTransactionCapabilityError(err) {
+			if fallbackErr == nil {
+				fallbackErr = err
+			}
+			slog.Warn("MongoDB transactions unavailable for managed default workflow; falling back to non-transactional write", "error", fallbackErr)
+			version, err := s.upsertManagedDefaultGlobal(ctx, input, workflowHash)
+			if err != nil {
+				return nil, fmt.Errorf("ensure managed default workflow without transaction: %w", errors.Join(fallbackErr, err))
+			}
+			return version, nil
+		}
 		return nil, err
 	}
 	if result == nil {
@@ -295,6 +276,75 @@ func (s *MongoDBStore) ensureManagedDefaultGlobal(ctx context.Context, input Cre
 	if !ok {
 		return nil, fmt.Errorf("unexpected workflow transaction result: %T", result)
 	}
+	return version, nil
+}
+
+func (s *MongoDBStore) upsertManagedDefaultGlobal(ctx context.Context, input CreateInput, workflowHash string) (*Version, error) {
+	var activeDoc mongoVersionDocument
+	err := s.collection.FindOne(ctx,
+		bson.D{{Key: "scope_key", Value: "global"}, {Key: "active", Value: true}},
+		options.FindOne().SetSort(bson.D{{Key: "created_at", Value: -1}, {Key: "_id", Value: -1}}),
+	).Decode(&activeDoc)
+	hasActive := true
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			hasActive = false
+		} else {
+			return nil, fmt.Errorf("load active global workflow: %w", err)
+		}
+	}
+
+	if hasActive {
+		if !activeDoc.Managed {
+			return nil, nil
+		}
+		if strings.TrimSpace(activeDoc.Name) == input.Name &&
+			strings.TrimSpace(activeDoc.Description) == input.Description &&
+			strings.TrimSpace(activeDoc.WorkflowHash) == workflowHash {
+			return nil, nil
+		}
+	}
+
+	var latest struct {
+		Version int `bson:"version"`
+	}
+	findOpts := options.FindOne().SetSort(bson.D{{Key: "version", Value: -1}})
+	err = s.collection.FindOne(ctx, bson.D{{Key: "scope_key", Value: "global"}}, findOpts).Decode(&latest)
+	if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
+		return nil, fmt.Errorf("load latest workflow version: %w", err)
+	}
+
+	if hasActive {
+		if _, err := s.collection.UpdateOne(ctx,
+			bson.D{{Key: "_id", Value: activeDoc.ID}, {Key: "active", Value: true}},
+			bson.D{{Key: "$set", Value: bson.D{{Key: "active", Value: false}}}},
+		); err != nil {
+			return nil, fmt.Errorf("deactivate current workflow version: %w", err)
+		}
+	}
+
+	now := time.Now().UTC()
+	version := &Version{
+		ID:           uuid.NewString(),
+		Scope:        input.Scope,
+		ScopeKey:     "global",
+		Version:      latest.Version + 1,
+		Active:       true,
+		Managed:      true,
+		Name:         input.Name,
+		Description:  input.Description,
+		Payload:      input.Payload,
+		WorkflowHash: workflowHash,
+		CreatedAt:    now,
+	}
+
+	if err := s.insertVersion(ctx, version); err != nil {
+		if mongo.IsDuplicateKeyError(err) {
+			return nil, fmt.Errorf("insert workflow version: duplicate key: %w", err)
+		}
+		return nil, fmt.Errorf("insert workflow version: %w", err)
+	}
+
 	return version, nil
 }
 

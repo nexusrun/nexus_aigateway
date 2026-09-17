@@ -616,6 +616,8 @@
   "models_remove_override": "移除覆盖",
   "api_keys_title": "API 密钥",
   "api_keys_create": "创建 API 密钥",
+  "api_keys_created": "已创建 API 密钥“{name}”。",
+  "api_keys_created_title": "API 密钥已创建",
   "api_keys_unavailable": "API 密钥管理不可用。",
   "api_keys_help": "通过仪表板管理的 API 密钥用于对发往网关的请求进行身份验证。停用是永久性的 — 如需恢复访问，请创建新的密钥。",
   "api_keys_loading": "正在加载 API 密钥",

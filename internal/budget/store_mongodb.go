@@ -7,12 +7,13 @@ import (
 	"log/slog"
 	"regexp"
 	"strconv"
-	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
+
+	"github.com/nexusrun/nexus_aigateway/internal/storage"
 )
 
 type MongoDBStore struct {
@@ -182,15 +183,15 @@ func (s *MongoDBStore) ReplaceConfigBudgets(ctx context.Context, budgets []Budge
 
 	_, err = session.WithTransaction(ctx, func(txCtx context.Context) (any, error) {
 		if err := s.replaceConfigBudgets(txCtx, budgets); err != nil {
-			if isMongoTransactionCapabilityError(err) {
-				return nil, &mongoTransactionFallbackError{err: err}
+			if storage.IsMongoTransactionCapabilityError(err) {
+				return nil, storage.NewMongoTransactionFallbackError(err)
 			}
 			return nil, err
 		}
 		return nil, nil
 	})
 	if err != nil {
-		if fallbackErr := mongoTransactionFallbackCause(err); fallbackErr != nil || isMongoTransactionCapabilityError(err) {
+		if fallbackErr := storage.MongoTransactionFallbackCause(err); fallbackErr != nil || storage.IsMongoTransactionCapabilityError(err) {
 			if fallbackErr == nil {
 				fallbackErr = err
 			}
@@ -308,15 +309,15 @@ func (s *MongoDBStore) SaveSettings(ctx context.Context, settings Settings) (Set
 
 	_, err = session.WithTransaction(ctx, func(txCtx context.Context) (any, error) {
 		if err := s.saveSettingsValues(txCtx, settings); err != nil {
-			if isMongoTransactionCapabilityError(err) {
-				return nil, &mongoTransactionFallbackError{err: err}
+			if storage.IsMongoTransactionCapabilityError(err) {
+				return nil, storage.NewMongoTransactionFallbackError(err)
 			}
 			return nil, err
 		}
 		return nil, nil
 	})
 	if err != nil {
-		if fallbackErr := mongoTransactionFallbackCause(err); fallbackErr != nil || isMongoTransactionCapabilityError(err) {
+		if fallbackErr := storage.MongoTransactionFallbackCause(err); fallbackErr != nil || storage.IsMongoTransactionCapabilityError(err) {
 			if fallbackErr == nil {
 				fallbackErr = err
 			}
@@ -329,44 +330,6 @@ func (s *MongoDBStore) SaveSettings(ctx context.Context, settings Settings) (Set
 		return Settings{}, fmt.Errorf("save budget settings transaction: %w", err)
 	}
 	return settings, nil
-}
-
-type mongoTransactionFallbackError struct {
-	err error
-}
-
-func (e *mongoTransactionFallbackError) Error() string {
-	if e == nil || e.err == nil {
-		return ""
-	}
-	return e.err.Error()
-}
-
-func mongoTransactionFallbackCause(err error) error {
-	if fallbackErr, ok := errors.AsType[*mongoTransactionFallbackError](err); ok {
-		return fallbackErr.err
-	}
-	return nil
-}
-
-func isMongoTransactionCapabilityError(err error) bool {
-	if err == nil {
-		return false
-	}
-	var commandErr mongo.CommandError
-	if errors.As(err, &commandErr) && commandErr.HasErrorCode(20) {
-		return true
-	}
-	var labeled mongo.LabeledError
-	if errors.As(err, &labeled) && labeled.HasErrorLabel("TransientTransactionError") {
-		message := strings.ToLower(err.Error())
-		return strings.Contains(message, "transaction") &&
-			(strings.Contains(message, "not supported") ||
-				strings.Contains(message, "not allowed") ||
-				strings.Contains(message, "replica set"))
-	}
-	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "transaction numbers are only allowed on a replica set member or mongos")
 }
 
 func (s *MongoDBStore) saveSettingsValues(ctx context.Context, settings Settings) error {

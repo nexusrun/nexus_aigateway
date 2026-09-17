@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -14,6 +15,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/storage"
 )
 
 type mongoDefinitionDocument struct {
@@ -186,13 +188,33 @@ func (s *MongoDBStore) UpsertMany(ctx context.Context, definitions []Definition)
 	defer session.EndSession(ctx)
 
 	_, err = session.WithTransaction(ctx, func(sessionCtx context.Context) (any, error) {
-		if _, err := s.collection.BulkWrite(sessionCtx, models, options.BulkWrite().SetOrdered(true)); err != nil {
-			return nil, fmt.Errorf("bulk upsert guardrails: %w", err)
+		if err := s.bulkUpsert(sessionCtx, models); err != nil {
+			if storage.IsMongoTransactionCapabilityError(err) {
+				return nil, storage.NewMongoTransactionFallbackError(err)
+			}
+			return nil, err
 		}
 		return nil, nil
 	})
 	if err != nil {
+		if fallbackErr := storage.MongoTransactionFallbackCause(err); fallbackErr != nil || storage.IsMongoTransactionCapabilityError(err) {
+			if fallbackErr == nil {
+				fallbackErr = err
+			}
+			slog.Warn("MongoDB transactions unavailable for guardrail upsert; falling back to non-transactional write", "error", fallbackErr)
+			if err := s.bulkUpsert(ctx, models); err != nil {
+				return fmt.Errorf("upsert guardrails without transaction: %w", errors.Join(fallbackErr, err))
+			}
+			return nil
+		}
 		return fmt.Errorf("upsert guardrails: %w", err)
+	}
+	return nil
+}
+
+func (s *MongoDBStore) bulkUpsert(ctx context.Context, models []mongo.WriteModel) error {
+	if _, err := s.collection.BulkWrite(ctx, models, options.BulkWrite().SetOrdered(true)); err != nil {
+		return fmt.Errorf("bulk upsert guardrails: %w", err)
 	}
 	return nil
 }

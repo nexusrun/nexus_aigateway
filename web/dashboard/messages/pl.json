@@ -660,6 +660,8 @@
   "models_remove_override": "Usuń nadpisanie",
   "api_keys_title": "Klucze API",
   "api_keys_create": "Utwórz klucz API",
+  "api_keys_created": "Utworzono klucz API „{name}”.",
+  "api_keys_created_title": "Utworzono klucz API",
   "api_keys_unavailable": "Zarządzanie kluczami API jest niedostępne.",
   "api_keys_help": "Zarządzane klucze API uwierzytelniają Requesty do gatewaya. Dezaktywacja jest trwała — aby przywrócić dostęp, utwórz nowy klucz.",
   "api_keys_loading": "Wczytywanie kluczy API",
