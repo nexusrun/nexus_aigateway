@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/nexusrun/nexus_aigateway/ext"
 	"github.com/nexusrun/nexus_aigateway/internal/storage"
@@ -42,25 +42,35 @@ func New(ctx context.Context, shared storage.Storage, secret, bootstrapUsername,
 	}
 	store, err := storage.ResolveSQLBackend[Store](ctx, shared,
 		func(db sqlx.DB) (Store, error) { return newSQLStore(ctx, db) },
-		func(_ *mongo.Database) (Store, error) { return nil, fmt.Errorf("admin password authentication currently requires a SQL storage backend") },
+		func(db *mongo.Database) (Store, error) { return newMongoStore(ctx, db) },
 	)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	s := &Service{store: store, secret: []byte(secret)}
 	if strings.TrimSpace(bootstrapUsername) != "" || bootstrapPassword != "" {
 		if strings.TrimSpace(bootstrapUsername) == "" || bootstrapPassword == "" {
 			return nil, fmt.Errorf("admin bootstrap username and password must be supplied together")
 		}
-		if err := s.bootstrap(ctx, bootstrapUsername, bootstrapPassword); err != nil { return nil, err }
+		if err := s.bootstrap(ctx, bootstrapUsername, bootstrapPassword); err != nil {
+			return nil, err
+		}
 	}
 	return s, nil
 }
 
 func (s *Service) bootstrap(ctx context.Context, username, password string) error {
 	_, err := s.store.FindByUsername(ctx, strings.ToLower(strings.TrimSpace(username)))
-	if err == nil { return nil }
-	if err != ErrNotFound { return err }
+	if err == nil {
+		return nil
+	}
+	if err != ErrNotFound {
+		return err
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil { return fmt.Errorf("hash bootstrap password: %w", err) }
+	if err != nil {
+		return fmt.Errorf("hash bootstrap password: %w", err)
+	}
 	now := time.Now().UTC()
 	return s.store.Create(ctx, Account{
 		ID: uuid.NewString(), Username: strings.ToLower(strings.TrimSpace(username)),
@@ -77,13 +87,21 @@ func (s *Service) Login(ctx context.Context, username, password string) (string,
 }
 
 func (s *Service) AuthenticateRequest(ctx context.Context, r *http.Request) (*ext.Authentication, error) {
-	if !strings.HasPrefix(r.URL.Path, "/admin/") && r.URL.Path != "/admin" { return nil, nil }
+	if !strings.HasPrefix(r.URL.Path, "/admin/") && r.URL.Path != "/admin" {
+		return nil, nil
+	}
 	cookie, err := r.Cookie(cookieName)
-	if err != nil { return nil, nil }
+	if err != nil {
+		return nil, nil
+	}
 	id, err := s.verify(cookie.Value)
-	if err != nil { return nil, nil }
+	if err != nil {
+		return nil, nil
+	}
 	a, err := s.store.FindByID(ctx, id)
-	if err != nil || !a.Enabled { return nil, nil }
+	if err != nil || !a.Enabled {
+		return nil, nil
+	}
 	return &ext.Authentication{PrincipalID: "admin:" + a.ID, DashboardAccess: true, Method: "password"}, nil
 }
 
@@ -95,25 +113,41 @@ func (s *Service) ClearSession(w http.ResponseWriter, secure bool) {
 	http.SetCookie(w, &http.Cookie{Name: cookieName, Value: "", Path: "/", HttpOnly: true, Secure: secure, SameSite: http.SameSiteLaxMode, MaxAge: -1})
 }
 
-type sessionPayload struct { ID string `json:"id"`; Expires int64 `json:"expires"` }
+type sessionPayload struct {
+	ID      string `json:"id"`
+	Expires int64  `json:"expires"`
+}
 
 func (s *Service) sign(id string, expires time.Time) (string, error) {
 	payload, err := json.Marshal(sessionPayload{ID: id, Expires: expires.Unix()})
-	if err != nil { return "", err }
+	if err != nil {
+		return "", err
+	}
 	encoded := base64.RawURLEncoding.EncodeToString(payload)
-	mac := hmac.New(sha256.New, s.secret); _, _ = mac.Write([]byte(encoded))
+	mac := hmac.New(sha256.New, s.secret)
+	_, _ = mac.Write([]byte(encoded))
 	return encoded + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil)), nil
 }
 
 func (s *Service) verify(token string) (string, error) {
 	parts := strings.Split(token, ".")
-	if len(parts) != 2 { return "", ErrInvalidLogin }
-	mac := hmac.New(sha256.New, s.secret); _, _ = mac.Write([]byte(parts[0]))
+	if len(parts) != 2 {
+		return "", ErrInvalidLogin
+	}
+	mac := hmac.New(sha256.New, s.secret)
+	_, _ = mac.Write([]byte(parts[0]))
 	sig, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil || !hmac.Equal(sig, mac.Sum(nil)) { return "", ErrInvalidLogin }
-	data, err := base64.RawURLEncoding.DecodeString(parts[0]); if err != nil { return "", ErrInvalidLogin }
+	if err != nil || !hmac.Equal(sig, mac.Sum(nil)) {
+		return "", ErrInvalidLogin
+	}
+	data, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return "", ErrInvalidLogin
+	}
 	var payload sessionPayload
-	if json.Unmarshal(data, &payload) != nil || payload.ID == "" || time.Now().Unix() >= payload.Expires { return "", ErrInvalidLogin }
+	if json.Unmarshal(data, &payload) != nil || payload.ID == "" || time.Now().Unix() >= payload.Expires {
+		return "", ErrInvalidLogin
+	}
 	return payload.ID, nil
 }
 
