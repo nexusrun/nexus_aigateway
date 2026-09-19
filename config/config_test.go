@@ -1540,7 +1540,7 @@ func TestLoad_StorageEnvAliases(t *testing.T) {
 }
 
 func TestLoad_ModelListURLEnv(t *testing.T) {
-	const defaultURL = "https://raw.githubusercontent.com/nexusrun/ai-model-list/refs/heads/main/models.min.json"
+	const defaultURL = "https://raw.githubusercontent.com/ENTERPILOT/ai-model-list/refs/heads/main/models.min.json"
 
 	tests := []struct {
 		name  string
