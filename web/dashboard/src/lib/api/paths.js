@@ -1,14 +1,14 @@
-// Base-path helpers. The Go handler injects window.GOMODEL_BASE_PATH when the
+// Base-path helpers. The Go handler injects window.AIGATEWAY_BASE_PATH when the
 // app is mounted under a sub-path; every URL the SPA touches goes through
 // these helpers (fetch/history are never monkey-patched).
 
 export function basePath() {
   if (typeof window === "undefined") return "/";
-  return window.GOMODEL_BASE_PATH || "/";
+  return window.AIGATEWAY_BASE_PATH || "/";
 }
 
-// gomodelPath prefixes an absolute app path with the configured base path.
-export function gomodelPath(urlPath) {
+// aigatewayPath prefixes an absolute app path with the configured base path.
+export function aigatewayPath(urlPath) {
   const base = basePath();
   if (
     !urlPath ||
@@ -41,10 +41,10 @@ export function unprefixedPath(path) {
 
 export function appVersion() {
   if (typeof window === "undefined") return "";
-  return window.GOMODEL_VERSION || "";
+  return window.AIGATEWAY_VERSION || "";
 }
 
 export function demoMode() {
   if (typeof window === "undefined") return false;
-  return window.GOMODEL_DEMO_MODE === true;
+  return window.AIGATEWAY_DEMO_MODE === true;
 }

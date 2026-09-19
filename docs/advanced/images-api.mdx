@@ -1,15 +1,15 @@
 ---
 title: "Images API"
-description: "OpenAI-compatible image generation and editing through GoModel, routed by model with the same access rules, budgets, rate limits, and cost tracking as chat."
+description: "OpenAI-compatible image generation and editing through AIGateway, routed by model with the same access rules, budgets, rate limits, and cost tracking as chat."
 icon: "image"
 keywords: ["images API", "image generation", "image edit", "inpainting", "dall-e", "gpt-image-1", "grok-2-image"]
 ---
 
 ## Overview
 
-GoModel exposes the **OpenAI-compatible image endpoints** for generation and
+AIGateway exposes the **OpenAI-compatible image endpoints** for generation and
 editing. Clients and SDKs that already call OpenAI's `/v1/images/generations`
-or `/v1/images/edits` can point at GoModel unchanged.
+or `/v1/images/edits` can point at AIGateway unchanged.
 
 Requests route **by model** through the same registry used for chat and
 embeddings, so `model` selection, `provider` hints, virtual models, per-key model
@@ -40,7 +40,7 @@ providers without image support.
 
 ```bash curl
 curl https://your-gateway/v1/images/generations \
-  -H "Authorization: Bearer $GOMODEL_KEY" \
+  -H "Authorization: Bearer $AIGATEWAY_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-image-1",
@@ -59,7 +59,7 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="https://your-gateway/v1",
-    api_key=os.environ["GOMODEL_KEY"],
+    api_key=os.environ["AIGATEWAY_KEY"],
 )
 
 result = client.images.generate(
@@ -79,7 +79,7 @@ import OpenAI from "openai";
 
 const client = new OpenAI({
   baseURL: "https://your-gateway/v1",
-  apiKey: process.env.GOMODEL_KEY,
+  apiKey: process.env.AIGATEWAY_KEY,
 });
 
 const result = await client.images.generate({
@@ -104,7 +104,7 @@ their native equivalents — see [Google Gemini](#google-gemini).
 
 The response is the OpenAI images envelope. `data[]` entries carry either a
 hosted `url` (DALL·E, `response_format: "url"`) or inline `b64_json`
-(`gpt-image-1` always returns base64). GoModel adds a `provider` field naming the
+(`gpt-image-1` always returns base64). AIGateway adds a `provider` field naming the
 provider type that served the request; everything else is passed through,
 including the `usage` block and echoed output parameters `gpt-image-1` reports.
 
@@ -125,7 +125,7 @@ required; send several source images as `image[]` (gpt-image-1 accepts up to
 
 ```bash curl
 curl https://your-gateway/v1/images/edits \
-  -H "Authorization: Bearer $GOMODEL_KEY" \
+  -H "Authorization: Bearer $AIGATEWAY_KEY" \
   -F model="gpt-image-1" \
   -F image="@lighthouse.png" \
   -F mask="@mask.png" \
@@ -177,14 +177,14 @@ tokens. The **generated images** are billed one of two ways, never both — the
 reported usage decides:
 
 - **Token-billed models** (`gpt-image-1`, Gemini image models) report `usage`.
-  GoModel stores the token counts and prices the generated tokens with the
+  AIGateway stores the token counts and prices the generated tokens with the
   model's `output_image_per_mtok` rate (falling back to `output_per_mtok`).
   The image output rate is the one
   providers charge here: `gpt-image-1` has no text output price at all, and
   Gemini 3 Pro Image bills image output at $120/Mtok against $12/Mtok for text.
   Pricing this way is exact for every size and quality.
 - **Per-image models** (DALL·E, `grok-imagine-image`, Imagen) report no tokens.
-  GoModel records the number of returned images (`images` in the raw usage
+  AIGateway records the number of returned images (`images` in the raw usage
   data) and prices it with the model's `per_image` rate.
 
 Catalog entries often carry both rates for the same model, because `per_image`

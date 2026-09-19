@@ -26,8 +26,8 @@
   } from "./conversation-panel.js";
 
   const drawer = conversationDrawer;
-  const storedWidth = Number(readStored("gomodel_interactions_panel_width"));
-  const promptCacheFillStorageKey = "gomodel_interactions_prompt_cache_fill";
+  const storedWidth = Number(readStored("aigateway_interactions_panel_width"));
+  const promptCacheFillStorageKey = "aigateway_interactions_prompt_cache_fill";
   let preferredWidth = Number.isFinite(storedWidth) && storedWidth > 0
     ? storedWidth
     : DEFAULT_CONVERSATION_PANEL_WIDTH;
@@ -118,7 +118,7 @@
         (event.pointerId !== undefined && event.pointerId !== resizePointerID)) return;
     resizePointerID = null;
     document.body.classList.remove("conversation-panel-resizing");
-    writeStored("gomodel_interactions_panel_width", preferredWidth);
+    writeStored("aigateway_interactions_panel_width", preferredWidth);
   }
 
   function resizeWithKeyboard(event) {
@@ -127,7 +127,7 @@
     preferredWidth = panelWidth + (event.key === "ArrowLeft" ? 24 : -24);
     syncPanelWidth();
     preferredWidth = panelWidth;
-    writeStored("gomodel_interactions_panel_width", preferredWidth);
+    writeStored("aigateway_interactions_panel_width", preferredWidth);
   }
 
   function scrollToConversationMessage(direction) {

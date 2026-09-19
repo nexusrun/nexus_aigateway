@@ -2,7 +2,7 @@
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-db_path="${SQLITE_PATH:-data/gomodel.db}"
+db_path="${SQLITE_PATH:-data/aigateway.db}"
 days="${DEMO_DAYS:-90}"
 end_date="${DEMO_END_DATE:-}"
 avg_requests="${DEMO_AVG_REQUESTS_PER_DAY:-2000}"
@@ -22,7 +22,7 @@ usage() {
 Usage: [env...] tools/seed-demo-data.sh
 
 Environment:
-  SQLITE_PATH                     SQLite DB path (default: data/gomodel.db)
+  SQLITE_PATH                     SQLite DB path (default: data/aigateway.db)
   DEMO_DAYS                       Rolling day count (default: 90)
   DEMO_END_DATE                   End date YYYY-MM-DD (default: today UTC)
   DEMO_AVG_REQUESTS_PER_DAY       Average daily request count (default: 2000)
@@ -131,7 +131,7 @@ demo_audio_mp3_bytes="$(printf '%s' "$demo_audio_mp3_base64" | openssl base64 -d
 guardrail_config_pii='{"rules":"[\\w.%+-]+@[\\w.-]+\\.[A-Za-z]{2,} => [redacted-email]\n\\+?[0-9][0-9 ().-]{9,}[0-9] => [redacted-phone]\nsk-[A-Za-z0-9]{20,} => [redacted-key]\n([0-9]{3})-([0-9]{2})-[0-9]{4} => $1-$2-XXXX","mode":"regex","case_insensitive":true,"roles":["user","assistant","tool"],"on_match":"replace"}'
 guardrail_config_blocked_terms='{"rules":"(project|codename)[ -]nightingale => \nunreleased pricing sheet => ","mode":"regex","case_insensitive":true,"roles":["user"],"on_match":"block","message":"This request mentions material that may not leave the tenant. Remove it and try again.","block_status":403}'
 guardrail_config_sales_tone='{"mode":"decorator","content":"Answer as a concise sales engineer. Never invent pricing, quote only figures present in the context, and end with one clear next step."}'
-guardrail_config_headers='{"response_add":"X-GoModel-Demo: true","upstream_set":"X-Tenant: gomodel-demo","response_remove":"X-Powered-By"}'
+guardrail_config_headers='{"response_add":"X-AIGateway-Demo: true","upstream_set":"X-Tenant: aigateway-demo","response_remove":"X-Powered-By"}'
 guardrail_config_injection_judge='{"model":"openai/gpt-5-nano-2025-08-07","target":"last_user","action":"block","message":"This prompt was rejected as a prompt-injection attempt.","block_status":400,"on_unclear":"warn","max_tokens":128,"temperature":0}'
 guardrail_config_quality_judge='{"model":"groq/llama-3.1-8b-instant","action":"warn","message":"The answer did not cite the retrieved context.","on_unclear":"allow","max_tokens":128,"temperature":0}'
 guardrail_config_normalizer='{"model":"groq/llama-3.1-8b-instant","roles":["user"],"max_tokens":2048,"prompt":"Rewrite the message as one self-contained question. Keep every fact, identifier, and instruction, and return only the rewritten text."}'
@@ -142,7 +142,7 @@ guardrail_config_normalizer='{"model":"groq/llama-3.1-8b-instant","roles":["user
 # guardrail could be of a type the referencing phase does not support, and the
 # workflow would then fail to compile and stop the gateway from starting.
 # The stored hash is the SHA-256 of the expanded JSON, which is the encoding
-# GoModel writes: schema version, canonical feature order, and steps sorted by
+# AIGateway writes: schema version, canonical feature order, and steps sorted by
 # phase, step, then ref.
 workflow_payload_baseline_v1='{"schema_version":2,"features":{"cache":true,"audit":true,"usage":true,"budget":true,"guardrails":false,"failover":true}}'
 workflow_payload_baseline='{"schema_version":2,"features":{"cache":true,"audit":true,"usage":true,"budget":true,"guardrails":true,"failover":true},"steps":[{"ref":"@@pii-redaction","phase":"prompt","step":0},{"ref":"@@gateway-headers","phase":"prompt","step":1},{"ref":"@@pii-redaction","phase":"response","step":0},{"ref":"@@gateway-headers","phase":"response","step":1}]}'
@@ -1327,7 +1327,7 @@ SELECT
         'model', coalesce(alias_source, provider_name || '/' || model),
         'session_id', session_id,
         'input', json_array(
-          json_object('role', 'system', 'content', 'You are GoModel demo analysis worker.'),
+          json_object('role', 'system', 'content', 'You are AIGateway demo analysis worker.'),
           json_object('role', 'user', 'content', 'Create a short incident-style report for ' || user_path || ' on session turn ' || session_turn || ' using token totals and cache telemetry.')
         ),
         'instructions', 'Return sections named summary, observations, and recommendation.',
@@ -1768,7 +1768,7 @@ ON CONFLICT(scope, subject, period_seconds) DO UPDATE SET
 
 -- Label-scoped budgets cap spend for one request label (as seeded on usage
 -- rows) across all user paths. Per-child quota templates are not seeded: they
--- require a GoModel Pro entitlement, and the gateway refuses to start when a
+-- require a AIGateway Pro entitlement, and the gateway refuses to start when a
 -- per-child budget exists without it.
 INSERT INTO budgets (scope, subject, per_child, period_seconds, amount, source, last_reset_at, created_at, updated_at)
 VALUES
@@ -2167,6 +2167,6 @@ groups), and the Sales key carries a per-key allowlist on top of the /sales
 policy. Budgets include label-scoped examples (env:prod, experiment:rag-v2)
 next to plain user-path limits.
 
-Rate-limit counters are live process state and start at zero when GoModel starts.
+Rate-limit counters are live process state and start at zero when AIGateway starts.
 Use the generated API keys to make requests and populate those counters.
 EOF

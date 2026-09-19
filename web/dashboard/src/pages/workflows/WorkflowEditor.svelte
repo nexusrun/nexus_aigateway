@@ -16,6 +16,7 @@
   import WorkflowCard from "./WorkflowCard.svelte";
   import { WORKFLOW_PHASES, phaseLabel } from "$lib/utils/pluginPhases.js";
   import { workflowGuardrailStepIssues } from "./workflowsLogic.js";
+  import { providerLabel } from "$lib/utils/providerLabel.js";
   import { Pencil, Plus, Save } from "lucide";
   import * as m from "$lib/paraglide/messages.js";
 </script>
@@ -66,7 +67,7 @@
       >
         <option value="">{m.workflows_all_scope()}</option>
         {#each wf.providerOptions() as providerName (providerName)}
-          <option value={providerName}>{providerName}</option>
+          <option value={providerName}>{providerLabel(providerName)}</option>
         {/each}
       </select>
     </div>

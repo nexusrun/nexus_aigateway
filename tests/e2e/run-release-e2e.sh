@@ -213,7 +213,7 @@ done
 [[ -f "$SCENARIO_DOC" ]] || die "missing scenario file: $SCENARIO_DOC"
 
 if (( OUTPUT_DIR_SET == 0 )); then
-  OUTPUT_DIR="/tmp/gomodel-release-e2e-$QA_SUFFIX"
+  OUTPUT_DIR="/tmp/aigateway-release-e2e-$QA_SUFFIX"
 fi
 
 for tool in awk bash curl grep jq mktemp sed; do

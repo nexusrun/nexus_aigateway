@@ -61,8 +61,8 @@ func clearAllConfigEnvVars(t *testing.T) {
 	t.Helper()
 	for _, key := range []string{
 		"CONFIG_STRICT",
-		"PORT", "BASE_PATH", "GOMODEL_MASTER_KEY", "BODY_SIZE_LIMIT", "STREAM_STALL_TIMEOUT", "SWAGGER_ENABLED", "PPROF_ENABLED", "ENABLE_PASSTHROUGH_ROUTES", "ALLOW_PASSTHROUGH_V1_ALIAS", "USER_PATH_HEADER", "ENABLED_PASSTHROUGH_PROVIDERS",
-		"GOMODEL_CACHE_DIR", "CACHE_REFRESH_INTERVAL", "MODEL_LIST_URL", "GOMODEL_OFFLINE", "GOMODEL_VERSION_CHECK_ENABLED",
+		"PORT", "BASE_PATH", "AIGATEWAY_MASTER_KEY", "BODY_SIZE_LIMIT", "STREAM_STALL_TIMEOUT", "SWAGGER_ENABLED", "PPROF_ENABLED", "ENABLE_PASSTHROUGH_ROUTES", "ALLOW_PASSTHROUGH_V1_ALIAS", "USER_PATH_HEADER", "ENABLED_PASSTHROUGH_PROVIDERS",
+		"AIGATEWAY_CACHE_DIR", "CACHE_REFRESH_INTERVAL", "MODEL_LIST_URL", "AIGATEWAY_OFFLINE", "AIGATEWAY_VERSION_CHECK_ENABLED",
 		"REDIS_URL", "REDIS_KEY_MODELS", "REDIS_KEY_RESPONSES", "REDIS_TTL_MODELS", "REDIS_TTL_RESPONSES",
 		"RESPONSE_CACHE_SIMPLE_ENABLED",
 		"SEMANTIC_CACHE_ENABLED", "SEMANTIC_CACHE_THRESHOLD", "SEMANTIC_CACHE_TTL", "SEMANTIC_CACHE_MAX_CONV_MESSAGES",
@@ -130,8 +130,8 @@ func TestBuildDefaultConfig(t *testing.T) {
 	if cfg.Server.BasePath != "/" {
 		t.Errorf("expected Server.BasePath=/, got %s", cfg.Server.BasePath)
 	}
-	if cfg.Server.UserPathHeader != "X-GoModel-User-Path" {
-		t.Errorf("expected Server.UserPathHeader=X-GoModel-User-Path, got %s", cfg.Server.UserPathHeader)
+	if cfg.Server.UserPathHeader != "X-AIGateway-User-Path" {
+		t.Errorf("expected Server.UserPathHeader=X-AIGateway-User-Path, got %s", cfg.Server.UserPathHeader)
 	}
 	if cfg.Server.PprofEnabled {
 		t.Error("expected Server.PprofEnabled=false")
@@ -1477,7 +1477,7 @@ func TestLoad_EnvOverridesDefaults(t *testing.T) {
 }
 
 // TestLoad_StorageEnvAliases covers the platform-injected connection variable
-// names (NexusAI and similar) accepted alongside the canonical GoModel names.
+// names (NexusAI and similar) accepted alongside the canonical AIGateway names.
 func TestLoad_StorageEnvAliases(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -1540,7 +1540,7 @@ func TestLoad_StorageEnvAliases(t *testing.T) {
 }
 
 func TestLoad_ModelListURLEnv(t *testing.T) {
-	const defaultURL = "https://raw.githubusercontent.com/ENTERPILOT/ai-model-list/refs/heads/main/models.min.json"
+	const defaultURL = "https://raw.githubusercontent.com/nexusrun/ai-model-list/refs/heads/main/models.min.json"
 
 	tests := []struct {
 		name  string
@@ -1782,14 +1782,14 @@ func TestLoad_CacheDir(t *testing.T) {
 	})
 
 	withTempDir(t, func(_ string) {
-		t.Setenv("GOMODEL_CACHE_DIR", "/tmp/gomodel-cache")
+		t.Setenv("AIGATEWAY_CACHE_DIR", "/tmp/aigateway-cache")
 
 		result, err := Load()
 		if err != nil {
 			t.Fatalf("Load() failed: %v", err)
 		}
-		if result.Config.Cache.Model.Local == nil || result.Config.Cache.Model.Local.CacheDir != "/tmp/gomodel-cache" {
-			t.Errorf("expected Cache.Model.Local.CacheDir=/tmp/gomodel-cache, got %v", result.Config.Cache.Model.Local)
+		if result.Config.Cache.Model.Local == nil || result.Config.Cache.Model.Local.CacheDir != "/tmp/aigateway-cache" {
+			t.Errorf("expected Cache.Model.Local.CacheDir=/tmp/aigateway-cache, got %v", result.Config.Cache.Model.Local)
 		}
 	})
 }
@@ -2275,14 +2275,14 @@ func TestOfflineModeDisablesEveryUnsolicitedOutboundCall(t *testing.T) {
 	}{
 		{name: "RemoteCatalogIsDropped", modelList: "", wantList: "", wantVersion: false},
 		{name: "MirrorIsDropped", modelList: "https://mirror.internal/models.min.json", wantList: "", wantVersion: false},
-		{name: "FileURLIsKept", modelList: "file:///etc/gomodel/models.json", wantList: "file:///etc/gomodel/models.json", wantVersion: false},
-		{name: "BarePathIsKept", modelList: "/etc/gomodel/models.json", wantList: "/etc/gomodel/models.json", wantVersion: false},
+		{name: "FileURLIsKept", modelList: "file:///etc/aigateway/models.json", wantList: "file:///etc/aigateway/models.json", wantVersion: false},
+		{name: "BarePathIsKept", modelList: "/etc/aigateway/models.json", wantList: "/etc/aigateway/models.json", wantVersion: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			clearAllConfigEnvVars(t)
 			withTempDir(t, func(_ string) {
-				t.Setenv("GOMODEL_OFFLINE", "true")
+				t.Setenv("AIGATEWAY_OFFLINE", "true")
 				if tt.modelList != "" {
 					t.Setenv("MODEL_LIST_URL", tt.modelList)
 				}
@@ -2310,7 +2310,7 @@ func TestOfflineModeDisablesEveryUnsolicitedOutboundCall(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(yaml), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			t.Setenv("GOMODEL_VERSION_CHECK_ENABLED", "true")
+			t.Setenv("AIGATEWAY_VERSION_CHECK_ENABLED", "true")
 			result, err := Load()
 			if err != nil {
 				t.Fatalf("Load() failed: %v", err)
@@ -2346,9 +2346,9 @@ func TestIsLocalModelListSource(t *testing.T) {
 		{"", false},
 		{"https://example.com/models.json", false},
 		{"HTTP://example.com/models.json", false},
-		{"file:///etc/gomodel/models.json", true},
-		{"FILE:///etc/gomodel/models.json", true},
-		{"/etc/gomodel/models.json", true},
+		{"file:///etc/aigateway/models.json", true},
+		{"FILE:///etc/aigateway/models.json", true},
+		{"/etc/aigateway/models.json", true},
 		{"./models.json", true},
 		{"models.json", true},
 	}

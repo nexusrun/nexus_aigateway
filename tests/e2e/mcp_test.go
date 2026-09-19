@@ -119,7 +119,7 @@ func TestMCPGatewayEndToEnd(t *testing.T) {
 
 	result, err := session.CallTool(context.Background(), &sdk.CallToolParams{
 		Name:      "beta_search",
-		Arguments: map[string]any{"q": "gomodel"},
+		Arguments: map[string]any{"q": "aigateway"},
 	})
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)

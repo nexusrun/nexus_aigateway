@@ -6,6 +6,7 @@ import * as m from "../../lib/paraglide/messages.js";
 import { getLocale } from "../../lib/paraglide/runtime.js";
 import { formatNumber } from "../../lib/i18n/locale.js";
 import { formatTokensShort } from "../../lib/utils/format.js";
+import { providerLabel } from "../../lib/utils/providerLabel.js";
 
 export function emptyAuditStats() {
   return {
@@ -69,7 +70,7 @@ export function auditStatsAvgLatencyText(stats) {
 }
 
 // Date parts in the dashboard's effective timezone: the server buckets by the
-// same X-GoModel-Timezone the dashboard sends, so labels must not drift to
+// same X-AIGateway-Timezone the dashboard sends, so labels must not drift to
 // the browser's locale when the two timezones differ.
 function auditStatsDateParts(d, zone) {
   try {
@@ -259,7 +260,7 @@ export function auditLatencyChartConfig(colors, buckets, series, options = {}) {
   const providerColor = options.providerColor || createProviderColorPicker();
   const labels = buckets.map((b) => auditStatsBucketLabel(b, interval, zone));
   const datasets = series.map((s) => ({
-    label: s.provider,
+    label: providerLabel(s.provider),
     data: (s.avg_duration_ms || []).map((v) =>
       v === null || v === undefined ? null : Number(v),
     ),

@@ -11,17 +11,17 @@ import (
 	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
-// GoModelBuildInfo mirrors what `gomodel plugin build` stamps into a plugin.
-var GoModelBuildInfo = pluginapi.BuildInfo{
+// AIGatewayBuildInfo mirrors what `aigateway plugin build` stamps into a plugin.
+var AIGatewayBuildInfo = pluginapi.BuildInfo{
 	GoVersion:        "go-fixture",
 	PluginAPIVersion: pluginapi.Version,
 }
 
 var instances atomic.Int32
 
-// GoModelPlugin is the constructor symbol the loader looks up. Each call
+// AIGatewayPlugin is the constructor symbol the loader looks up. Each call
 // returns a fresh instance, which the tests verify.
-func GoModelPlugin() pluginapi.Plugin {
+func AIGatewayPlugin() pluginapi.Plugin {
 	return &fixture{serial: int(instances.Add(1))}
 }
 

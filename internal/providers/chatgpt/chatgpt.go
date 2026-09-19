@@ -4,7 +4,7 @@
 // The upstream is the endpoint the Codex CLI itself calls when signed in with
 // ChatGPT. It speaks a deliberately narrow dialect of the Responses API — a
 // strict parameter allowlist, streaming only, no stored responses — so all the
-// adaptation lives in request.go and stream.go and never leaks into GoModel's
+// adaptation lives in request.go and stream.go and never leaks into AIGateway's
 // OpenAI-compatible surface.
 package chatgpt
 
@@ -109,7 +109,7 @@ func (p *Provider) ListModels(_ context.Context) (*core.ModelsResponse, error) {
 }
 
 // Responses serves a non-streaming request by collapsing the upstream stream:
-// the Codex backend rejects `stream: false`, so GoModel streams on the client's
+// the Codex backend rejects `stream: false`, so AIGateway streams on the client's
 // behalf and returns the final response object.
 func (p *Provider) Responses(ctx context.Context, req *core.ResponsesRequest) (*core.ResponsesResponse, error) {
 	stream, err := p.StreamResponses(ctx, req)

@@ -176,7 +176,7 @@ func TestInit_AllowsStartupWhenProviderIsUnavailable(t *testing.T) {
 	}
 }
 
-// TestInit_SucceedsWithNoProvidersConfigured verifies GoModel can boot with
+// TestInit_SucceedsWithNoProvidersConfigured verifies AIGateway can boot with
 // zero env var/config.yaml providers (e.g. all credentials come from the
 // dashboard's provider-credentials store instead), rather than failing
 // startup as it did before that store existed.
@@ -220,7 +220,7 @@ func TestInit_NormalizesNilContext(t *testing.T) {
 		return nil
 	}
 
-	cacheDir, err := os.MkdirTemp("", "gomodel-init-nil-context-*")
+	cacheDir, err := os.MkdirTemp("", "aigateway-init-nil-context-*")
 	if err != nil {
 		t.Fatalf("os.MkdirTemp() error = %v, want nil", err)
 	}

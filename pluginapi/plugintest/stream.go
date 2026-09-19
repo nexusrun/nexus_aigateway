@@ -32,7 +32,7 @@ type StreamResult struct {
 	Response *pluginapi.Completion
 }
 
-// RunStream drives hook with events the way GoModel does under its
+// RunStream drives hook with events the way AIGateway does under its
 // StreamPolicy: in transform mode the text deltas of a choice, and the
 // argument deltas of each of its tool calls, form windows that are
 // coalesced until MinChunkChars runes are pending; the last LookbehindChars

@@ -3,7 +3,7 @@ title: "Prompt Compression"
 description: "Reduce repeated and structural context in inference requests before they reach the provider, without changing the request's structure."
 icon: "package-minus"
 tag: "Pro"
-keywords: ["GoModel Pro", "prompt compression", "token savings", "deduplication", "prompt cache"]
+keywords: ["AIGateway Pro", "prompt compression", "token savings", "deduplication", "prompt cache"]
 ---
 
 <Frame caption="Dashboard Usage page: Pro savings over seven days of production traffic.">
@@ -84,7 +84,7 @@ Set `PRO_COMPRESSION_LEVEL=none` to disable compression for the whole
 gateway. For one request, send:
 
 ```http
-X-GoModel-Compression: off
+X-AIGateway-Compression: off
 ```
 
 The per-request opt-out and the `none` level bypass request-body parsing, so
@@ -96,12 +96,12 @@ Compressed responses include estimated savings and the number of replaced
 duplicate blocks:
 
 ```http
-X-GoModel-Pro-Tokens-Saved: 1843
-X-GoModel-Pro-Compression-Blocks: 12
+X-AIGateway-Pro-Tokens-Saved: 1843
+X-AIGateway-Pro-Compression-Blocks: 12
 ```
 
 Audit logs retain the original request and a revision for each rewriter. The
 revision records its byte sizes and compression detail; the rewritten body is
 also retained when `LOGGING_LOG_BODIES=true`. Prometheus metrics use the
-`gomodel_pro_compression_` prefix, and the Dashboard Usage page reports Pro
+`aigateway_pro_compression_` prefix, and the Dashboard Usage page reports Pro
 savings in tokens or cost.

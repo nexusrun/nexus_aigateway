@@ -8,7 +8,7 @@ from openai import AsyncOpenAI
 set_default_openai_client(
     AsyncOpenAI(
         base_url=os.getenv("OPENAI_BASE_URL", "http://localhost:8080/v1"),
-        api_key=os.getenv("GOMODEL_MASTER_KEY", "change-me"),
+        api_key=os.getenv("AIGATEWAY_MASTER_KEY", "change-me"),
     ),
     use_for_tracing=False,
 )

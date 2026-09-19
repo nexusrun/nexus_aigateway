@@ -10,7 +10,7 @@ import {
 setDefaultOpenAIClient(
   new OpenAI({
     baseURL: process.env.OPENAI_BASE_URL ?? "http://localhost:8080/v1",
-    apiKey: process.env.GOMODEL_MASTER_KEY ?? "change-me",
+    apiKey: process.env.AIGATEWAY_MASTER_KEY ?? "change-me",
   }),
 );
 setOpenAIAPI("responses");

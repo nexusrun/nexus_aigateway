@@ -1,5 +1,5 @@
 // Package ext is the public extension API for building custom gateway
-// binaries on top of GoModel. External modules register request rewriters,
+// binaries on top of AIGateway. External modules register request rewriters,
 // HTTP middleware, extra routes, runtime settings, upstream observers, and a
 // route selector on a Registry (usually ext.Default) before startup. Core
 // consumes an immutable snapshot at server construction; an empty registry
@@ -52,7 +52,7 @@ type Input struct {
 type Result struct {
 	Body []byte
 	// ResponseHeader entries are merged into the HTTP response so rewriters
-	// can annotate what they did (for example X-GoModel-Pro-Tokens-Saved).
+	// can annotate what they did (for example X-AIGateway-Pro-Tokens-Saved).
 	ResponseHeader http.Header
 	// Detail optionally carries a JSON-serializable summary of what the
 	// rewriter changed. It is recorded in the audit trail's request-revision

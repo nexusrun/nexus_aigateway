@@ -2,7 +2,7 @@
 // /admin/dashboard/audit -> audit-logs,
 // /admin/dashboard/settings/guardrails -> guardrails.
 
-import { gomodelPath, unprefixedPath } from "$lib/api/paths.js";
+import { aigatewayPath, unprefixedPath } from "$lib/api/paths.js";
 
 export const PAGES = [
   "overview",
@@ -68,7 +68,7 @@ class Router {
     history.pushState(
       null,
       "",
-      gomodelPath("/admin/dashboard/" + page + suffix),
+      aigatewayPath("/admin/dashboard/" + page + suffix),
     );
     this.page = page;
     this.sub = sub;

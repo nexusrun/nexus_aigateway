@@ -9,8 +9,8 @@ func TestChannelFor(t *testing.T) {
 	}{
 		{AppCore, "core"},
 		{AppPro, "pro"},
-		{"gomodel pro", "pro"},
-		{"  GoModel Pro  ", "pro"},
+		{"aigateway pro", "pro"},
+		{"  AIGateway Pro  ", "pro"},
 		{"Acme Gateway", "core"},
 		{"", "core"},
 	}

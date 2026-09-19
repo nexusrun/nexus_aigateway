@@ -202,7 +202,7 @@ func sendBudgetChatRequest(t *testing.T, serverURL, message, requestID, userPath
 
 	return sendBudgetJSONRequestWithHeaders(t, http.MethodPost, serverURL+chatCompletionsPath, defaultChatReq(message), map[string]string{
 		"X-Request-ID":        requestID,
-		"X-GoModel-User-Path": userPath,
+		"X-AIGateway-User-Path": userPath,
 	})
 }
 

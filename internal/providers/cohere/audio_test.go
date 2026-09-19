@@ -57,7 +57,7 @@ func TestCreateTranscriptionTranslatesMultipartRequest(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		_, _ = io.WriteString(w, `{"text":"GoModel routes requests reliably."}`)
+		_, _ = io.WriteString(w, `{"text":"AIGateway routes requests reliably."}`)
 	}))
 	defer server.Close()
 
@@ -92,7 +92,7 @@ func TestCreateTranscriptionTranslatesMultipartRequest(t *testing.T) {
 	if resp.ContentType != "application/json; charset=utf-8" {
 		t.Fatalf("ContentType = %q", resp.ContentType)
 	}
-	if string(resp.Data) != `{"text":"GoModel routes requests reliably."}` {
+	if string(resp.Data) != `{"text":"AIGateway routes requests reliably."}` {
 		t.Fatalf("Data = %s", resp.Data)
 	}
 }

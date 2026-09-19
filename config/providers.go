@@ -29,7 +29,7 @@ type RawProviderConfig struct {
 	// into outbound requests. It is ignored by provider types other than llmd.
 	InferenceObjective string `yaml:"inference_objective"`
 	// FairnessFromUserPath controls whether the llmd provider derives its
-	// fairness ID from GoModel's effective (authenticated) user path. It
+	// fairness ID from AIGateway's effective (authenticated) user path. It
 	// defaults to true; nil preserves that default.
 	FairnessFromUserPath *bool              `yaml:"fairness_from_user_path"`
 	Models               []RawProviderModel `yaml:"models"`

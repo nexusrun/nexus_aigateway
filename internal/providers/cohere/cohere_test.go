@@ -27,7 +27,7 @@ func TestChatCompletionTranslatesRequestAndResponse(t *testing.T) {
 		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
 			t.Errorf("Authorization = %q", got)
 		}
-		if got := r.Header.Get("X-Client-Name"); got != "GoModel" {
+		if got := r.Header.Get("X-Client-Name"); got != "AIGateway" {
 			t.Errorf("X-Client-Name = %q", got)
 		}
 		if err := json.NewDecoder(r.Body).Decode(&captured); err != nil {

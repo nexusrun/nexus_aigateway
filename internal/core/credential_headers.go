@@ -15,7 +15,7 @@ var credentialHeaders = map[string]struct{}{
 	"x-goog-api-key":      {}, // Google Gemini / Vertex credential header
 	"x-auth-token":        {},
 	"x-access-token":      {},
-	"x-gomodel-key":       {},
+	"x-aigateway-key":     {},
 }
 
 // maxCredentialHeaderLen bounds the lowercase scratch buffer below; every

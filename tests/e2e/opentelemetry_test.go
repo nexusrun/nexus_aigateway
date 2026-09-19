@@ -51,7 +51,7 @@ func TestOpenTelemetryExport(t *testing.T) {
 		expected := map[string]any{
 			"gen_ai.operation.name": "chat",
 			"gen_ai.request.model":  "otel-buffered",
-			"gomodel.provider.name": "vllm-eu",
+			"aigateway.provider.name": "vllm-eu",
 		}
 		if !collector.waitFor(5*time.Second, func() bool {
 			return collector.findSpan(func(span *tracepb.Span) bool {
@@ -82,7 +82,7 @@ func TestOpenTelemetryExport(t *testing.T) {
 			"error.type":            "429",
 			"gen_ai.operation.name": "chat",
 			"gen_ai.request.model":  "otel-failure",
-			"gomodel.provider.name": "vllm-eu",
+			"aigateway.provider.name": "vllm-eu",
 		}
 		if !collector.waitFor(5*time.Second, func() bool {
 			return collector.findSpan(func(span *tracepb.Span) bool {
@@ -120,7 +120,7 @@ func TestOpenTelemetryExport(t *testing.T) {
 			"gen_ai.operation.name": "chat",
 			"gen_ai.request.model":  "otel-stream",
 			"gen_ai.request.stream": true,
-			"gomodel.provider.name": "vllm-eu",
+			"aigateway.provider.name": "vllm-eu",
 		}
 		if !collector.waitFor(5*time.Second, func() bool {
 			return collector.hasHistogramPoint("gen_ai.client.operation.time_to_first_chunk", expected)
@@ -158,7 +158,7 @@ func TestOpenTelemetryExport(t *testing.T) {
 			"gen_ai.operation.name": "chat",
 			"gen_ai.request.model":  "otel-passthrough",
 			"gen_ai.request.stream": true,
-			"gomodel.provider.name": "vllm-eu",
+			"aigateway.provider.name": "vllm-eu",
 		}
 		if !collector.waitFor(5*time.Second, func() bool {
 			return collector.hasHistogramPoint("gen_ai.client.operation.time_to_first_chunk", metricAttributes)
@@ -212,7 +212,7 @@ func TestOpenTelemetryExport(t *testing.T) {
 			"error.type":            "empty_stream",
 			"gen_ai.operation.name": "chat",
 			"gen_ai.request.model":  "otel-empty-stream",
-			"gomodel.provider.name": "vllm-eu",
+			"aigateway.provider.name": "vllm-eu",
 		}
 		if !collector.waitFor(5*time.Second, func() bool {
 			return collector.hasHistogramPoint("gen_ai.client.operation.duration", expected)
@@ -266,10 +266,10 @@ func startOTelGateway(t *testing.T, collectorURL, upstreamURL string) string {
 	tmp := t.TempDir()
 	for key, value := range map[string]string{
 		"PORT":                            port,
-		"PID_FILE":                        tmp + "/gomodel.pid",
-		"SQLITE_PATH":                     tmp + "/gomodel.db",
+		"PID_FILE":                        tmp + "/aigateway.pid",
+		"SQLITE_PATH":                     tmp + "/aigateway.db",
 		"LOG_LEVEL":                       "warn",
-		"GOMODEL_VERSION_CHECK_ENABLED":   "false",
+		"AIGATEWAY_VERSION_CHECK_ENABLED":   "false",
 		"VLLM_EU_BASE_URL":                upstreamURL,
 		"VLLM_EU_API_KEY":                 "sk-e2e",
 		"VLLM_EU_MODELS":                  "otel-buffered,otel-stream,otel-failure,otel-passthrough,otel-empty-stream",
@@ -279,7 +279,7 @@ func startOTelGateway(t *testing.T, collectorURL, upstreamURL string) string {
 		"METRICS_ENDPOINT":                "monitoring/metrics",
 		"PPROF_ENABLED":                   "true",
 		"OTEL_ENABLED":                    "true",
-		"OTEL_SERVICE_NAME":               "gomodel-e2e",
+		"OTEL_SERVICE_NAME":               "aigateway-e2e",
 		"OTEL_EXPORTER_OTLP_ENDPOINT":     collectorURL,
 		"OTEL_EXPORTER_OTLP_PROTOCOL":     "http/protobuf",
 		"OTEL_TRACES_SAMPLER":             "always_on",
@@ -293,7 +293,7 @@ func startOTelGateway(t *testing.T, collectorURL, upstreamURL string) string {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		done <- run.Run(ctx, run.Options{ProductName: "gomodel-e2e", Args: []string{}})
+		done <- run.Run(ctx, run.Options{ProductName: "aigateway-e2e", Args: []string{}})
 	}()
 	t.Cleanup(func() {
 		cancel()

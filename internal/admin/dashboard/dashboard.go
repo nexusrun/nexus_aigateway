@@ -1,4 +1,4 @@
-// Package dashboard provides the embedded admin dashboard UI for GoModel.
+// Package dashboard provides the embedded admin dashboard UI for AIGateway.
 //
 // The UI is a Svelte single-page app built from web/dashboard into
 // static/dist by `make frontend` (locally) or the CI `frontend` job. The
@@ -86,7 +86,7 @@ func buildIndexHTML(assets fs.FS, basePath string, demoMode bool) ([]byte, error
 	}
 
 	globals := fmt.Sprintf(
-		`<script>window.GOMODEL_BASE_PATH=%q;window.GOMODEL_VERSION=%q;window.GOMODEL_DEMO_MODE=%t;</script>`,
+		`<script>window.AIGATEWAY_BASE_PATH=%q;window.AIGATEWAY_VERSION=%q;window.AIGATEWAY_DEMO_MODE=%t;</script>`,
 		basePath, version.Info(), demoMode,
 	)
 	if !strings.Contains(html, "<head>") {

@@ -2,7 +2,7 @@
 
 ## Context
 
-GoModel had two interception mechanisms and neither was a plugin system:
+AIGateway had two interception mechanisms and neither was a plugin system:
 
 - `ext.RequestRewriter` ran post-auth on raw JSON bytes and could rewrite or
   reject a request, but could not see the resolved provider or touch the
@@ -34,12 +34,12 @@ The constraint is not stylistic. Go's `plugin` package refuses to load a
 shared object unless every package present in both host and plugin was
 built from identical sources with the same toolchain and flags. A
 stdlib-only contract means a `.so` shares exactly the standard library plus
-`pluginapi` with the host: internal GoModel changes, new providers, and
+`pluginapi` with the host: internal AIGateway changes, new providers, and
 dashboard work never invalidate a plugin. Only a `pluginapi` change or a Go
 toolchain change does.
 
-`pluginapi.Version` is informational. It is printed by `gomodel --version`,
-stamped into plugins by `gomodel plugin build`, and used to explain a
+`pluginapi.Version` is informational. It is printed by `aigateway --version`,
+stamped into plugins by `aigateway plugin build`, and used to explain a
 refused load; it is never used to accept or reject one, because the
 toolchain already enforces identical sources.
 
@@ -152,7 +152,7 @@ Every synchronous hook returns a `Decision` with an `Action`:
   assistant turn, HTTP 200, rendered as a one-turn stream for streaming
   requests;
 - `warn`: continue, record `Detail` in the audit trail, and add
-  `X-GoModel-Guardrail: warn; code=<code>` to the client response.
+  `X-AIGateway-Guardrail: warn; code=<code>` to the client response.
 
 The non-standard 446/246 statuses some products use are not defaults; an
 operator who wants parity sets `block_status` on the instance.
@@ -226,7 +226,7 @@ three modes in its `StreamPolicy`, and the host does the work:
   fail-closed with `event_too_large` instead.
 - `buffer`: `streaming.BufferedSSEStream` drains upstream into a bounded
   buffer (default 4 MiB, exceeding it fails closed with
-  `response_too_large`), sends the SSE comment `: gomodel-buffering` every
+  `response_too_large`), sends the SSE comment `: aigateway-buffering` every
   15 s so proxies and clients do not time out, assembles a `Completion` from
   the events, runs the response chain plus the buffering instances'
   `OnResponse`, and then replays the original bytes (`allow`, `warn`),
@@ -237,7 +237,7 @@ Mixed chains: if any stream instance asks for `buffer`, or the workflow has
 any `response` step, the whole stream is buffered and `transform` instances
 run over the replay. When such plugins run, the handler reads the first chunk
 before committing the response headers, so a `warn` decided over a buffered
-response is delivered as the `X-GoModel-Guardrail` header when buffering
+response is delivered as the `X-AIGateway-Guardrail` header when buffering
 finished before the first keep-alive; a later warn is audit-only. A stream cut by `terminate`, or by a `block`/`respond`
 from `OnStreamEnd`, ends with `finish_reason: "content_filter"` (mapped to
 `stop_reason: "end_turn"` in the Anthropic dialect) and `[DONE]`; the client
@@ -307,22 +307,22 @@ A plugin type reaches the catalog in one of three ways:
 
 The `.so` loader resolves a relative file inside `plugins.search_paths`
 (symlinks followed and checked), verifies an optional SHA-256 pin, opens the
-file, looks up `GoModelPlugin` (a `func() pluginapi.Plugin` constructor, or
+file, looks up `AIGatewayPlugin` (a `func() pluginapi.Plugin` constructor, or
 a `pluginapi.Plugin` variable that limits the file to one instance) and the
-optional `GoModelBuildInfo`, and checks that every declared `Kind` is backed
+optional `AIGatewayBuildInfo`, and checks that every declared `Kind` is backed
 by the matching interface. Every failure is a startup error naming the file.
 
 Constraints of Go's `plugin` package that the documentation states plainly:
 
 - Linux, macOS, and FreeBSD only, and only with `CGO_ENABLED=1`. The default
-  image stays static; `Dockerfile.plugins` builds `gomodel:<version>-plugins`
+  image stays static; `Dockerfile.plugins` builds `aigateway:<version>-plugins`
   with cgo on a glibc base and includes a `plugin-builder` target with the
   identical toolchain. `make build-plugins` produces the cgo binary locally.
 - The plugin must be built with the same Go version, the same build flags
   (`-trimpath`, `-race`, `-tags`, `-gcflags`, `-asmflags`), and identical
-  sources of every shared package. `gomodel plugin build` copies the flags
+  sources of every shared package. `aigateway plugin build` copies the flags
   recorded in the running binary, forces cgo, pins `GOTOOLCHAIN` to the
-  host's Go version, stamps `GoModelBuildInfo`, and refuses an output built
+  host's Go version, stamps `AIGatewayBuildInfo`, and refuses an output built
   with a different Go version. A refused load is reported with both sides'
   Go version, module version, and flags instead of Go's generic message.
 - Plugins cannot be unloaded. A changed `.so` takes effect on restart; a
@@ -398,13 +398,13 @@ Declared in the contract or the spec but not run by this release:
   of hidden, and blocking without leakage is possible through buffering
 - **Deterministic chains**: one mutator per step and severity merging replace
   last-writer-wins
-- **Legible `.so` failures**: stdlib-only contract, `gomodel plugin build`,
+- **Legible `.so` failures**: stdlib-only contract, `aigateway plugin build`,
   and build-info stamping turn the toolchain constraint into a one-line CI
   step and a readable error
 
 ### Negative
 
-- **Rebuild churn for `.so` plugins**: every GoModel release and Go patch
+- **Rebuild churn for `.so` plugins**: every AIGateway release and Go patch
   release requires rebuilding shared objects
 - **A second image variant**: cgo builds double the image matrix and cannot
   be cross-compiled from the build platform

@@ -126,14 +126,14 @@ func TestExpandString(t *testing.T) {
 		},
 		{
 			name:     "master key pattern - not set should be empty",
-			input:    "${GOMODEL_MASTER_KEY:-}",
+			input:    "${AIGATEWAY_MASTER_KEY:-}",
 			envVars:  map[string]string{},
 			expected: "",
 		},
 		{
 			name:     "master key pattern - set to value",
-			input:    "${GOMODEL_MASTER_KEY:-}",
-			envVars:  map[string]string{"GOMODEL_MASTER_KEY": "secret-key"},
+			input:    "${AIGATEWAY_MASTER_KEY:-}",
+			envVars:  map[string]string{"AIGATEWAY_MASTER_KEY": "secret-key"},
 			expected: "secret-key",
 		},
 		{
@@ -225,8 +225,8 @@ func TestApplyEnvOverrides(t *testing.T) {
 			},
 		},
 		{
-			name:    "GOMODEL_MASTER_KEY override",
-			envVars: map[string]string{"GOMODEL_MASTER_KEY": "my-secret"},
+			name:    "AIGATEWAY_MASTER_KEY override",
+			envVars: map[string]string{"AIGATEWAY_MASTER_KEY": "my-secret"},
 			check: func(t *testing.T, cfg *Config) {
 				if cfg.Server.MasterKey != "my-secret" {
 					t.Errorf("Server.MasterKey = %q, want %q", cfg.Server.MasterKey, "my-secret")

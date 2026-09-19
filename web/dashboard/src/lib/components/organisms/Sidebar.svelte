@@ -1,17 +1,18 @@
 <script>
   import Icon from "$lib/components/atoms/Icon.svelte";
-  import GoModelLogo from "$lib/components/atoms/GoModelLogo.svelte";
+  import AIGatewayLogo from "$lib/components/atoms/AIGatewayLogo.svelte";
   import ThemeToggle from "./ThemeToggle.svelte";
   import { router } from "$lib/stores/router.svelte.js";
   import { sidebar } from "$lib/stores/ui.svelte.js";
   import { auth } from "$lib/stores/auth.svelte.js";
   import { access } from "$lib/stores/access.svelte.js";
+  import { flash } from "$lib/stores/flash.svelte.js";
   import {
     MAX_SIDEBAR_WIDTH,
     MIN_SIDEBAR_WIDTH,
     sidebarWidthFromPointer,
   } from "$lib/stores/sidebar-sizing.js";
-  import { gomodelPath } from "$lib/api/paths.js";
+  import { aigatewayPath } from "$lib/api/paths.js";
   import * as m from "$lib/paraglide/messages.js";
   import { NAV_ITEMS } from "./navigation.js";
   import {
@@ -28,6 +29,15 @@
   const navItems = $derived(
     NAV_ITEMS.filter((item) => !item.visible || item.visible()),
   );
+
+  let signingOut = $state(false);
+
+  async function signOut() {
+    signingOut = true;
+    const ok = await auth.logout();
+    signingOut = false;
+    if (!ok) flash.error(m.sidebar_sign_out_failed());
+  }
 
   let resizePointerID = $state(null);
   let resizeStartX = 0;
@@ -93,14 +103,14 @@
 >
   <div class="sidebar-header">
     <div class="sidebar-logo">
-      <GoModelLogo />
+      <AIGatewayLogo />
     </div>
     <h1 class="sidebar-brand-name">NEXUS AI Gateway</h1>
   </div>
   <nav class="sidebar-nav">
     {#each navItems as item (item.page)}
       <a
-        href={gomodelPath("/admin/dashboard/" + item.page)}
+        href={aigatewayPath("/admin/dashboard/" + item.page)}
         class="nav-item"
         class:active={router.page === item.page}
         title={item.label()}
@@ -143,12 +153,26 @@
         {/if}
         <a
           class="api-key-open-btn"
-          href={gomodelPath(auth.externalLogoutURL)}
+          href={aigatewayPath(auth.externalLogoutURL)}
           aria-label={m.sidebar_action_sign_out()}
         >
           <Icon icon={LogOut} class="api-key-open-icon" />
           <span>{m.sidebar_action_sign_out()}</span>
         </a>
+      </div>
+    {/if}
+    {#if auth.passwordSession && !auth.needsAuth}
+      <div class="api-key-section">
+        <button
+          type="button"
+          class="api-key-open-btn"
+          onclick={signOut}
+          disabled={signingOut}
+          aria-label={m.sidebar_action_sign_out()}
+        >
+          <Icon icon={LogOut} class="api-key-open-icon" />
+          <span>{m.sidebar_action_sign_out()}</span>
+        </button>
       </div>
     {/if}
     {#if auth.needsAuth || auth.hasApiKey()}

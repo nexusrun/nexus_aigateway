@@ -1,16 +1,16 @@
 ---
 title: "Responses compatibility"
-description: "Understand which Responses API features GoModel can translate to chat providers, which ones require native provider support, and how this affects agent SDKs."
+description: "Understand which Responses API features AIGateway can translate to chat providers, which ones require native provider support, and how this affects agent SDKs."
 icon: "route"
 keywords: ["Responses API compatibility", "feature support", "agent SDK", "translation limits"]
 ---
 
-GoModel accepts OpenAI-compatible `/v1/responses` requests and routes them to
+AIGateway accepts OpenAI-compatible `/v1/responses` requests and routes them to
 the selected model provider. Some providers expose a native Responses-compatible
 surface. Others expose chat completions or provider-native chat APIs, so
-GoModel translates the request.
+AIGateway translates the request.
 
-The compatibility rule follows Postel's Law: GoModel translates portable model
+The compatibility rule follows Postel's Law: AIGateway translates portable model
 features and accepts unfamiliar tool declarations without forwarding them to a
 provider that cannot execute them. Fields that would change the meaning of the
 model output are still rejected when they cannot be translated safely.
@@ -19,8 +19,8 @@ model output are still rejected when they cannot be translated safely.
 
 | Mode | What happens |
 | --- | --- |
-| Native Responses provider | GoModel forwards the Responses payload to the provider's Responses-compatible endpoint. Provider-native features may work if that provider supports them. |
-| Chat-translated provider | GoModel converts `/v1/responses` to chat semantics, calls the provider's chat API, then converts the result back to a Responses shape. |
+| Native Responses provider | AIGateway forwards the Responses payload to the provider's Responses-compatible endpoint. Provider-native features may work if that provider supports them. |
+| Chat-translated provider | AIGateway converts `/v1/responses` to chat semantics, calls the provider's chat API, then converts the result back to a Responses shape. |
 
 Chat-translated providers include Anthropic and Gemini native routing. They work
 well for text, streaming, multimodal inputs supported by the target adapter, and
@@ -37,15 +37,15 @@ function tool loops. They cannot safely execute OpenAI-hosted tools.
 | Replayed output item metadata (`id`, `status`, `annotations`, `logprobs`) | Forwarded | Dropped before dispatch: chat providers have no place for them, and Groq and Fireworks reject them outright |
 | `text.format` structured output | Forwarded | Converted to `response_format` when the provider supports it |
 | Responses-only tools (`web_search`, `file_search`, `computer_use_preview`, and `namespace`) | Provider decides | Accepted and omitted |
-| `previous_response_id` | Forwarded, unless GoModel minted the id for a chat-translated provider or a content-editing prompt guardrail runs: then resolved as on the right | Resolved by GoModel: the stored previous response's input items and output are prepended to the input. The previous response must be stored (`store` left on), or the request returns 404 (see [Stored responses](/advanced/responses-api#stored-responses)) |
-| `conversation` | Resolved by GoModel from the gateway-managed conversation | Resolved by GoModel from the gateway-managed conversation |
+| `previous_response_id` | Forwarded, unless AIGateway minted the id for a chat-translated provider or a content-editing prompt guardrail runs: then resolved as on the right | Resolved by AIGateway: the stored previous response's input items and output are prepended to the input. The previous response must be stored (`store` left on), or the request returns 404 (see [Stored responses](/advanced/responses-api#stored-responses)) |
+| `conversation` | Resolved by AIGateway from the gateway-managed conversation | Resolved by AIGateway from the gateway-managed conversation |
 | `include` annotations | Forwarded | Accepted and ignored, except `message.output_text.logprobs` |
 | Unknown Responses input item types | Preserved | Rejected |
-| Responses websocket transport | Not implemented by GoModel | Not implemented by GoModel |
+| Responses websocket transport | Not implemented by AIGateway | Not implemented by AIGateway |
 
 <Note>
   Anthropic does not currently accept translated `response_format` or
-  `text.verbosity` settings through GoModel's chat translation path. GoModel
+  `text.verbosity` settings through AIGateway's chat translation path. AIGateway
   rejects those fields instead of dropping them.
 </Note>
 
@@ -59,7 +59,7 @@ not support them. Clients that always attach `include`, such as Codex with
 `wire_api = "responses"`, work without extra configuration.
 
 The one exception is `message.output_text.logprobs`, which requests real model
-output rather than an annotation. GoModel rejects it for the same reason it
+output rather than an annotation. AIGateway rejects it for the same reason it
 rejects `top_logprobs`.
 
 ## Hosted tools
@@ -74,7 +74,7 @@ runtime state:
 - `computer_use_preview` depends on a provider-managed computer session,
   display environment, and safety model.
 
-GoModel does not translate these into Anthropic, Gemini, or other chat-provider
+AIGateway does not translate these into Anthropic, Gemini, or other chat-provider
 tool calls. A fake translation would change where the tool runs, how state is
 stored, and which security controls apply. Chat-translated providers therefore
 accept the request but omit every non-function tool before provider dispatch.
@@ -93,7 +93,7 @@ provider when the result depends on one of those tools running.
 ## Agent SDKs
 
 OpenAI Agents SDK clients can talk to Anthropic and Gemini models through
-GoModel for portable flows:
+AIGateway for portable flows:
 
 - plain `Runner.run(...)`
 - `Runner.run_streamed(...)` over HTTP/SSE
@@ -106,11 +106,11 @@ provider-specific support.
 
 Stateless replay works too. Clients that send the previous turn's output items
 back as input (`store: false`, Codex, SDK-managed history) always include the
-item `id` that the Responses API returned. GoModel drops that `id`, along with
+item `id` that the Responses API returned. AIGateway drops that `id`, along with
 the other Responses-only item metadata, before calling a chat provider, so the
 same replay body works on every provider.
 
-For Python Agents SDK clients, namespaced GoModel model IDs such as
+For Python Agents SDK clients, namespaced AIGateway model IDs such as
 `anthropic/claude-sonnet-4-20250514` and `gemini/gemini-2.0-flash` need model ID
 pass-through mode:
 
@@ -138,11 +138,11 @@ Use that `run_config` when calling `Runner.run(...)` or
 ## Test the compatibility boundary
 
 The OpenAI Agents SDK examples include probes for Anthropic routing through
-GoModel:
+AIGateway:
 
 ```bash
 export OPENAI_BASE_URL=http://localhost:8080/v1
-export GOMODEL_MASTER_KEY=change-me
+export AIGATEWAY_MASTER_KEY=change-me
 export OPENAI_MODEL=anthropic/claude-sonnet-4-20250514
 
 python3 docs/examples/openai-agents-sdk/anthropic_responses_probe.py
@@ -158,5 +158,5 @@ tool loops.
 ## Roadmap
 
 Future support for hosted tools should use explicit provider capability mapping.
-That means GoModel should know which provider, model, API mode, and request
+That means AIGateway should know which provider, model, API mode, and request
 shape can safely handle each feature before accepting the request.

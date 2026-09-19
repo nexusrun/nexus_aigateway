@@ -101,7 +101,7 @@ class AuditListStore {
   // preference, not a filter: clearAuditFilters leaves it alone.
   toggleAuditGroupSessions() {
     liveLogs.auditGroupSessions = !liveLogs.auditGroupSessions;
-    writeStored("gomodel_audit_group_sessions", liveLogs.auditGroupSessions);
+    writeStored("aigateway_audit_group_sessions", liveLogs.auditGroupSessions);
     this.auditExpandedThreads = {};
     liveLogs.auditThreadChildren = {};
     this.fetchAuditLog(true);

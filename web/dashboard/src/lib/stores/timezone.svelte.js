@@ -1,5 +1,5 @@
 // Timezone preference + timezone-aware formatting. The effective timezone
-// rides on every admin request as the X-GoModel-Timezone header so
+// rides on every admin request as the X-AIGateway-Timezone header so
 // server-side day grouping matches the UI.
 
 import { browserStorage } from "$lib/utils/storage.js";
@@ -10,7 +10,7 @@ import {
 } from "$lib/utils/dateKeys.js";
 
 const DEFAULT_TIMEZONE = "UTC";
-const TIMEZONE_STORAGE_KEY = "gomodel_timezone_override";
+const TIMEZONE_STORAGE_KEY = "aigateway_timezone_override";
 const formatterCache = new Map();
 const supportedTimeZoneCache = new Map();
 

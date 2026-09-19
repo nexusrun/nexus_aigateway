@@ -29,7 +29,7 @@ func TestAudioTranscription_ForwardsUnknownFormFields(t *testing.T) {
 	for _, field := range [][2]string{
 		{"model", "gpt-4o-transcribe"},
 		{"response_format", "json"},
-		{"prompt", "GoModel"},
+		{"prompt", "AIGateway"},
 		{"temperature", "0"},
 		{"language", "en"},
 		{"timestamp_granularities[]", "word"},
@@ -81,7 +81,7 @@ func TestAudioTranscription_ForwardsUnknownFormFields(t *testing.T) {
 		}
 	}
 	// The gateway-owned parts keep their typed home and never travel twice.
-	if captured.Language != "en" || captured.Prompt != "GoModel" || captured.ResponseFormat != "json" {
+	if captured.Language != "en" || captured.Prompt != "AIGateway" || captured.ResponseFormat != "json" {
 		t.Errorf("typed fields mismatch: %+v", captured)
 	}
 }

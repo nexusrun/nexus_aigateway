@@ -1,16 +1,16 @@
 ---
-title: "GoModel & Codex"
-description: "Put GoModel between Codex and your models: keep billing on your ChatGPT subscription, or route Codex to any other provider."
+title: "AIGateway & Codex"
+description: "Put AIGateway between Codex and your models: keep billing on your ChatGPT subscription, or route Codex to any other provider."
 icon: "code-xml"
 keywords: ["Codex", "OpenAI Codex", "ChatGPT subscription", "coding agent", "setup guide"]
 ---
 
-GoModel is a good fit for Codex because Codex already targets the OpenAI
+AIGateway is a good fit for Codex because Codex already targets the OpenAI
 Responses API.
 
-`Codex -> GoModel -> upstream`
+`Codex -> AIGateway -> upstream`
 
-Codex talks to GoModel with a GoModel master key, so every request shows up in
+Codex talks to AIGateway with a AIGateway master key, so every request shows up in
 the dashboard. The one choice to make is which provider serves the model,
 because that decides what pays for it:
 
@@ -24,10 +24,10 @@ Everything after this point is the same either way.
 ## Before you start
 
 - Install Codex on your machine.
-- Choose a GoModel master key, for example `change-me`.
+- Choose a AIGateway master key, for example `change-me`.
 
 To bill Codex to your ChatGPT plan, sign in once so Codex writes its token
-file, then hand that token to GoModel:
+file, then hand that token to AIGateway:
 
 ```bash
 codex login
@@ -36,7 +36,7 @@ export CHATGPT_API_KEY=$(jq -r .tokens.access_token ~/.codex/auth.json)
 
 ```bash
 docker run --rm -p 8080:8080 \
-  -e GOMODEL_MASTER_KEY="change-me" \
+  -e AIGATEWAY_MASTER_KEY="change-me" \
   -e CHATGPT_API_KEY="$CHATGPT_API_KEY" \
   nexusrun/nexus_aigateway
 ```
@@ -49,7 +49,7 @@ example `-e OPENAI_API_KEY="sk-..."` — and use one of its models in step 2.
 
 ## 1. Confirm the Responses API
 
-Optional: check that GoModel answers a plain Responses request before involving
+Optional: check that AIGateway answers a plain Responses request before involving
 Codex. Use a model your configured provider actually serves.
 
 ```bash
@@ -62,42 +62,42 @@ curl -s http://localhost:8080/v1/responses \
 The response contains `ok`. For the Python and JavaScript equivalents, see the
 [Responses API reference](/advanced/responses-api).
 
-## 2. Configure Codex to use GoModel
+## 2. Configure Codex to use AIGateway
 
 Add a Responses-based provider to `~/.codex/config.toml`:
 
 ```toml
-model_provider = "gomodel"
-model = "gpt-5.6-sol"   # or any model your GoModel serves
+model_provider = "aigateway"
+model = "gpt-5.6-sol"   # or any model your AIGateway serves
 
-[model_providers.gomodel]
-name = "GoModel"
+[model_providers.aigateway]
+name = "AIGateway"
 base_url = "http://localhost:8080/v1"
-env_key = "GOMODEL_API_KEY"
+env_key = "AIGATEWAY_API_KEY"
 wire_api = "responses"
 ```
 
-Then export the GoModel master key for that provider:
+Then export the AIGateway master key for that provider:
 
 ```bash
-export GOMODEL_API_KEY=change-me
+export AIGATEWAY_API_KEY=change-me
 ```
 
 <Note>
   Codex requires this variable even when you are signed in with ChatGPT, and it
-  carries the GoModel master key — not an OpenAI key. Without it the provider
+  carries the AIGateway master key — not an OpenAI key. Without it the provider
   fails to start.
 </Note>
 
 To try it without editing your config, pass the same settings inline:
 
 ```bash
-GOMODEL_API_KEY=change-me codex exec \
-  -c model_provider=gomodel \
-  -c 'model_providers.gomodel.name="GoModel"' \
-  -c 'model_providers.gomodel.base_url="http://localhost:8080/v1"' \
-  -c 'model_providers.gomodel.env_key="GOMODEL_API_KEY"' \
-  -c 'model_providers.gomodel.wire_api="responses"' \
+AIGATEWAY_API_KEY=change-me codex exec \
+  -c model_provider=aigateway \
+  -c 'model_providers.aigateway.name="AIGateway"' \
+  -c 'model_providers.aigateway.base_url="http://localhost:8080/v1"' \
+  -c 'model_providers.aigateway.env_key="AIGATEWAY_API_KEY"' \
+  -c 'model_providers.aigateway.wire_api="responses"' \
   -m gpt-5.6-sol 'Reply with exactly ok and no punctuation.'
 ```
 
@@ -121,20 +121,20 @@ ok
 
 <Note>
   Codex 0.147.0 logs `failed to refresh available models: missing field
-  "models"` at startup. It calls its own catalogue endpoint, which GoModel
+  "models"` at startup. It calls its own catalogue endpoint, which AIGateway
   answers with the standard OpenAI `/v1/models` shape. The message is cosmetic
   — Codex falls back and the session works.
 </Note>
 
-## 4. Check the traffic in GoModel
+## 4. Check the traffic in AIGateway
 
-Open the GoModel dashboard audit logs:
+Open the AIGateway dashboard audit logs:
 
 [http://localhost:8080/admin/dashboard/audit](http://localhost:8080/admin/dashboard/audit)
 
-This lets you confirm that Codex is reaching GoModel and inspect the full
+This lets you confirm that Codex is reaching AIGateway and inspect the full
 request and response trail. From the same dashboard, you can keep following
-your GoModel traffic and usage.
+your AIGateway traffic and usage.
 
 ## DeepSeek V4
 
@@ -170,12 +170,12 @@ Codex asks for on every request.
 
 ## Validated on August 20, 2026
 
-This guide was validated against a local GoModel instance and Codex CLI
+This guide was validated against a local AIGateway instance and Codex CLI
 `0.147.0`. Local validation confirmed:
 
-- `codex exec` returned `ok` through `Codex -> GoModel -> ChatGPT subscription`
+- `codex exec` returned `ok` through `Codex -> AIGateway -> ChatGPT subscription`
 - `POST /v1/responses` returned `200 OK` for both streaming and non-streaming
   callers
 - Codex sent plain JSON; no `Content-Encoding: zstd` header was present
-- the custom `gomodel` provider failed without its `env_key`, because Codex
+- the custom `aigateway` provider failed without its `env_key`, because Codex
   still requires that variable when signed in with ChatGPT

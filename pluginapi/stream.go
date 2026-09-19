@@ -6,7 +6,7 @@ import (
 	"unicode/utf8"
 )
 
-// StreamMode says how GoModel drives a [StreamHook].
+// StreamMode says how AIGateway drives a [StreamHook].
 type StreamMode string
 
 const (
@@ -25,10 +25,10 @@ const (
 // StreamPolicy configures how a [StreamHook] is driven.
 type StreamPolicy struct {
 	Mode StreamMode
-	// LookbehindChars is how many trailing characters GoModel withholds in
+	// LookbehindChars is how many trailing characters AIGateway withholds in
 	// transform mode so the hook can rewrite text that spans events.
 	LookbehindChars int
-	// MinChunkChars, in transform mode, makes GoModel collect the text
+	// MinChunkChars, in transform mode, makes AIGateway collect the text
 	// deltas of a choice (and, per call, its tool-call argument deltas)
 	// until at least this many new characters (runes)
 	// are pending and present them to the hook as one text event, so a
@@ -78,7 +78,7 @@ type StreamEvent struct {
 	// Overlap is the number of leading characters (runes) of Text that were
 	// already presented in an earlier event of this window (a choice's
 	// text, or the arguments of one of its tool calls): under a lookbehind
-	// StreamPolicy GoModel withholds a tail of text and shows it again in
+	// StreamPolicy AIGateway withholds a tail of text and shows it again in
 	// front of the next delta, after this plugin's earlier decision was
 	// applied to it. An edit whose match ends within the first Overlap
 	// characters was applied then and must not be applied again; edits that
@@ -92,7 +92,7 @@ type StreamEvent struct {
 	Raw json.RawMessage
 }
 
-// StreamAction is what a [StreamHook] asks GoModel to do with an event.
+// StreamAction is what a [StreamHook] asks AIGateway to do with an event.
 type StreamAction string
 
 const (

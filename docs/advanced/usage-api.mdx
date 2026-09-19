@@ -112,15 +112,15 @@ console.log(usage);
 
 - **Managed API key** — the key's bound `user_path` is used. No parameters
   needed, and the key holder cannot read outside their own subtree.
-- **Master key (or unsafe mode)** — pass `X-GoModel-User-Path` to pick a path,
+- **Master key (or unsafe mode)** — pass `X-AIGateway-User-Path` to pick a path,
   or omit it to see `/` (everything):
 
 <CodeGroup>
 
 ```bash curl
 curl http://localhost:8080/v1/usage \
-  -H "Authorization: Bearer $GOMODEL_MASTER_KEY" \
-  -H "X-GoModel-User-Path: /team/alpha"
+  -H "Authorization: Bearer $AIGATEWAY_MASTER_KEY" \
+  -H "X-AIGateway-User-Path: /team/alpha"
 ```
 
 ```python Python
@@ -131,8 +131,8 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="http://localhost:8080",
-    api_key=os.environ["GOMODEL_MASTER_KEY"],
-    default_headers={"X-GoModel-User-Path": "/team/alpha"},
+    api_key=os.environ["AIGATEWAY_MASTER_KEY"],
+    default_headers={"X-AIGateway-User-Path": "/team/alpha"},
 )
 usage = client.get("/v1/usage", cast_to=httpx.Response)
 
@@ -144,8 +144,8 @@ import OpenAI from "openai";
 
 const client = new OpenAI({
   baseURL: "http://localhost:8080",
-  apiKey: process.env.GOMODEL_MASTER_KEY,
-  defaultHeaders: { "X-GoModel-User-Path": "/team/alpha" },
+  apiKey: process.env.AIGATEWAY_MASTER_KEY,
+  defaultHeaders: { "X-AIGateway-User-Path": "/team/alpha" },
 });
 
 const usage = await client.get("/v1/usage");

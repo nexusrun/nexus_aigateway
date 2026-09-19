@@ -84,7 +84,7 @@ func speechFormat(responseFormat string) (openAIFormat, outputFormat string, err
 
 // speechSpeed clamps the OpenAI speed parameter to ElevenLabs' voice setting
 // range (0.7-1.2). OpenAI accepts a wider range (0.25-4.0); per Postel's Law,
-// GoModel adapts the request to the provider's requirements rather than
+// AIGateway adapts the request to the provider's requirements rather than
 // rejecting values OpenAI clients legitimately send. A zero value means
 // "unset" and is left out of the request.
 func speechSpeed(speed float64) *float64 {

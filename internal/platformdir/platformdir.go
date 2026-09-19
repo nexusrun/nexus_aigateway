@@ -1,5 +1,5 @@
 // Package platformdir resolves the OS-conventional per-user directories for
-// GoModel's durable data and caches, used when no explicit path is
+// AIGateway's durable data and caches, used when no explicit path is
 // configured. Binary installs (install.sh / Homebrew / install.ps1) run from
 // arbitrary working directories, so CWD-relative defaults would scatter
 // state; these follow each platform's convention instead.
@@ -11,38 +11,61 @@ import (
 	"runtime"
 )
 
-const app = "gomodel"
+const app = "aigateway"
+
+// legacyApp is the directory name used before the gateway was renamed. An
+// install that still has one keeps using it, so the rename never strands a
+// database or an install identity in a directory nothing reads any more.
+const legacyApp = "gomodel"
 
 // DataDir returns the directory for durable application data such as the
 // SQLite database:
 //
-//	Linux    $XDG_DATA_HOME/gomodel (default ~/.local/share/gomodel)
-//	macOS    ~/Library/Application Support/gomodel
-//	Windows  %LocalAppData%\gomodel
+//	Linux    $XDG_DATA_HOME/aigateway (default ~/.local/share/aigateway)
+//	macOS    ~/Library/Application Support/aigateway
+//	Windows  %LocalAppData%\aigateway
 func DataDir() (string, error) {
+	parent, err := dataParent()
+	if err != nil {
+		return "", err
+	}
+	return appDir(parent), nil
+}
+
+func dataParent() (string, error) {
 	switch runtime.GOOS {
 	case "windows":
-		base, err := os.UserCacheDir() // %LocalAppData%
-		if err != nil {
-			return "", err
-		}
-		return filepath.Join(base, app), nil
+		return os.UserCacheDir() // %LocalAppData%
 	case "darwin":
-		base, err := os.UserConfigDir() // ~/Library/Application Support
-		if err != nil {
-			return "", err
-		}
-		return filepath.Join(base, app), nil
+		return os.UserConfigDir() // ~/Library/Application Support
 	default:
 		if xdg := os.Getenv("XDG_DATA_HOME"); xdg != "" {
-			return filepath.Join(xdg, app), nil
+			return xdg, nil
 		}
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return "", err
 		}
-		return filepath.Join(home, ".local", "share", app), nil
+		return filepath.Join(home, ".local", "share"), nil
 	}
+}
+
+// appDir names the application directory under parent, preferring a
+// pre-rename directory that already exists over a current one that does not.
+func appDir(parent string) string {
+	current := filepath.Join(parent, app)
+	if isDir(current) {
+		return current
+	}
+	if legacy := filepath.Join(parent, legacyApp); isDir(legacy) {
+		return legacy
+	}
+	return current
+}
+
+func isDir(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
 
 // LocalDataDir is the project-local data directory. Deployments that already
@@ -74,9 +97,9 @@ func DataFile(name string) string {
 // CacheDir returns the directory for re-creatable caches such as the model
 // catalog:
 //
-//	Linux    $XDG_CACHE_HOME/gomodel (default ~/.cache/gomodel)
-//	macOS    ~/Library/Caches/gomodel
-//	Windows  %LocalAppData%\gomodel\cache
+//	Linux    $XDG_CACHE_HOME/aigateway (default ~/.cache/aigateway)
+//	macOS    ~/Library/Caches/aigateway
+//	Windows  %LocalAppData%\aigateway\cache
 func CacheDir() (string, error) {
 	base, err := os.UserCacheDir()
 	if err != nil {

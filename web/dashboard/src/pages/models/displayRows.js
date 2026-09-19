@@ -3,6 +3,7 @@
 // relative imports keep it loadable outside Vite.
 
 import * as m from "../../lib/paraglide/messages.js";
+import { providerLabel } from "../../lib/utils/providerLabel.js";
 import {
   GLOBAL_OVERRIDE_SELECTOR,
   aliasKeys,
@@ -152,11 +153,11 @@ export function filterDisplayModels(rows, modelFilter) {
 function providerGroupDisplayName(providerName, providerType) {
   const normalizedProviderName = String(providerName || "").trim();
   if (normalizedProviderName) {
-    return normalizedProviderName;
+    return providerLabel(normalizedProviderName);
   }
   const normalizedProviderType = String(providerType || "").trim();
   if (normalizedProviderType) {
-    return normalizedProviderType;
+    return providerLabel(normalizedProviderType);
   }
   return m.models_unassigned();
 }
@@ -170,7 +171,7 @@ function providerGroupTypeLabel(providerName, providerType) {
   ) {
     return "";
   }
-  return normalizedProviderType;
+  return providerLabel(normalizedProviderType);
 }
 
 function providerOverrideSelector(providerName) {

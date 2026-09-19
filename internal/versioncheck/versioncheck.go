@@ -1,4 +1,4 @@
-// Package versioncheck reports whether a newer GoModel release exists.
+// Package versioncheck reports whether a newer AIGateway release exists.
 //
 // It reads a plain-text manifest on a daily schedule and on the first
 // dashboard visit of each day. The request
@@ -44,7 +44,7 @@ const minRefreshInterval = time.Minute
 // must not each hold an outbound connection open.
 const maxConcurrentBeacons = 8
 
-// DefaultURL is the public release manifest served by the GoModel website.
+// DefaultURL is the public release manifest served by the AIGateway website.
 // The channel file ("core.txt" or "pro.txt") is appended to it.
 const DefaultURL = "https://aigateway.nexusai.run/version"
 
@@ -317,9 +317,9 @@ func (c *Checker) fetch(ctx context.Context, beacon Beacon) (string, error) {
 	}
 	req.Header.Set("Accept", "text/plain")
 	req.Header.Set("User-Agent", fmt.Sprintf("%s/%s", strings.ReplaceAll(c.cfg.App, " ", "-"), c.cfg.Version))
-	req.Header.Set("X-GoModel-Version", c.cfg.Version)
-	req.Header.Set("X-GoModel-App", c.cfg.App)
-	req.Header.Set("X-GoModel-Install", c.installID(ctx))
+	req.Header.Set("X-AIGateway-Version", c.cfg.Version)
+	req.Header.Set("X-AIGateway-App", c.cfg.App)
+	req.Header.Set("X-AIGateway-Install", c.installID(ctx))
 	beacon.apply(req)
 
 	resp, err := c.cfg.Client.Do(req)

@@ -7,11 +7,11 @@ keywords: ["admin API", "dashboard", "REST API", "monitoring", "gateway health"]
 
 ## Philosophy
 
-GoModel ships with admin endpoints **enabled by default**. The goal is simple: you should be able to deploy GoModel and immediately have visibility into what's happening — no extra services, no separate monitoring stack, no configuration.
+AIGateway ships with admin endpoints **enabled by default**. The goal is simple: you should be able to deploy AIGateway and immediately have visibility into what's happening — no extra services, no separate monitoring stack, no configuration.
 
 The admin layer is split into two independently controllable pieces:
 
-1. **Admin REST API** (`/admin/*`) — machine-readable JSON endpoints for usage data, budgets, and model inventory. Protected by `GOMODEL_MASTER_KEY` like all other API routes.
+1. **Admin REST API** (`/admin/*`) — machine-readable JSON endpoints for usage data, budgets, and model inventory. Protected by `AIGATEWAY_MASTER_KEY` like all other API routes.
 2. **Admin Dashboard UI** (`/admin/dashboard`) — a lightweight, embedded HTML dashboard that visualizes the same data. No external dependencies, no JavaScript frameworks to install — it's compiled into the binary.
 
 Both are on by default because observability shouldn't be opt-in. If you don't need them, turn them off with a single environment variable.
@@ -33,13 +33,13 @@ variables, defaults, and the equivalent `admin:` YAML block.
 
 The admin REST API endpoints (`/admin/*`) accept two credentials as a Bearer token:
 
-- **`GOMODEL_MASTER_KEY`** — always has admin access.
+- **`AIGATEWAY_MASTER_KEY`** — always has admin access.
 - **A managed API key with dashboard access** — managed keys are created *without* dashboard access by default, so a key handed out for model traffic cannot read the audit log, issue new keys, or change gateway settings. Requests made with a managed key that lacks access return `403` with error code `dashboard_access_denied`.
 
 <CodeGroup>
 
 ```bash curl
-curl -H "Authorization: Bearer $GOMODEL_MASTER_KEY" \
+curl -H "Authorization: Bearer $AIGATEWAY_MASTER_KEY" \
   http://localhost:8080/admin/usage/summary
 ```
 
@@ -51,7 +51,7 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="http://localhost:8080",
-    api_key=os.environ["GOMODEL_MASTER_KEY"],
+    api_key=os.environ["AIGATEWAY_MASTER_KEY"],
 )
 summary = client.get("/admin/usage/summary", cast_to=httpx.Response)
 
@@ -63,7 +63,7 @@ import OpenAI from "openai";
 
 const client = new OpenAI({
   baseURL: "http://localhost:8080",
-  apiKey: process.env.GOMODEL_MASTER_KEY,
+  apiKey: process.env.AIGATEWAY_MASTER_KEY,
 });
 
 const summary = await client.get("/admin/usage/summary");
@@ -78,7 +78,7 @@ Grant or revoke dashboard access per key on the dashboard's API Keys page, at cr
 
 ```bash curl
 curl -X PUT http://localhost:8080/admin/auth-keys/<key-id>/dashboard-access \
-  -H "Authorization: Bearer $GOMODEL_MASTER_KEY" \
+  -H "Authorization: Bearer $AIGATEWAY_MASTER_KEY" \
   -H "Content-Type: application/json" \
   -d '{"dashboard_access": true}'
 ```
@@ -91,7 +91,7 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="http://localhost:8080",
-    api_key=os.environ["GOMODEL_MASTER_KEY"],
+    api_key=os.environ["AIGATEWAY_MASTER_KEY"],
 )
 auth_key = client.put(
     "/admin/auth-keys/<key-id>/dashboard-access",
@@ -107,7 +107,7 @@ import OpenAI from "openai";
 
 const client = new OpenAI({
   baseURL: "http://localhost:8080",
-  apiKey: process.env.GOMODEL_MASTER_KEY,
+  apiKey: process.env.AIGATEWAY_MASTER_KEY,
 });
 
 const authKey = await client.put(
@@ -140,7 +140,7 @@ dashboard access and no `user_path` (or `/`) is a **global admin** and sees
 everything, like the master key. A key bound to `/team/alpha` is a **scoped
 admin**: it reads and manages only `/team/alpha` and its descendants
 (`/team/alpha/service`, `/team/alpha/service/worker`, ...). The
-`X-GoModel-User-Path` header never widens a key's scope.
+`X-AIGateway-User-Path` header never widens a key's scope.
 
 Extension identities such as SSO sessions follow the same rule: the session's
 user path is the subtree it administers, so an extension binds gateway admins
@@ -182,7 +182,7 @@ The same scope applies to `/v1` lifecycle objects; see
 The dashboard UI pages (`/admin/dashboard`) and static assets (`/admin/static/*`) **skip authentication** so the dashboard shell is accessible without configuring API keys in the browser — the data it loads still requires a key with dashboard access.
 
 <Warning>
-  If your GoModel instance is publicly accessible, be aware that the dashboard
+  If your AIGateway instance is publicly accessible, be aware that the dashboard
   UI is unauthenticated. Disable it with `ADMIN_UI_ENABLED=false` or restrict
   access at the network level.
 </Warning>
@@ -341,7 +341,7 @@ describe provider spend. Pass `cache_mode` to change that:
 
 ```bash
 curl "http://localhost:8080/admin/usage/summary?user_path=/team/alpha&cache_mode=all" \
-  -H "Authorization: Bearer $GOMODEL_MASTER_KEY"
+  -H "Authorization: Bearer $AIGATEWAY_MASTER_KEY"
 ```
 
 Accepted by `/admin/usage/summary`, `/admin/usage/daily`, `/admin/usage/log`,
@@ -546,7 +546,7 @@ is off (`PLUGINS_ENABLED=false` and `GUARDRAILS_ENABLED=false`).
 
 ## Admin Dashboard
 
-The dashboard is a server-rendered HTML page embedded in the GoModel binary. Access it at:
+The dashboard is a server-rendered HTML page embedded in the AIGateway binary. Access it at:
 
 ```
 http://localhost:8080/admin/dashboard

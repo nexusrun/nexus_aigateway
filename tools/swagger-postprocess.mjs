@@ -1,6 +1,6 @@
 import fs from "node:fs";
 
-const file = process.argv[2] || "cmd/gomodel/docs/docs.go";
+const file = process.argv[2] || "cmd/aigateway/docs/docs.go";
 const source = fs.readFileSync(file, "utf8");
 const marker = "const docTemplate = `";
 const start = source.indexOf(marker);
@@ -13,7 +13,7 @@ if (end < 0) {
   throw new Error("missing docTemplate end");
 }
 
-const schemesMarker = "__GOMODEL_SWAGGER_SCHEMES__";
+const schemesMarker = "__AIGATEWAY_SWAGGER_SCHEMES__";
 const template = source.slice(templateStart, end);
 const rawBacktickJoin = "` + \"`\" + `";
 const parseableTemplate = template.replace(

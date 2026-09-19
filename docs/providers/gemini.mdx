@@ -1,6 +1,6 @@
 ---
 title: "Google Gemini"
-description: "Configure Google Gemini via AI Studio in GoModel, choose native or OpenAI-compatible routing, and understand image_url behavior."
+description: "Configure Google Gemini via AI Studio in AIGateway, choose native or OpenAI-compatible routing, and understand image_url behavior."
 icon: "sparkles"
 keywords: ["Google Gemini", "AI Studio", "native Gemini API", "provider setup"]
 ---
@@ -8,7 +8,7 @@ keywords: ["Google Gemini", "AI Studio", "native Gemini API", "provider setup"]
 This page covers Gemini through **Google AI Studio** API keys. For Gemini on
 Google Cloud's Vertex AI, see the [Google Vertex AI guide](/providers/vertex).
 
-By default, GoModel routes Gemini chat, Responses, embeddings, and
+By default, AIGateway routes Gemini chat, Responses, embeddings, and
 [image](/advanced/images-api) requests through Gemini's native APIs
 (`generateContent`, `batchEmbedContents`, Imagen `predict`). Switch to the
 OpenAI-compatible endpoint when you need compatibility behavior the native
@@ -36,7 +36,7 @@ providers:
   when per-provider `GEMINI_API_MODE` is unset. Prefer `GEMINI_API_MODE`.
 </Note>
 
-Native AI Studio mode can also materialize GoModel's post-routing prompt-cache
+Native AI Studio mode can also materialize AIGateway's post-routing prompt-cache
 plans as five-minute Gemini cached-content objects. Reuse is scoped to the API
 key selected for the session; sessionless traffic with rotating keys skips
 object creation so a resource is never reused under the wrong credential.
@@ -44,13 +44,13 @@ Vertex currently receives the original request without cached-content objects.
 
 ## Base URLs
 
-GoModel keeps separate internal bases for native Gemini and the
+AIGateway keeps separate internal bases for native Gemini and the
 OpenAI-compatible API:
 
 - native chat/models: `https://generativelanguage.googleapis.com/v1beta`
 - OpenAI-compatible: `https://generativelanguage.googleapis.com/v1beta/openai`
 
-`GEMINI_BASE_URL` overrides them. When the value ends in `/openai`, GoModel
+`GEMINI_BASE_URL` overrides them. When the value ends in `/openai`, AIGateway
 uses it for the OpenAI-compatible client and derives the native base by
 stripping `/openai`. Files and batches always use the OpenAI-compatible
 surface; chat, embeddings, and images follow the API mode.
@@ -85,7 +85,7 @@ Gemini's `thinkingConfig`:
 | Gemini 3 Pro, 3.1 Pro, 3.7 Flash, 3.8 Flash | `thinkingLevel: low` | `thinkingLevel` as given |
 
 Thinking cannot be turned off on Gemini 3, and Pro models plus 3.7 and 3.8
-Flash reject `minimal`, so GoModel sends the lowest level those models accept
+Flash reject `minimal`, so AIGateway sends the lowest level those models accept
 instead of surfacing Google's 400. An explicit
 `extra_body.google.thinking_config` is always forwarded unchanged.
 
@@ -93,7 +93,7 @@ instead of surfacing Google's 400. An explicit
 
 Google's Gemini 3 migration guides say to remove `temperature`, `top_p` and
 `top_k` from every request because the models are tuned for their defaults,
-and list `candidate_count` as unsupported on Gemini 3.x. In native mode GoModel
+and list `candidate_count` as unsupported on Gemini 3.x. In native mode AIGateway
 therefore drops those four fields for Gemini 3 and later (`gemini-3-*`,
 `gemini-3.5-*`, `gemini-3.8-*`, ...) and still forwards them for Gemini 2.5,
 Gemma and other models. `max_tokens`, `stop`, penalties, `response_format` and
@@ -104,7 +104,7 @@ thinking settings are unaffected.
 Gemini 3 attaches an encrypted `thoughtSignature` to the function calls it
 emits and rejects a follow-up request (HTTP 400, "Function call is missing a
 thought_signature") when that call comes back in the history without it. In
-native mode GoModel exposes the signature the same way Google's own
+native mode AIGateway exposes the signature the same way Google's own
 OpenAI-compatible endpoint does, so a client that echoes assistant messages
 back unchanged keeps working:
 
@@ -131,7 +131,7 @@ so clients built against other gateways keep working.
 
 When a Gemini 3 history contains a function call without any signature (the
 conversation started on another model, or the client dropped the field),
-GoModel sends Google's documented `skip_thought_signature_validator`
+AIGateway sends Google's documented `skip_thought_signature_validator`
 placeholder instead of surfacing the 400. Reasoning continuity is reduced for
 that turn, so prefer echoing the real signature.
 

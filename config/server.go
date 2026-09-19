@@ -23,11 +23,11 @@ var bodySizeLimitRegex = regexp.MustCompile(`(?i)^(\d+)([KMG])?B?$`)
 // ServerConfig holds HTTP server configuration
 type ServerConfig struct {
 	Port           string `yaml:"port" env:"PORT"`
-	BasePath       string `yaml:"base_path" env:"BASE_PATH"`             // URL path prefix where the app is mounted (e.g., "/g")
-	MasterKey      string `yaml:"master_key" env:"GOMODEL_MASTER_KEY"`   // Optional: Master key for authentication
-	BodySizeLimit  string `yaml:"body_size_limit" env:"BODY_SIZE_LIMIT"` // Max request body size (e.g., "10M", "1024K")
-	SwaggerEnabled bool   `yaml:"swagger_enabled" env:"SWAGGER_ENABLED"` // Whether to expose the Swagger UI at /swagger/index.html
-	PprofEnabled   bool   `yaml:"pprof_enabled" env:"PPROF_ENABLED"`     // Whether to expose debug profiling routes at /debug/pprof/*
+	BasePath       string `yaml:"base_path" env:"BASE_PATH"`                                // URL path prefix where the app is mounted (e.g., "/g")
+	MasterKey      string `yaml:"master_key" env:"AIGATEWAY_MASTER_KEY,GOMODEL_MASTER_KEY"` // Optional: Master key for authentication
+	BodySizeLimit  string `yaml:"body_size_limit" env:"BODY_SIZE_LIMIT"`                    // Max request body size (e.g., "10M", "1024K")
+	SwaggerEnabled bool   `yaml:"swagger_enabled" env:"SWAGGER_ENABLED"`                    // Whether to expose the Swagger UI at /swagger/index.html
+	PprofEnabled   bool   `yaml:"pprof_enabled" env:"PPROF_ENABLED"`                        // Whether to expose debug profiling routes at /debug/pprof/*
 	// EnablePassthroughRoutes exposes provider-native passthrough endpoints under
 	// /p/{provider}/{endpoint}. Default: true.
 	EnablePassthroughRoutes bool `yaml:"enable_passthrough_routes" env:"ENABLE_PASSTHROUGH_ROUTES"`
@@ -35,7 +35,7 @@ type ServerConfig struct {
 	// while keeping /p/{provider}/... as the canonical form. Default: true.
 	AllowPassthroughV1Alias bool `yaml:"allow_passthrough_v1_alias" env:"ALLOW_PASSTHROUGH_V1_ALIAS"`
 	// UserPathHeader is the inbound HTTP header used to read/write user paths.
-	// Default: X-GoModel-User-Path.
+	// Default: X-AIGateway-User-Path.
 	UserPathHeader string `yaml:"user_path_header" env:"USER_PATH_HEADER"`
 	// EnabledPassthroughProviders lists the provider types enabled on
 	// /p/{provider}/... passthrough routes. Default:
@@ -52,7 +52,7 @@ type ServerConfig struct {
 	// Default: false — turn it on only when a service in front of the gateway
 	// needs to validate keys without holding a copy of them.
 	AuthVerifyEnabled bool `yaml:"auth_verify_enabled" env:"AUTH_VERIFY_ENABLED"`
-	// PIDFile records the process id of the running gateway so `gomodel --reload`
+	// PIDFile records the process id of the running gateway so `aigateway --reload`
 	// can find it. Default: DefaultPIDFilePath(). Set it per instance when
 	// several gateways share a host, or to "" in config.yaml to write no pid
 	// file at all, which also disables `--reload` (an empty PID_FILE reads as
@@ -78,14 +78,14 @@ const DefaultStreamStallTimeoutSeconds = 60
 
 // LegacyPIDFilePath is the pid file location used next to a project-local
 // ./data directory, matching where the SQLite database lands in the same setup.
-const LegacyPIDFilePath = "data/gomodel.pid"
+const LegacyPIDFilePath = "data/aigateway.pid"
 
 // DefaultPIDFilePath returns the pid file path used when none is configured:
 // LegacyPIDFilePath when a ./data directory already exists (Docker images and
 // existing deployments), otherwise the OS-conventional per-user data directory
 // — the same resolution the database uses, so both land together.
 func DefaultPIDFilePath() string {
-	return platformdir.DataFile("gomodel.pid")
+	return platformdir.DataFile("aigateway.pid")
 }
 
 var headerNameRegex = regexp.MustCompile(`^[!#$%&'*+\-.^_` + "`" + `|~0-9A-Za-z]+$`)

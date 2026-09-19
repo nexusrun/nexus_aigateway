@@ -8,11 +8,11 @@ import (
 
 // OpenTelemetryConfig configures OTLP trace and metric export.
 //
-// Only Enabled is a GoModel setting. The other fields mirror the standard
+// Only Enabled is a AIGateway setting. The other fields mirror the standard
 // OTEL_* environment variables that the OpenTelemetry SDK reads by itself, so
 // a YAML-first deployment does not have to reach for the environment for the
 // common settings. An OTEL_* variable that is already set in the environment
-// wins over the YAML value, like every other GoModel setting; anything not
+// wins over the YAML value, like every other AIGateway setting; anything not
 // listed here (per-signal endpoints, timeouts, compression, batch sizes, …)
 // is available through its OTEL_* variable.
 type OpenTelemetryConfig struct {
@@ -22,7 +22,7 @@ type OpenTelemetryConfig struct {
 	Enabled bool `yaml:"enabled" env:"OTEL_ENABLED"`
 
 	// ServiceName is the service.name resource attribute (OTEL_SERVICE_NAME).
-	// Default: "gomodel"
+	// Default: "aigateway"
 	ServiceName string `yaml:"service_name"`
 
 	// ResourceAttributes adds resource attributes such as

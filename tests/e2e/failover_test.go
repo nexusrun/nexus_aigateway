@@ -36,7 +36,7 @@ func sendModelChatRequest(t *testing.T, serverURL, model, message, requestID str
 		Messages: []core.Message{{Role: "user", Content: message}},
 	}, map[string]string{
 		"X-Request-ID":        requestID,
-		"X-GoModel-User-Path": "/team/failover",
+		"X-AIGateway-User-Path": "/team/failover",
 	})
 }
 

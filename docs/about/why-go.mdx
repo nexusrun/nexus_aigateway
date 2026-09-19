@@ -1,11 +1,11 @@
 ---
 title: "Why Go"
-description: "Why GoModel is written in Go rather than Python or Rust: runtime behavior that fits a gateway, a language enterprises already trust, and a hiring pool that keeps the project maintainable."
+description: "Why AIGateway is written in Go rather than Python or Rust: runtime behavior that fits a gateway, a language enterprises already trust, and a hiring pool that keeps the project maintainable."
 icon: "code"
 keywords: ["Go", "Golang", "Rust", "Python", "language choice", "performance"]
 ---
 
-GoModel is written in Go. We also seriously considered Rust. This page explains
+AIGateway is written in Go. We also seriously considered Rust. This page explains
 why Go won, so you can judge whether our reasoning matches your own priorities.
 
 ## A gateway is a runtime problem
@@ -20,7 +20,7 @@ Go fits that shape well:
 - **Goroutines make streaming cheap.** Every open connection to a provider is a
   lightweight goroutine, so long-lived streaming responses do not tie up threads
   or force an async framework onto the whole codebase.
-- **A single static binary.** GoModel ships as one file with no interpreter,
+- **A single static binary.** AIGateway ships as one file with no interpreter,
   no virtual environment, and no dependency tree to install at deploy time. The
   container image is small and starts in well under a second.
 - **Predictable memory.** Go's garbage collector is tuned for low pause times,
@@ -40,7 +40,7 @@ We chose Go anyway, for reasons that have little to do with the language itself:
    a gentler learning curve: an engineer productive in another language can
    read and contribute to a Go codebase within days.
 2. **Contributors are easier to find.** A larger pool of engineers who already
-   know Go means more people can review, extend, and maintain GoModel, and it
+   know Go means more people can review, extend, and maintain AIGateway, and it
    keeps the cost of hiring for it reasonable for the companies that run it.
 3. **Enterprises are already moving to Go.** Many organizations that
    standardized on Java for backend services now treat Go as their next paved
@@ -48,7 +48,7 @@ We chose Go anyway, for reasons that have little to do with the language itself:
    tooling, security review, and operational habits those teams already have.
 4. **Go keeps growing.** The share of new infrastructure projects written in Go
    has increased year over year. Betting on the language that platform teams
-   are adopting keeps GoModel easy to run and easy to contribute to for the
+   are adopting keeps AIGateway easy to run and easy to contribute to for the
    long term.
 
 Rust remains an excellent language. For a project whose success depends on a

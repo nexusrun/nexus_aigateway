@@ -1,13 +1,13 @@
 ---
 title: "Cache"
-description: "How GoModel response caching works, how to enable exact and semantic cache layers, and what is included in the exact-cache key."
+description: "How AIGateway response caching works, how to enable exact and semantic cache layers, and what is included in the exact-cache key."
 icon: "database"
 keywords: ["response cache", "semantic cache", "exact cache", "cache key", "Redis"]
 ---
 
 ## Overview
 
-GoModel ships with two response-cache layers for streaming and non-streaming
+AIGateway ships with two response-cache layers for streaming and non-streaming
 requests on:
 
 - `/v1/chat/completions`
@@ -74,7 +74,7 @@ cache:
         type: qdrant
         qdrant:
           url: http://localhost:6333
-          collection: gomodel_semantic
+          collection: aigateway_semantic
 ```
 
 Supported vector stores:
@@ -127,7 +127,7 @@ non-cacheable responses are never fanned out.
 
 ## Provider prompt-cache planning
 
-After routing resolves the concrete provider and model, GoModel adds a cache
+After routing resolves the concrete provider and model, AIGateway adds a cache
 plan when the stable prefix meets that provider's minimum size and the client
 did not already supply a cache directive:
 
@@ -142,7 +142,7 @@ The plan is applied post-routing so provider-only fields cannot leak through a
 fallback to another backend. Cache keys include the concrete provider instance
 and model, and caller-supplied cache controls always win.
 
-Provider prompt-cache planning is enabled by default. To disable GoModel's
+Provider prompt-cache planning is enabled by default. To disable AIGateway's
 automatic planning while continuing to pass through compatible client cache
 directives, set:
 
@@ -212,11 +212,11 @@ its cost fields stay provider-only.
 ```bash
 # provider-bound requests only (default)
 curl "http://localhost:8080/admin/usage/summary?user_path=/team/alpha" \
-  -H "Authorization: Bearer $GOMODEL_MASTER_KEY"
+  -H "Authorization: Bearer $AIGATEWAY_MASTER_KEY"
 
 # including local cache hits
 curl "http://localhost:8080/admin/usage/summary?user_path=/team/alpha&cache_mode=all" \
-  -H "Authorization: Bearer $GOMODEL_MASTER_KEY"
+  -H "Authorization: Bearer $AIGATEWAY_MASTER_KEY"
 ```
 
 See [admin endpoints](/advanced/admin-endpoints#cache-mode) and the

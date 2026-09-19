@@ -1,13 +1,13 @@
 ---
 title: "CLI Operations"
-description: "Command-line flags for inspecting the GoModel binary, probing a running gateway's health, and reloading its configuration."
+description: "Command-line flags for inspecting the AIGateway binary, probing a running gateway's health, and reloading its configuration."
 icon: "terminal"
 keywords: ["CLI", "command-line flags", "health check", "version probe", "config reload", "SIGHUP"]
 ---
 
 ## Overview
 
-The `gomodel` binary exposes a small set of command-line flags for operational
+The `aigateway` binary exposes a small set of command-line flags for operational
 tasks. Flags accept both single-dash (`-flag`) and double-dash (`--flag`) forms;
 the examples below use the long form.
 
@@ -25,7 +25,7 @@ the examples below use the long form.
 Print the build version and exit:
 
 ```bash
-gomodel --version
+aigateway --version
 ```
 
 ## Health probe
@@ -34,7 +34,7 @@ gomodel --version
 configuration as the server, requests the local `/health` endpoint, and exits.
 
 ```bash
-gomodel --health
+aigateway --health
 ```
 
 - Exits `0` when the endpoint returns HTTP `200` with `{"status":"ok"}`.
@@ -47,7 +47,7 @@ inside the same container as the server, but it derives the `PORT` and
 the request with `--health-timeout`:
 
 ```bash
-gomodel --health --health-timeout 5s
+aigateway --health --health-timeout 5s
 ```
 
 ### Docker `HEALTHCHECK`
@@ -58,7 +58,7 @@ official image wires it up automatically:
 
 ```dockerfile
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD ["/gomodel", "--health"]
+  CMD ["/aigateway", "--health"]
 ```
 
 Orchestrators (Docker, Compose, Kubernetes) can then detect and restart an
@@ -80,7 +80,7 @@ Upstream **provider** reachability is deliberately excluded: a provider outage
 must not pull a healthy gateway out of rotation.
 
 ```bash
-gomodel --ready
+aigateway --ready
 ```
 
 - Exits `0` when the endpoint returns HTTP `200` (`ready` or `degraded`).
@@ -97,7 +97,7 @@ gomodel --ready
 restarting it — the same operation as `nginx -s reload`:
 
 ```bash
-gomodel --reload
+aigateway --reload
 ```
 
 It loads the same configuration the gateway does to find the pid file, signals
@@ -137,7 +137,7 @@ Sending the signal directly does the same thing, which is what a process manager
 or a container without a shell can use:
 
 ```bash
-kill -HUP "$(cat data/gomodel.pid)"
+kill -HUP "$(cat data/aigateway.pid)"
 ```
 
 <Note>
@@ -147,7 +147,7 @@ kill -HUP "$(cat data/gomodel.pid)"
 ### The pid file
 
 The gateway writes its process id to `PID_FILE` / `server.pid_file` at startup
-and removes it on shutdown. The default is `data/gomodel.pid` when a `./data`
+and removes it on shutdown. The default is `data/aigateway.pid` when a `./data`
 directory exists (Docker images and existing deployments) and the
 OS-conventional per-user data directory otherwise — the same resolution the
 SQLite database uses.
@@ -159,12 +159,12 @@ though `kill -HUP` still works. An empty `PID_FILE` env var reads as unset and
 keeps the default, the same as every other setting. If the path is not writable
 the gateway logs a warning and serves normally, only without `--reload` support.
 
-Both the gateway and `gomodel --reload` resolve the path from the same
+Both the gateway and `aigateway --reload` resolve the path from the same
 configuration, so run the command from the same working directory (or with the
 same `PID_FILE`) as the gateway:
 
 ```bash
-docker exec my-gateway /gomodel --reload
+docker exec my-gateway /aigateway --reload
 ```
 
 ### What a reload does not change
@@ -172,7 +172,7 @@ docker exec my-gateway /gomodel --reload
 - **`PORT`** — the socket stays bound so no connection is refused; a port change
   needs a restart. The gateway logs a warning naming both ports.
 - **`PID_FILE`** — it names the process that is already running.
-- **`GOMODEL_DEMO_MODE`** — the demo warnings are wired up once at startup.
+- **`AIGATEWAY_DEMO_MODE`** — the demo warnings are wired up once at startup.
 - **In-memory state** — virtual-model session affinity and live log buffers
   start fresh, exactly as they would after a restart. Request and token rate
   limit windows are written on shutdown and restored by the next generation.
@@ -186,22 +186,22 @@ the lighter option.
 Liveness (`--health`) is the right signal for a Docker `HEALTHCHECK` (restart on
 crash). Readiness (`/health/ready`) is the right signal for a Kubernetes
 `readinessProbe` (gate traffic) — point it at the HTTP endpoint directly or run
-`gomodel --ready` as an exec probe. Keep `--ready-timeout` larger than the
+`aigateway --ready` as an exec probe. Keep `--ready-timeout` larger than the
 server's internal per-dependency probe timeout (`2s`) so a slow backend returns
 a clean `not_ready` instead of the client timing out first.
 
 ## Plugin tooling
 
-`gomodel plugin` builds and inspects shared-object plugins (`.so`) with the
+`aigateway plugin` builds and inspects shared-object plugins (`.so`) with the
 toolchain of the running binary; see [Plugins](/advanced/plugins#shared-object-plugins).
 
 ```sh
-gomodel plugin build [-o out.so] <dir>   # go build -buildmode=plugin with this binary's flags
-gomodel plugin inspect <file.so>         # open the file and print its manifest and build info
+aigateway plugin build [-o out.so] <dir>   # go build -buildmode=plugin with this binary's flags
+aigateway plugin inspect <file.so>         # open the file and print its manifest and build info
 ```
 
 `plugin build` forces `CGO_ENABLED=1`, pins `GOTOOLCHAIN` to the host's Go
-version, stamps a `GoModelBuildInfo` variable into the plugin, and refuses an
+version, stamps a `AIGatewayBuildInfo` variable into the plugin, and refuses an
 output built with a different Go version. Loading needs a cgo build of
-GoModel (`make build-plugins` or the `gomodel:<version>-plugins` image).
-`gomodel --version` prints the Go and `pluginapi` versions plugins must match.
+AIGateway (`make build-plugins` or the `aigateway:<version>-plugins` image).
+`aigateway --version` prints the Go and `pluginapi` versions plugins must match.

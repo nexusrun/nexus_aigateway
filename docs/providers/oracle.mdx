@@ -1,11 +1,11 @@
 ---
 title: "Oracle GenAI"
-description: "Configure Oracle GenAI's OpenAI-compatible endpoint in GoModel, including the required OCI policy and configured model lists."
+description: "Configure Oracle GenAI's OpenAI-compatible endpoint in AIGateway, including the required OCI policy and configured model lists."
 icon: "/brand/oracle.svg"
 keywords: ["Oracle GenAI", "OCI", "provider setup"]
 ---
 
-GoModel calls Oracle Generative AI through Oracle's OpenAI-compatible inference
+AIGateway calls Oracle Generative AI through Oracle's OpenAI-compatible inference
 endpoint. Setup needs an OCI IAM policy for `generativeaiapikey`, a
 region-specific base URL, and a configured model list (Oracle's `/models` is
 not reliably available on the API-key flow).
@@ -25,7 +25,7 @@ compartment, API key, or specific model.
 ORACLE_BASE_URL=https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/20231130/actions/v1
 ORACLE_API_KEY=...
 ORACLE_MODELS=openai.gpt-oss-120b,xai.grok-3
-GOMODEL_MASTER_KEY=change-me
+AIGATEWAY_MASTER_KEY=change-me
 ```
 
 `ORACLE_MODELS` is a comma-separated list (whitespace trimmed). Behavior
@@ -48,7 +48,7 @@ providers:
 If both are set, `ORACLE_MODELS` overrides YAML `models:` for the matching
 provider.
 
-## 3. Run GoModel
+## 3. Run AIGateway
 
 <CodeGroup>
 
@@ -58,7 +58,7 @@ docker run --rm -p 8080:8080 --env-file .env nexusrun/nexus_aigateway
 
 ```bash Docker (inline -e)
 docker run --rm -p 8080:8080 \
-  -e GOMODEL_MASTER_KEY="change-me" \
+  -e AIGATEWAY_MASTER_KEY="change-me" \
   -e ORACLE_BASE_URL="https://inference.generativeai.us-chicago-1.oci.oraclecloud.com/20231130/actions/v1" \
   -e ORACLE_API_KEY="..." \
   -e ORACLE_MODELS="openai.gpt-oss-120b,xai.grok-3" \
@@ -67,7 +67,7 @@ docker run --rm -p 8080:8080 \
 
 ```bash Binary (make build)
 make build
-./bin/gomodel
+./bin/aigateway
 ```
 
 </CodeGroup>

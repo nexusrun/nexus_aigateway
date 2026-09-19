@@ -3,7 +3,7 @@ title: "Intelligent Routing"
 description: "Route each request to an easy or hard model tier by its content, then pick the healthiest and cheapest provider inside that tier."
 icon: "route"
 tag: "Pro · Beta"
-keywords: ["GoModel Pro", "intelligent routing", "smart routing", "model tiers", "adaptive routing", "load balancing", "cost optimization"]
+keywords: ["AIGateway Pro", "intelligent routing", "smart routing", "model tiers", "adaptive routing", "load balancing", "cost optimization"]
 ---
 
 <Warning>
@@ -31,7 +31,7 @@ strategy, the selector then picks the best provider for it.
 
 ## Smart tier routing
 
-Configure a tiered alias with ordinary GoModel model names. The tier targets can
+Configure a tiered alias with ordinary AIGateway model names. The tier targets can
 be concrete models or virtual models:
 
 ```bash
@@ -84,21 +84,21 @@ pin expires after `PRO_SMART_ROUTING_SESSION_TTL` of inactivity.
 
 ### Override and inspect a decision
 
-Send `X-GoModel-Smart-Routing: off` to bypass classification for one request,
-or `X-GoModel-Tier: easy` or `X-GoModel-Tier: hard` to force its tier without
+Send `X-AIGateway-Smart-Routing: off` to bypass classification for one request,
+or `X-AIGateway-Tier: easy` or `X-AIGateway-Tier: hard` to force its tier without
 changing the session pin.
 
 Every routed response reports the decision:
 
 ```http
-X-GoModel-Pro-Tier: hard
-X-GoModel-Pro-Tier-Target: normal-hard
-X-GoModel-Pro-Tier-Score: 5
+X-AIGateway-Pro-Tier: hard
+X-AIGateway-Pro-Tier-Target: normal-hard
+X-AIGateway-Pro-Tier-Score: 5
 ```
 
 The same verdict and its reasons are recorded in the audit revision detail.
 Prometheus exposes request, escalation, and score metrics under the
-`gomodel_pro_smartroute_` prefix; the score histogram is the tool for tuning
+`aigateway_pro_smartroute_` prefix; the score histogram is the tool for tuning
 the threshold against real traffic.
 
 ## Adaptive routing
@@ -188,11 +188,11 @@ on its first request and rides a failing target for the pin's whole lifetime,
 visible only as latency and wasted upstream spend, because failover still
 returns `200`s to the client.
 
-`gomodel_pro_routing_session_affinity_total{outcome}` counts pins `honored`
+`aigateway_pro_routing_session_affinity_total{outcome}` counts pins `honored`
 and pins `released` to a cooldown, so the behaviour is visible in Prometheus
 rather than only in a provider invoice.
 
-Prometheus metrics use the `gomodel_pro_routing_` prefix (selections,
+Prometheus metrics use the `aigateway_pro_routing_` prefix (selections,
 declines, outcomes, cooldowns, session affinity, and a latency-estimate
 gauge). Scoring state is per node; replicas learn independently and share
 nothing.

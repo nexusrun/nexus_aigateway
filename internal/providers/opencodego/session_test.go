@@ -86,8 +86,8 @@ func TestRequestHeaders_DetectedSessionForwarded(t *testing.T) {
 			if v := got.Get(clientHeader); v != defaultClient {
 				t.Fatalf("%s = %q, want %s", clientHeader, v, defaultClient)
 			}
-			if v := got.Get("User-Agent"); v != "gomodel/"+version.Version {
-				t.Fatalf("User-Agent = %q, want gomodel/%s", v, version.Version)
+			if v := got.Get("User-Agent"); v != "aigateway/"+version.Version {
+				t.Fatalf("User-Agent = %q, want aigateway/%s", v, version.Version)
 			}
 		})
 	}
@@ -222,15 +222,15 @@ func TestPassthrough_FillsMissingIdentificationHeaders(t *testing.T) {
 	if v := got.Get(clientHeader); v != "curl-script" {
 		t.Fatalf("%s = %q, want caller value curl-script", clientHeader, v)
 	}
-	if v := got.Get("User-Agent"); v != "gomodel/"+version.Version {
-		t.Fatalf("User-Agent = %q, want gomodel/%s", v, version.Version)
+	if v := got.Get("User-Agent"); v != "aigateway/"+version.Version {
+		t.Fatalf("User-Agent = %q, want aigateway/%s", v, version.Version)
 	}
 }
 
 func TestWithDefaultHeaders(t *testing.T) {
-	defaults := http.Header{"X-Opencode-Session": {"gw"}, "User-Agent": {"gomodel/dev"}}
+	defaults := http.Header{"X-Opencode-Session": {"gw"}, "User-Agent": {"aigateway/dev"}}
 	merged := withDefaultHeaders(nil, defaults)
-	if merged.Get("X-Opencode-Session") != "gw" || merged.Get("User-Agent") != "gomodel/dev" {
+	if merged.Get("X-Opencode-Session") != "gw" || merged.Get("User-Agent") != "aigateway/dev" {
 		t.Fatalf("nil headers should take every default, got %v", merged)
 	}
 	// A non-canonical caller key still counts as present and is not duplicated.
@@ -246,7 +246,7 @@ func TestWithDefaultHeaders(t *testing.T) {
 	if len(sessionValues) != 1 || sessionValues[0] != "mine" {
 		t.Fatalf("caller value should win without duplication, got %v", merged)
 	}
-	if merged.Get("User-Agent") != "gomodel/dev" {
+	if merged.Get("User-Agent") != "aigateway/dev" {
 		t.Fatalf("missing default should be added, got %v", merged)
 	}
 	if len(caller) != 1 {

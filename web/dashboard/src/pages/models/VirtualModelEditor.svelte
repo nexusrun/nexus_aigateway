@@ -186,8 +186,8 @@
   {/if}
   {#if vmFormScheduleStrategy(vm.vmForm)}
     <div class="vm-strategy-fields">
-      <p class="form-hint">Choose different model targets during local peak hours.</p>
-      <FormField id="virtual-model-timezone" label="Timezone">
+      <p class="form-hint">{m.models_schedule_hint()}</p>
+      <FormField id="virtual-model-timezone" label={m.models_schedule_timezone()}>
         <input
           id="virtual-model-timezone"
           type="text"
@@ -196,33 +196,33 @@
           bind:value={vm.vmForm.strategy_config.timezone}
           disabled={vm.vmFormManaged}
         />
-        <span class="form-hint">Use an IANA timezone such as America/Phoenix or America/New_York.</span>
+        <span class="form-hint">{m.models_schedule_timezone_hint()}</span>
       </FormField>
       <div class="form-grid-2">
-        <FormField id="virtual-model-peak-start" label="Peak starts">
+        <FormField id="virtual-model-peak-start" label={m.models_schedule_peak_start()}>
           <input id="virtual-model-peak-start" type="time" bind:value={vm.vmForm.strategy_config.peak_start} disabled={vm.vmFormManaged} />
         </FormField>
-        <FormField id="virtual-model-peak-end" label="Peak ends">
+        <FormField id="virtual-model-peak-end" label={m.models_schedule_peak_end()}>
           <input id="virtual-model-peak-end" type="time" bind:value={vm.vmForm.strategy_config.peak_end} disabled={vm.vmFormManaged} />
         </FormField>
       </div>
-      <FormField id="virtual-model-peak-targets" label="Peak-hour targets">
+      <FormField id="virtual-model-peak-targets" label={m.models_schedule_peak_targets()}>
         <textarea
           id="virtual-model-peak-targets"
           rows="3"
           class="mono"
-          placeholder="openai/gpt-5\nfast-provider/model"
+          placeholder={"openai/gpt-5\nfast-provider/model"}
           value={scheduleTargets("peak_targets")}
           oninput={(event) => setScheduleTargets("peak_targets", event.currentTarget.value)}
           disabled={vm.vmFormManaged}
         ></textarea>
       </FormField>
-      <FormField id="virtual-model-off-peak-targets" label="Off-peak targets">
+      <FormField id="virtual-model-off-peak-targets" label={m.models_schedule_off_peak_targets()}>
         <textarea
           id="virtual-model-off-peak-targets"
           rows="3"
           class="mono"
-          placeholder="groq/llama\ncheaper-provider/model"
+          placeholder={"groq/llama\ncheaper-provider/model"}
           value={scheduleTargets("off_peak_targets")}
           oninput={(event) => setScheduleTargets("off_peak_targets", event.currentTarget.value)}
           disabled={vm.vmFormManaged}

@@ -1,20 +1,20 @@
 #!/bin/sh
-# GoModel installer for macOS and Linux.
+# AIGateway installer for macOS and Linux.
 #
-#   curl -fsSL https://gomodel.enterpilot.io/install.sh | sh
+#   curl -fsSL https://aigateway.nexusai.run/install.sh | sh
 #
 # Downloads the latest release binary from GitHub, verifies its SHA-256
 # checksum, and installs it to /usr/local/bin (or ~/.local/bin when
 # /usr/local/bin is not writable). No telemetry is sent by this script.
 #
 # Overrides:
-#   GOMODEL_VERSION      install a specific version (e.g. v0.1.50); default: latest
-#   GOMODEL_INSTALL_DIR  install directory; default: /usr/local/bin or ~/.local/bin
+#   AIGATEWAY_VERSION      install a specific version (e.g. v0.1.50); default: latest
+#   AIGATEWAY_INSTALL_DIR  install directory; default: /usr/local/bin or ~/.local/bin
 
 set -eu
 
-REPO="ENTERPILOT/GoModel"
-BINARY="gomodel"
+REPO="nexusrun/nexus_aigateway"
+BINARY="aigateway"
 
 say() { printf '%s\n' "$*"; }
 fail() { printf 'error: %s\n' "$*" >&2; exit 1; }
@@ -36,7 +36,7 @@ esac
 
 # Resolve the version from the /releases/latest redirect, avoiding the
 # GitHub API and its per-IP rate limit.
-tag="${GOMODEL_VERSION:-}"
+tag="${AIGATEWAY_VERSION:-}"
 if [ -z "$tag" ]; then
     location=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest") ||
         fail "could not resolve the latest release"
@@ -72,7 +72,7 @@ say "Checksum verified."
 
 tar -xzf "$tmpdir/$archive" -C "$tmpdir" "$BINARY"
 
-install_dir="${GOMODEL_INSTALL_DIR:-}"
+install_dir="${AIGATEWAY_INSTALL_DIR:-}"
 if [ -z "$install_dir" ]; then
     if [ -w /usr/local/bin ]; then
         install_dir="/usr/local/bin"
@@ -81,7 +81,7 @@ if [ -z "$install_dir" ]; then
     fi
 fi
 mkdir -p "$install_dir" || fail "cannot create $install_dir"
-[ -w "$install_dir" ] || fail "$install_dir is not writable — set GOMODEL_INSTALL_DIR to a writable directory, or rerun with sudo"
+[ -w "$install_dir" ] || fail "$install_dir is not writable — set AIGATEWAY_INSTALL_DIR to a writable directory, or rerun with sudo"
 install -m 755 "$tmpdir/$BINARY" "$install_dir/$BINARY"
 
 say ""
@@ -99,4 +99,4 @@ say "Get started:"
 say "  export OPENAI_API_KEY=sk-...   # or any other provider key"
 say "  $BINARY"
 say ""
-say "Docs: https://gomodel.enterpilot.io"
+say "Docs: https://aigateway.nexusai.run"

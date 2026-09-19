@@ -31,7 +31,7 @@ const ScopeHeader = "X-MCP-Servers"
 // headers plus auth-key labels) from the HTTP layer into tool handlers, which
 // only see per-message HTTP headers. It is internal: the HTTP entrypoint
 // strips any client-sent value before stamping its own.
-const labelsHeader = "X-Gomodel-Mcp-Labels"
+const labelsHeader = "X-Aigateway-Mcp-Labels"
 
 // pinnedServerKey carries the /mcp/{server} path pin through the request
 // context into per-session server construction.
@@ -338,8 +338,8 @@ func (s *Service) getServer(r *http.Request) *mcp.Server {
 	views := s.visibleServers(scope)
 
 	server := mcp.NewServer(&mcp.Implementation{
-		Name:    "gomodel",
-		Title:   "GoModel MCP Gateway",
+		Name:    "aigateway",
+		Title:   "AIGateway MCP Gateway",
 		Version: version.Version,
 	}, &mcp.ServerOptions{
 		Instructions: s.composeInstructions(scope, views),
@@ -483,7 +483,7 @@ func (s *Service) composeInstructions(scope requestScope, views []ServerView) st
 			names = append(names, view.Spec.Name)
 		}
 		sort.Strings(names)
-		fmt.Fprintf(&b, "GoModel MCP gateway aggregating %d server(s): %s. Tools and prompts are namespaced as {server}%s{name}.",
+		fmt.Fprintf(&b, "AIGateway MCP gateway aggregating %d server(s): %s. Tools and prompts are namespaced as {server}%s{name}.",
 			len(names), strings.Join(names, ", "), namespaceSeparator)
 	}
 	for _, view := range views {

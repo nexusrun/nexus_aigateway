@@ -64,3 +64,19 @@ func TestExpiredSessionIsRejected(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, identity)
 }
+
+func TestClearSessionExpiresCookie(t *testing.T) {
+	service := &Service{store: &memoryStore{accounts: map[string]Account{}}, secret: []byte("01234567890123456789012345678901")}
+	rec := httptest.NewRecorder()
+	service.ClearSession(rec, true)
+
+	cookies := rec.Result().Cookies()
+	require.Len(t, cookies, 1)
+	cookie := cookies[0]
+	require.Equal(t, cookieName, cookie.Name)
+	require.Empty(t, cookie.Value)
+	require.Equal(t, "/", cookie.Path)
+	require.Less(t, cookie.MaxAge, 0)
+	require.True(t, cookie.HttpOnly)
+	require.True(t, cookie.Secure)
+}

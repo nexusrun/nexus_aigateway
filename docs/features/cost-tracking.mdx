@@ -1,29 +1,29 @@
 ---
 title: "Cost tracking"
-description: "How GoModel estimates request costs, where pricing comes from, how to override it, and how to recalculate stored costs."
+description: "How AIGateway estimates request costs, where pricing comes from, how to override it, and how to recalculate stored costs."
 icon: "calculator"
 keywords: ["cost tracking", "LLM cost", "token pricing", "spend", "pricing override", "cost estimate"]
 ---
 
-GoModel estimates the cost of every tracked request from model pricing and shows the totals on the dashboard.
+AIGateway estimates the cost of every tracked request from model pricing and shows the totals on the dashboard.
 
 <Warning>
   These costs are **estimates**, not a billing record. Unless a provider reports
-  an exact cost, GoModel multiplies the tokens a provider reports by that model's
+  an exact cost, AIGateway multiplies the tokens a provider reports by that model's
   configured rates, so discounts, promotions, and provider-side rounding are not
   reflected. Treat the provider's dashboard as the source of truth, and check
-  GoModel figures against it before using them for invoicing or reconciliation.
+  AIGateway figures against it before using them for invoicing or reconciliation.
 </Warning>
 
 ## How costs are estimated
 
-For each request GoModel prices:
+For each request AIGateway prices:
 
 - **Input** and **output** tokens at the model's per-million-token (MTok) rates.
 - **Cached input**, **reasoning**, and **audio** tokens at their own rates when the provider reports them, so cache-heavy and reasoning-heavy traffic is priced correctly.
 - **Non-token units** where that is how the provider bills: generated images (`per_image` / `output_image_per_mtok`), audio duration (`per_second_input`, `per_second_output`), and speech characters (`per_character_input`). See [images](/advanced/images-api#cost-tracking) and [audio](/advanced/audio-api#cost-tracking) for which unit applies to which model — where a rate and a token rate are two expressions of the same charge (an image's generated tokens, an audio clip's duration), only one of them is applied.
 
-When a provider returns an exact cost (OpenRouter credits, xAI `cost_in_usd_ticks`), GoModel uses that value instead of catalog pricing. Each row records which method was used in its `cost_source` field: `model_pricing`, `openrouter_credits`, or `xai_cost_in_usd_ticks`.
+When a provider returns an exact cost (OpenRouter credits, xAI `cost_in_usd_ticks`), AIGateway uses that value instead of catalog pricing. Each row records which method was used in its `cost_source` field: `model_pricing`, `openrouter_credits`, or `xai_cost_in_usd_ticks`.
 
 <Note>
   Cached tokens are discounted only when the model's pricing includes a
@@ -54,7 +54,7 @@ Some providers charge different rates depending on when a request runs. DeepSeek
 }
 ```
 
-GoModel prices each request with the rates in effect at the moment it completed, evaluated in **UTC** regardless of the server's or the dashboard's timezone. Ranges are half-open (`start` inclusive, `end` exclusive); an `end` at or before `start` wraps past midnight, and `days` limits a range to weekdays (all days when omitted). Rates absent from a window keep their base price, and outside every window the base prices apply. Recalculating stored costs uses each row's stored timestamp, so historical rows are re-priced for the window they actually fell in. The dashboard's cached-input cost estimate applies windows per minute of the week, matching the precision of the window bounds.
+AIGateway prices each request with the rates in effect at the moment it completed, evaluated in **UTC** regardless of the server's or the dashboard's timezone. Ranges are half-open (`start` inclusive, `end` exclusive); an `end` at or before `start` wraps past midnight, and `days` limits a range to weekdays (all days when omitted). Rates absent from a window keep their base price, and outside every window the base prices apply. Recalculating stored costs uses each row's stored timestamp, so historical rows are re-priced for the window they actually fell in. The dashboard's cached-input cost estimate applies windows per minute of the week, matching the precision of the window bounds.
 
 On the **Models** page, a `*` next to a price marks a model with time windows; hover it to see the schedule and rates. Overriding a base rate (input, output, cached input, or cache write) replaces the catalog's discount for that rate as well: the override becomes the price at every hour. `config.yaml` model metadata may also declare its own `time_windows`, which replace the catalog's.
 
@@ -70,9 +70,9 @@ Pricing for a model is resolved in priority order:
 
 1. Operator **overrides** set in the dashboard.
 2. **`config.yaml`** `providers.<name>.models` metadata.
-3. The **model catalog**, sourced from the [`ai-model-list`](https://github.com/ENTERPILOT/ai-model-list) registry.
+3. The **model catalog**, sourced from the [`ai-model-list`](https://github.com/nexusrun/ai-model-list) registry.
 
-The catalog supplies the default pricing for most models. If a model's price looks wrong or a rate is missing (for example, a cached-input rate), check it against [`ai-model-list`](https://github.com/ENTERPILOT/ai-model-list) and contribute a correction there, or set an override for an immediate fix.
+The catalog supplies the default pricing for most models. If a model's price looks wrong or a rate is missing (for example, a cached-input rate), check it against [`ai-model-list`](https://github.com/nexusrun/ai-model-list) and contribute a correction there, or set an override for an immediate fix.
 
 Pricing is one part of a wider metadata pipeline that also resolves context windows, capabilities, and model categories — see [Model metadata](/advanced/model-metadata) for the full source chain.
 
@@ -83,14 +83,14 @@ Override pricing when the catalog price is wrong, missing, or differs from your 
 <Frame caption="The Models page lists each model's prices; the $ action opens its pricing override">
   <img
     src="/features/pricing-override-models.png"
-    alt="GoModel Models page listing registered models with input and output prices per MTok and a pricing override action on each row"
+    alt="AIGateway Models page listing registered models with input and output prices per MTok and a pricing override action on each row"
   />
 </Frame>
 
 <Frame caption="Set a price type and USD value; saved fields override catalog and config.yaml pricing for the selector">
   <img
     src="/features/pricing-override-editor.png"
-    alt="GoModel Pricing override editor showing the selector, an Input dollars-per-MTok price type, and its USD value"
+    alt="AIGateway Pricing override editor showing the selector, an Input dollars-per-MTok price type, and its USD value"
   />
 </Frame>
 

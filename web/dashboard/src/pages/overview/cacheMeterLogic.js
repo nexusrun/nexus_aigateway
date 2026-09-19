@@ -59,7 +59,7 @@ export function cacheOverviewTotalTokens(cacheOverview) {
 
 // --- Cache meter ---
 // Splits the selected period's input tokens into three buckets that sum to
-// 100%: not-cached, locally-cached (GoModel response cache), and
+// 100%: not-cached, locally-cached (AIGateway response cache), and
 // prompt-cached (provider cache reads). The provider split comes from
 // /admin/usage/summary (uncached/cached/cache-write over provider rows); the
 // local slice from /admin/cache/overview. Both already refresh with the

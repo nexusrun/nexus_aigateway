@@ -1,4 +1,4 @@
-# GoModel with shared-object plugin support (gomodel:<version>-plugins).
+# AIGateway with shared-object plugin support (aigateway:<version>-plugins).
 #
 # Differences from the default Dockerfile:
 #   - CGO_ENABLED=1: Go's plugin package only works in cgo-enabled binaries.
@@ -13,15 +13,15 @@
 #     which the plugin-builder stage below provides.
 #
 # Build the runtime image:
-#   docker build -f Dockerfile.plugins -t gomodel:plugins .
+#   docker build -f Dockerfile.plugins -t aigateway:plugins .
 #
 # Build a plugin with the exact toolchain of that image:
-#   docker build -f Dockerfile.plugins --target plugin-builder -t gomodel-plugin-builder .
+#   docker build -f Dockerfile.plugins --target plugin-builder -t aigateway-plugin-builder .
 #   docker run --rm -v "$PWD/my-plugin:/src" -v "$PWD/plugins:/out" \
-#       gomodel-plugin-builder -o /out/my-plugin.so /src
+#       aigateway-plugin-builder -o /out/my-plugin.so /src
 #
 # Run with plugins mounted:
-#   docker run -v "$PWD/plugins:/app/plugins:ro" -e PLUGINS_ENABLED=true -e PLUGINS_SEARCH_PATHS=/app/plugins ... gomodel:plugins
+#   docker run -v "$PWD/plugins:/app/plugins:ro" -e PLUGINS_ENABLED=true -e PLUGINS_SEARCH_PATHS=/app/plugins ... aigateway:plugins
 FROM golang:1.27.1-bookworm AS builder
 
 WORKDIR /app
@@ -31,7 +31,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 # Copy source and build with cgo. No -trimpath: plugins must be built with the
-# same flags as the host, and `gomodel plugin build` copies this binary's
+# same flags as the host, and `aigateway plugin build` copies this binary's
 # recorded flags.
 COPY . .
 ARG VERSION=dev
@@ -39,25 +39,25 @@ ARG COMMIT=none
 ARG DATE=unknown
 RUN CGO_ENABLED=1 go build \
 	-ldflags="-s -w -X github.com/nexusrun/nexus_aigateway/internal/version.Version=${VERSION} -X github.com/nexusrun/nexus_aigateway/internal/version.Commit=${COMMIT} -X github.com/nexusrun/nexus_aigateway/internal/version.Date=${DATE}" \
-	-o /gomodel ./cmd/gomodel
+	-o /aigateway ./cmd/aigateway
 
 # Create .cache, data, and plugins directories for runtime (with placeholder for COPY)
 RUN mkdir -p /app/.cache /app/data /app/plugins && touch /app/.cache/.keep /app/data/.keep /app/plugins/.keep
 
-# Plugin builder: the same toolchain, sources, and gomodel binary, so
-# `gomodel plugin build` reproduces the host's build exactly. Mount a plugin
+# Plugin builder: the same toolchain, sources, and aigateway binary, so
+# `aigateway plugin build` reproduces the host's build exactly. Mount a plugin
 # package at /src (an in-tree example directory, or an external module that
 # `replace`s github.com/nexusrun/nexus_aigateway => /app) and an output dir at /out.
 FROM builder AS plugin-builder
 WORKDIR /src
-ENTRYPOINT ["/gomodel", "plugin", "build"]
+ENTRYPOINT ["/aigateway", "plugin", "build"]
 
 # Runtime stage: glibc, CA certificates, nonroot user, nothing else.
 FROM gcr.io/distroless/base-debian12:nonroot
 
-LABEL io.modelcontextprotocol.server.name="io.github.ENTERPILOT/gomodel"
+LABEL io.modelcontextprotocol.server.name="io.github.nexusrun/nexus_aigateway"
 
-COPY --from=builder /gomodel /gomodel
+COPY --from=builder /aigateway /aigateway
 COPY --from=builder /app/config/*.yaml /app/config/
 
 # Create writable .cache and data directories for nonroot user (UID=65532);
@@ -70,6 +70,6 @@ WORKDIR /app
 
 EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD ["/gomodel", "--health"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD ["/aigateway", "--health"]
 
-ENTRYPOINT ["/gomodel"]
+ENTRYPOINT ["/aigateway"]

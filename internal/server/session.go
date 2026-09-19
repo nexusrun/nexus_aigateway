@@ -13,7 +13,7 @@ import (
 	"github.com/nexusrun/nexus_aigateway/internal/session"
 )
 
-const interactionParentHeader = "X-GoModel-Interaction-Parent"
+const interactionParentHeader = "X-AIGateway-Interaction-Parent"
 
 type interactionParentLookup interface {
 	GetInteractionParent(ctx context.Context, id string) (*auditlog.InteractionParent, error)

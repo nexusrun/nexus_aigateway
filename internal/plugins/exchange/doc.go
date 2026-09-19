@@ -1,4 +1,4 @@
-// Package exchange maps GoModel's core request and response types to the
+// Package exchange maps AIGateway's core request and response types to the
 // unified pluginapi types plugins see, and applies plugin edits back.
 //
 // Message identity: messages built from a request get IDs "m<index>" (the

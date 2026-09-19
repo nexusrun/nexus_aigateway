@@ -29,7 +29,7 @@ func TestObserverRecordsBufferedGenAISpanAndDuration(t *testing.T) {
 		t.Fatalf("spans = %+v, want one CLIENT span named chat gpt-5", spans)
 	}
 	attrs := attributeMap(spans[0].Attributes())
-	if attrs["gen_ai.provider.name"] != "openai" || attrs["gomodel.provider.name"] != "openai-eu" || attrs["gen_ai.request.model"] != "gpt-5" {
+	if attrs["gen_ai.provider.name"] != "openai" || attrs["aigateway.provider.name"] != "openai-eu" || attrs["gen_ai.request.model"] != "gpt-5" {
 		t.Fatalf("span attributes = %+v", attrs)
 	}
 	if !hasMetric(t, reader, "gen_ai.client.operation.duration") {
@@ -103,7 +103,7 @@ func TestObserverCountsEmptyResponses(t *testing.T) {
 
 	for _, scope := range collect(t, reader).ScopeMetrics {
 		for _, candidate := range scope.Metrics {
-			if candidate.Name != "gomodel.client.empty_responses" {
+			if candidate.Name != "aigateway.client.empty_responses" {
 				continue
 			}
 			sum, ok := candidate.Data.(metricdata.Sum[int64])
@@ -113,13 +113,13 @@ func TestObserverCountsEmptyResponses(t *testing.T) {
 			point := sum.DataPoints[0]
 			attrs := attributeMap(point.Attributes.ToSlice())
 			if point.Value != 2 || attrs["error.type"] != "no_choices" || attrs["gen_ai.provider.name"] != "openai" ||
-				attrs["gomodel.provider.name"] != "openai-eu" || attrs["gen_ai.request.model"] != "gpt-5" {
+				attrs["aigateway.provider.name"] != "openai-eu" || attrs["gen_ai.request.model"] != "gpt-5" {
 				t.Fatalf("empty_responses point = %d %+v", point.Value, attrs)
 			}
 			return
 		}
 	}
-	t.Fatal("gomodel.client.empty_responses was not recorded")
+	t.Fatal("aigateway.client.empty_responses was not recorded")
 }
 
 func TestObserverDefersTelemetryWhenStreamIntentIsUncertain(t *testing.T) {

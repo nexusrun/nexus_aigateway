@@ -2435,7 +2435,7 @@ func TestDashboardConfig_ReturnsAllowlistedRuntimeFlags(t *testing.T) {
 		PricingRecalculation:   "on",
 		LiveLogsEnabled:        "on",
 		MCPEnabled:             "off",
-		VirtualModelStrategies: "round_robin,cost,adaptive",
+		VirtualModelStrategies: "round_robin,cost,adaptive,schedule",
 		UserPathHeader:         " X-Tenant-Path ",
 	}))
 	c, rec := newHandlerContext("/admin/runtime/config")
@@ -3363,7 +3363,7 @@ func TestTokenThroughput_ForwardsTimezoneOffset(t *testing.T) {
 
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/admin/usage/throughput?granularity=day", nil)
-	req.Header.Set("X-GoModel-Timezone", "Asia/Kolkata") // UTC+5:30, no DST
+	req.Header.Set("X-AIGateway-Timezone", "Asia/Kolkata") // UTC+5:30, no DST
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 

@@ -3,14 +3,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-STACK_DIR="${RELEASE_STACK_DIR:-/tmp/gomodel-release-stack}"
-BIN="${GOMODEL_RELEASE_BINARY:-$REPO_ROOT/bin/gomodel}"
-ENV_FILE="${GOMODEL_RELEASE_ENV_FILE:-$REPO_ROOT/.env}"
-PG_DATABASE="${GOMODEL_RELEASE_PG_DATABASE:-gomodel_release_e2e}"
-MONGO_DATABASE="${GOMODEL_RELEASE_MONGO_DATABASE:-gomodel_release_e2e}"
-MOCK_MCP_BIN="${GOMODEL_RELEASE_MOCK_MCP_BINARY:-$REPO_ROOT/bin/mockmcp}"
-MOCK_MCP_PORT="${GOMODEL_RELEASE_MOCK_MCP_PORT:-18090}"
-MOCK_MCP_TOKEN="${GOMODEL_RELEASE_MOCK_MCP_TOKEN:-qa-mock-mcp-secret}"
+STACK_DIR="${RELEASE_STACK_DIR:-/tmp/aigateway-release-stack}"
+BIN="${AIGATEWAY_RELEASE_BINARY:-$REPO_ROOT/bin/aigateway}"
+ENV_FILE="${AIGATEWAY_RELEASE_ENV_FILE:-$REPO_ROOT/.env}"
+PG_DATABASE="${AIGATEWAY_RELEASE_PG_DATABASE:-aigateway_release_e2e}"
+MONGO_DATABASE="${AIGATEWAY_RELEASE_MONGO_DATABASE:-aigateway_release_e2e}"
+MOCK_MCP_BIN="${AIGATEWAY_RELEASE_MOCK_MCP_BINARY:-$REPO_ROOT/bin/mockmcp}"
+MOCK_MCP_PORT="${AIGATEWAY_RELEASE_MOCK_MCP_PORT:-18090}"
+MOCK_MCP_TOKEN="${AIGATEWAY_RELEASE_MOCK_MCP_TOKEN:-qa-mock-mcp-secret}"
 
 BUILD_BEFORE_START=0
 
@@ -25,7 +25,7 @@ Commands:
   logs GATEWAY          Show the last 40 log lines for one gateway
 
 Options:
-  --build               Rebuild bin/gomodel before starting
+  --build               Rebuild bin/aigateway before starting
   --help                Show this help
 
 Gateways:
@@ -89,7 +89,7 @@ load_env() {
   source "$ENV_FILE"
   set +a
 
-  [[ -n "${GOMODEL_MASTER_KEY:-}" ]] || die "GOMODEL_MASTER_KEY must be set in $ENV_FILE"
+  [[ -n "${AIGATEWAY_MASTER_KEY:-}" ]] || die "AIGATEWAY_MASTER_KEY must be set in $ENV_FILE"
 
   export REDIS_URL="${REDIS_URL:-redis://localhost:6379}"
   export CONFIGURED_PROVIDER_MODELS_MODE="${CONFIGURED_PROVIDER_MODELS_MODE:-allowlist}"
@@ -184,11 +184,11 @@ status_mock_mcp() {
 }
 
 ensure_pg_database() {
-  psql "postgres://gomodel:gomodel@localhost:5432/postgres?sslmode=disable" \
+  psql "postgres://aigateway:aigateway@localhost:5432/postgres?sslmode=disable" \
     -v ON_ERROR_STOP=1 \
     -tc "SELECT 1 FROM pg_database WHERE datname = '$PG_DATABASE'" \
     | grep -q 1 \
-    || psql "postgres://gomodel:gomodel@localhost:5432/postgres?sslmode=disable" \
+    || psql "postgres://aigateway:aigateway@localhost:5432/postgres?sslmode=disable" \
       -v ON_ERROR_STOP=1 \
       -c "CREATE DATABASE $PG_DATABASE"
 }
@@ -245,7 +245,7 @@ clear_unmanaged_credentials() {
   # the encoded form is the only delimiter-safe record (it is also what the
   # DELETE URL needs).
   entries="$(curl -fsS "http://localhost:$port/admin/provider-credentials" \
-    -H "Authorization: Bearer $GOMODEL_MASTER_KEY" \
+    -H "Authorization: Bearer $AIGATEWAY_MASTER_KEY" \
     | jq -r '.[] | select(.managed == false) | .name | @uri')" \
     || die "failed to list provider credentials on $gateway"
 
@@ -253,7 +253,7 @@ clear_unmanaged_credentials() {
   while IFS= read -r encoded; do
     [[ -n "$encoded" ]] || continue
     curl -fsS -X DELETE "http://localhost:$port/admin/provider-credentials/$encoded" \
-      -H "Authorization: Bearer $GOMODEL_MASTER_KEY" >/dev/null \
+      -H "Authorization: Bearer $AIGATEWAY_MASTER_KEY" >/dev/null \
       || die "failed to delete unmanaged provider credential $encoded on $gateway"
     printf 'deleted unmanaged provider credential %s on %s\n' "$encoded" "$gateway"
   done <<<"$entries"
@@ -363,11 +363,11 @@ start_stack() {
   start_mock_mcp
 
   start_gateway sqlite-main \
-    -u GOMODEL_MASTER_KEY \
+    -u AIGATEWAY_MASTER_KEY \
     PORT=18080 \
     BASE_PATH= \
     STORAGE_TYPE=sqlite \
-    SQLITE_PATH="$(gateway_dir sqlite-main)/data/gomodel.db" \
+    SQLITE_PATH="$(gateway_dir sqlite-main)/data/aigateway.db" \
     METRICS_ENABLED=true \
     LOGGING_ENABLED=true \
     LOGGING_LOG_BODIES=true \
@@ -376,14 +376,14 @@ start_stack() {
     RESPONSE_CACHE_SIMPLE_ENABLED=false \
     SEMANTIC_CACHE_ENABLED=false \
     REDIS_URL="$REDIS_URL" \
-    REDIS_KEY_MODELS="gomodel:release-e2e:models"
+    REDIS_KEY_MODELS="aigateway:release-e2e:models"
 
   start_gateway pg-smoke \
-    -u GOMODEL_MASTER_KEY \
+    -u AIGATEWAY_MASTER_KEY \
     PORT=18081 \
     BASE_PATH= \
     STORAGE_TYPE=postgresql \
-    POSTGRES_URL="postgres://gomodel:gomodel@localhost:5432/$PG_DATABASE?sslmode=disable" \
+    POSTGRES_URL="postgres://aigateway:aigateway@localhost:5432/$PG_DATABASE?sslmode=disable" \
     LOGGING_ENABLED=true \
     LOGGING_LOG_BODIES=true \
     LOGGING_LOG_HEADERS=true \
@@ -391,10 +391,10 @@ start_stack() {
     RESPONSE_CACHE_SIMPLE_ENABLED=false \
     SEMANTIC_CACHE_ENABLED=false \
     REDIS_URL="$REDIS_URL" \
-    REDIS_KEY_MODELS="gomodel:release-e2e:models"
+    REDIS_KEY_MODELS="aigateway:release-e2e:models"
 
   start_gateway mongo-smoke \
-    -u GOMODEL_MASTER_KEY \
+    -u AIGATEWAY_MASTER_KEY \
     PORT=18082 \
     BASE_PATH= \
     STORAGE_TYPE=mongodb \
@@ -407,14 +407,14 @@ start_stack() {
     RESPONSE_CACHE_SIMPLE_ENABLED=false \
     SEMANTIC_CACHE_ENABLED=false \
     REDIS_URL="$REDIS_URL" \
-    REDIS_KEY_MODELS="gomodel:release-e2e:models"
+    REDIS_KEY_MODELS="aigateway:release-e2e:models"
 
   start_gateway guardrails \
-    -u GOMODEL_MASTER_KEY \
+    -u AIGATEWAY_MASTER_KEY \
     PORT=18083 \
     BASE_PATH= \
     STORAGE_TYPE=sqlite \
-    SQLITE_PATH="$(gateway_dir guardrails)/data/gomodel.db" \
+    SQLITE_PATH="$(gateway_dir guardrails)/data/aigateway.db" \
     LOGGING_ENABLED=true \
     LOGGING_LOG_BODIES=true \
     LOGGING_LOG_HEADERS=true \
@@ -422,13 +422,13 @@ start_stack() {
     RESPONSE_CACHE_SIMPLE_ENABLED=false \
     SEMANTIC_CACHE_ENABLED=false \
     REDIS_URL="$REDIS_URL" \
-    REDIS_KEY_MODELS="gomodel:release-e2e:models"
+    REDIS_KEY_MODELS="aigateway:release-e2e:models"
 
   start_gateway auth-cache \
     PORT=18084 \
     BASE_PATH= \
     STORAGE_TYPE=sqlite \
-    SQLITE_PATH="$(gateway_dir auth-cache)/data/gomodel.db" \
+    SQLITE_PATH="$(gateway_dir auth-cache)/data/aigateway.db" \
     LOGGING_ENABLED=true \
     LOGGING_LOG_BODIES=true \
     LOGGING_LOG_HEADERS=true \
@@ -436,11 +436,11 @@ start_stack() {
     RESPONSE_CACHE_SIMPLE_ENABLED=true \
     SEMANTIC_CACHE_ENABLED=false \
     REDIS_URL="$REDIS_URL" \
-    REDIS_KEY_MODELS="gomodel:release-e2e:models" \
-    REDIS_KEY_RESPONSES="gomodel:release-e2e:response:"
+    REDIS_KEY_MODELS="aigateway:release-e2e:models" \
+    REDIS_KEY_RESPONSES="aigateway:release-e2e:response:"
 
   curl -fsS "http://localhost:18084/admin/runtime/config" \
-    -H "Authorization: Bearer $GOMODEL_MASTER_KEY" \
+    -H "Authorization: Bearer $AIGATEWAY_MASTER_KEY" \
     | jq -e '.CACHE_ENABLED == "on" and .REDIS_URL == "on"' >/dev/null
 
   local gateway

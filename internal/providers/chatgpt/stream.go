@@ -17,7 +17,7 @@ const maxSSELineBytes = 8 << 20
 
 // collapseResponsesStream reads a Responses SSE stream and returns the response
 // object carried by its terminal event. The Codex backend streams only, so this
-// is how GoModel answers a non-streaming /v1/responses call against it.
+// is how AIGateway answers a non-streaming /v1/responses call against it.
 //
 // Only a terminal lifecycle event produces a response. A stream that stops
 // early — a dropped connection, or an `error` event — is an error rather than

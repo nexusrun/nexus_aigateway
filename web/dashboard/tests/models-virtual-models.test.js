@@ -275,7 +275,7 @@ test("groupDisplayModels groups rows by provider_name and applies provider-wide 
   const backup = groups.find((group) => group.provider_name === "openai-backup");
 
   assert.equal(groups.length, 2);
-  assert.equal(primary.type_label, "openai");
+  assert.equal(primary.type_label, "OpenAI");
   assert.equal(primary.access.selector, "openai-primary/");
   assert.equal(primary.access.default_enabled, false);
   assert.equal(primary.access.effective_enabled, true);
@@ -303,7 +303,7 @@ test("groupDisplayModels keeps alias-only virtual models in a first group", () =
   assert.deepEqual(Array.from(groups[0].rows, (row) => row.display_name), ["smart"]);
   assert.equal(groups[0].provider_name, "");
   assert.equal(groups[0].access.selector, "");
-  assert.deepEqual(Array.from(groups, (group) => group.display_name), ["Virtual models", "alpha", "zulu"]);
+  assert.deepEqual(Array.from(groups, (group) => group.display_name), ["Virtual models", "Alpha", "Zulu"]);
 
   const overriddenModel = groups[1].rows.find((row) => row.display_name === "alpha/model-a");
   assert.equal(overriddenModel.masking_alias.name, "model-a");

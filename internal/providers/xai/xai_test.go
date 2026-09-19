@@ -227,8 +227,8 @@ func TestChatCompletion_GeneratesStableXGrokConvIDWhenMissing(t *testing.T) {
 	if receivedConvIDs[0] == "" {
 		t.Fatal("first generated x-grok-conv-id is empty")
 	}
-	if !strings.HasPrefix(receivedConvIDs[0], "gomodel-") {
-		t.Fatalf("generated x-grok-conv-id = %q, want gomodel-*", receivedConvIDs[0])
+	if !strings.HasPrefix(receivedConvIDs[0], "aigateway-") {
+		t.Fatalf("generated x-grok-conv-id = %q, want aigateway-*", receivedConvIDs[0])
 	}
 	if receivedConvIDs[1] != receivedConvIDs[0] {
 		t.Fatalf("generated x-grok-conv-id changed across appended conversation: %q then %q", receivedConvIDs[0], receivedConvIDs[1])

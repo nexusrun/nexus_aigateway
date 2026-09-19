@@ -10,7 +10,7 @@ func TestLoad_PluginsSection(t *testing.T) {
 	withTempDir(t, func(dir string) {
 		writeConfigYAML(t, dir, `
 plugins:
-  search_paths: ["/etc/gomodel/plugins", "./plugins"]
+  search_paths: ["/etc/aigateway/plugins", "./plugins"]
   load:
     - file: keyword_block.so
       sha256: "abc"
@@ -21,7 +21,7 @@ plugins:
 			t.Fatalf("Load() error = %v", err)
 		}
 		p := result.Config.Plugins
-		if len(p.SearchPaths) != 2 || p.SearchPaths[0] != "/etc/gomodel/plugins" || p.SearchPaths[1] != "./plugins" {
+		if len(p.SearchPaths) != 2 || p.SearchPaths[0] != "/etc/aigateway/plugins" || p.SearchPaths[1] != "./plugins" {
 			t.Fatalf("SearchPaths = %v", p.SearchPaths)
 		}
 		if len(p.Load) != 2 || p.Load[0].File != "keyword_block.so" || p.Load[0].SHA256 != "abc" || p.Load[1].File != "/opt/acme/guard.so" || p.Load[1].SHA256 != "" {

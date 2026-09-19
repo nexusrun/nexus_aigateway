@@ -60,7 +60,7 @@ attention as changes to `go.sum`.
 - PRs that change the dashboard contain only Svelte/JS/CSS sources. They no
   longer conflict with each other over build output, and the review diff is
   the actual change.
-- `go install github.com/nexusrun/nexus_aigateway/cmd/gomodel@latest` produces a
+- `go install github.com/nexusrun/nexus_aigateway/cmd/aigateway@latest` produces a
   binary without the dashboard: the gateway and admin API work, the UI is
   disabled with an error in the log. This path was never documented;
   supported installs (`install.sh`, Docker, GitHub releases) all go through

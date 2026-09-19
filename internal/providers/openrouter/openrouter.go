@@ -17,7 +17,7 @@ import (
 const (
 	defaultBaseURL = "https://openrouter.ai/api/v1"
 	defaultSiteURL = "https://aigateway.nexusai.run"
-	defaultAppName = "GoModel"
+	defaultAppName = "AIGateway"
 )
 
 var Registration = providers.Registration{
@@ -254,7 +254,7 @@ func setHeaders(req *http.Request, apiKey string) {
 	})
 	// OpenRouter uses this value to keep a conversation on the same resolved
 	// model and provider endpoint from its first successful request, maximizing
-	// upstream prompt-cache reuse. GoModel's session detector already scopes
+	// upstream prompt-cache reuse. AIGateway's session detector already scopes
 	// user-supplied IDs before placing them in context.
 	if sessionID := strings.TrimSpace(core.SessionIDFromContext(req.Context())); sessionID != "" {
 		req.Header.Set("X-Session-Id", sessionID)

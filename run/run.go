@@ -1,4 +1,4 @@
-// Package run exposes the complete GoModel gateway lifecycle as an
+// Package run exposes the complete AIGateway gateway lifecycle as an
 // importable entry point. External modules build custom gateway binaries by
 // registering extensions (see the ext package) and calling Run:
 //
@@ -35,29 +35,29 @@ import (
 var shutdownTimeout = 30 * time.Second
 
 // Distribution names for Options.AppName. They decide which release manifest
-// the daily update check reads and what the X-GoModel-App header carries.
+// the daily update check reads and what the X-AIGateway-App header carries.
 const (
 	// AppCore is the open-source gateway; its checks read core.txt.
 	AppCore = version.AppCore
-	// AppPro is GoModel Pro; its checks read pro.txt.
+	// AppPro is AIGateway Pro; its checks read pro.txt.
 	AppPro = version.AppPro
 )
 
-// Options configures a gateway run. The zero value runs the standard gomodel
+// Options configures a gateway run. The zero value runs the standard aigateway
 // gateway on os.Args.
 type Options struct {
 	// ProductName names the binary in CLI usage output, the startup log line,
 	// --version output, and the default OpenTelemetry service.name. Default:
-	// "gomodel".
+	// "aigateway".
 	ProductName string
-	// AppName names the distribution in the X-GoModel-App header and decides
+	// AppName names the distribution in the X-AIGateway-App header and decides
 	// which release manifest the update check reads ("core.txt" or
 	// "pro.txt"). Custom distributions set AppPro or their own name.
 	//
 	// Empty leaves version.App as the build stamped it, so a distribution can
 	// choose either mechanism: this field, or -ldflags on version.App the way
 	// the Pro image already stamps version.Version. Setting it here wins.
-	// Default: version.AppCore ("GoModel").
+	// Default: version.AppCore ("AIGateway").
 	AppName string
 	// Extensions is the extension registry snapshotted at server
 	// construction. Default: ext.Default.
@@ -69,7 +69,7 @@ type Options struct {
 	Stderr io.Writer
 	// ConfigureSwaggerDocs receives the configured server base path so the
 	// caller's generated swagger docs package can be aligned with it. The
-	// gomodel binary passes its build-tagged implementation. Default: no-op.
+	// aigateway binary passes its build-tagged implementation. Default: no-op.
 	ConfigureSwaggerDocs func(basePath string)
 	// Setup, when set, runs once the process is committed to starting the
 	// gateway — after CLI parsing, --version/--health/--ready
@@ -94,7 +94,7 @@ type Options struct {
 
 func (o Options) withDefaults() Options {
 	if o.ProductName == "" {
-		o.ProductName = "gomodel"
+		o.ProductName = "aigateway"
 	}
 	if o.Extensions == nil {
 		o.Extensions = ext.Default
@@ -139,7 +139,7 @@ func ExitCode(err error) int {
 // with graceful shutdown.
 //
 // Cancelling ctx triggers the same graceful shutdown as SIGINT/SIGTERM. A
-// reload signal (SIGHUP, what `gomodel --reload` sends) instead re-reads the
+// reload signal (SIGHUP, what `aigateway --reload` sends) instead re-reads the
 // environment file and the configuration and replaces the running application
 // with one built from them, without giving up the listening socket.
 func Run(ctx context.Context, opts Options) error {

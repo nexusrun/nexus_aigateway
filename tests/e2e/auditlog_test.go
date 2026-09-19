@@ -553,7 +553,7 @@ func TestAuditLogHeaderRedaction(t *testing.T) {
 		"X-Auth-Token",
 		"X-Access-Token",
 		"Proxy-Authorization",
-		"X-Gomodel-Key",
+		"X-Aigateway-Key",
 	}
 
 	for _, header := range sensitiveHeaders {

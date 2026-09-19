@@ -1,6 +1,6 @@
 ---
 title: "Extra content, thinking blocks, and thought signatures"
-description: "How GoModel preserves provider replay state such as Gemini 3 thought signatures and Anthropic thinking blocks across turns, APIs, and providers"
+description: "How AIGateway preserves provider replay state such as Gemini 3 thought signatures and Anthropic thinking blocks across turns, APIs, and providers"
 icon: "fingerprint"
 ---
 
@@ -12,7 +12,7 @@ and rejects a history that replays the call without it. Anthropic requires the
 thinking blocks of an assistant turn, signatures included, in front of a
 tool-use turn that continues.
 
-Such state has no OpenAI-compatible field, so GoModel carries it in one place:
+Such state has no OpenAI-compatible field, so AIGateway carries it in one place:
 an `extra_content` object keyed by vendor.
 
 ```json
@@ -27,7 +27,7 @@ an `extra_content` object keyed by vendor.
 }
 ```
 
-GoModel stores nothing. The state travels inside the response to the client
+AIGateway stores nothing. The state travels inside the response to the client
 and comes back inside the client's message history. Clients that copy
 assistant messages into the history verbatim, which is what the OpenAI,
 Anthropic, and Responses SDKs do, need no changes.
@@ -53,7 +53,7 @@ belong to the whole assistant turn, so they live on the message.
   Messages ingress, streaming, and the assistant-turn echo carry
   `extra_content` without looking inside.
 - **Only the owning provider sees its own vendor.** Before a request leaves
-  for a provider, GoModel drops every vendor object that provider does not
+  for a provider, AIGateway drops every vendor object that provider does not
   own. A Gemini signature never reaches Anthropic or OpenAI, and a history
   that moved between providers does not fail on foreign fields.
 - **Only the owning adapter reads or writes inside it.** Nothing else in the
@@ -85,7 +85,7 @@ that matter are shown.
     ```
   </Step>
   <Step title="Gemini replies with a function call and a signature">
-    GoModel translates the request into Gemini's native `generateContent`
+    AIGateway translates the request into Gemini's native `generateContent`
     shape. Gemini returns a `functionCall` part that carries the signature.
 
     ```json
@@ -102,7 +102,7 @@ that matter are shown.
     }
     ```
   </Step>
-  <Step title="GoModel returns the call with the signature under extra_content">
+  <Step title="AIGateway returns the call with the signature under extra_content">
     ```json
     {
       "choices": [{
@@ -147,7 +147,7 @@ that matter are shown.
     }
     ```
   </Step>
-  <Step title="GoModel replays the signature on the matching Gemini part">
+  <Step title="AIGateway replays the signature on the matching Gemini part">
     ```json
     {
       "contents": [
@@ -163,7 +163,7 @@ that matter are shown.
     }
     ```
 
-    Gemini accepts the replay and answers with text. GoModel returns a normal
+    Gemini accepts the replay and answers with text. AIGateway returns a normal
     chat completion.
   </Step>
 </Steps>
@@ -180,7 +180,7 @@ other gateways keep working.
 
 When a Gemini 3 history contains a function call without any signature,
 because the conversation started on another provider or a client dropped the
-member, GoModel sends Google's documented placeholder instead of surfacing the
+member, AIGateway sends Google's documented placeholder instead of surfacing the
 400. Echo the real value whenever you have it; the placeholder costs reasoning
 continuity for that turn. See [Gemini thought
 signatures](/providers/gemini#thought-signatures) for provider details.
@@ -215,7 +215,7 @@ the flow is:
     }
     ```
   </Step>
-  <Step title="GoModel keeps the blocks under extra_content.anthropic">
+  <Step title="AIGateway keeps the blocks under extra_content.anthropic">
     Internally the history is chat-shaped. The thinking blocks ride on the
     assistant message and `is_error` on the tool result. Neither has an
     OpenAI-compatible field, so both live under the `anthropic` vendor.
@@ -329,7 +329,7 @@ before dispatch, on every route, in every dialect.
 | `extra_content.anthropic` | any other provider | nothing; the member is dropped |
 
 The client's own history is never modified. The filtering happens on the copy
-GoModel sends upstream.
+AIGateway sends upstream.
 
 ## Vendor reference
 

@@ -8,7 +8,7 @@ import (
 
 func TestParseCLI_AcceptsSingleAndDoubleDashVersion(t *testing.T) {
 	for _, args := range [][]string{{"-version"}, {"--version"}} {
-		opts, err := parseCLI("gomodel", args, io.Discard)
+		opts, err := parseCLI("aigateway", args, io.Discard)
 		if err != nil {
 			t.Fatalf("parseCLI(%v) error = %v", args, err)
 		}
@@ -20,7 +20,7 @@ func TestParseCLI_AcceptsSingleAndDoubleDashVersion(t *testing.T) {
 
 func TestParseCLI_AcceptsSingleAndDoubleDashHealth(t *testing.T) {
 	for _, args := range [][]string{{"-health"}, {"--health"}} {
-		opts, err := parseCLI("gomodel", args, io.Discard)
+		opts, err := parseCLI("aigateway", args, io.Discard)
 		if err != nil {
 			t.Fatalf("parseCLI(%v) error = %v", args, err)
 		}
@@ -31,19 +31,19 @@ func TestParseCLI_AcceptsSingleAndDoubleDashHealth(t *testing.T) {
 }
 
 func TestParseCLI_RejectsUnknownFlags(t *testing.T) {
-	if _, err := parseCLI("gomodel", []string{"--helath"}, io.Discard); err == nil {
+	if _, err := parseCLI("aigateway", []string{"--helath"}, io.Discard); err == nil {
 		t.Fatal("parseCLI(--helath) error = nil, want error")
 	}
 }
 
 func TestParseCLI_RejectsRemovedDemoFlag(t *testing.T) {
-	if _, err := parseCLI("gomodel", []string{"--demo"}, io.Discard); err == nil {
+	if _, err := parseCLI("aigateway", []string{"--demo"}, io.Discard); err == nil {
 		t.Fatal("parseCLI(--demo) error = nil, want error")
 	}
 }
 
 func TestParseCLI_RejectsPositionalArgs(t *testing.T) {
-	if _, err := parseCLI("gomodel", []string{"--health", "extra"}, io.Discard); err == nil {
+	if _, err := parseCLI("aigateway", []string{"--health", "extra"}, io.Discard); err == nil {
 		t.Fatal("parseCLI(--health extra) error = nil, want error")
 	}
 }

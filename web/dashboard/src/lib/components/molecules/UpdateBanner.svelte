@@ -1,5 +1,5 @@
 <script>
-  // Announces a newer GoModel release at the top of the Settings page.
+  // Announces a newer AIGateway release at the top of the Settings page.
   //
   // The dismiss control hides it for this page session only (see
   // versionStore.dismissed): an update stays available until it is installed,

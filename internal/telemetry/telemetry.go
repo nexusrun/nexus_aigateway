@@ -1,7 +1,7 @@
-// Package telemetry provides GoModel's OpenTelemetry integration: OTLP trace
+// Package telemetry provides AIGateway's OpenTelemetry integration: OTLP trace
 // and metric export for inbound HTTP requests and outbound provider calls.
 //
-// Enabling it is the only GoModel-specific switch (OTEL_ENABLED). Exporters,
+// Enabling it is the only AIGateway-specific switch (OTEL_ENABLED). Exporters,
 // resource attributes, sampling, and propagation follow the standard OTEL_*
 // environment variables read by the OpenTelemetry SDK.
 package telemetry
@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	defaultServiceName  = "gomodel"
+	defaultServiceName  = "aigateway"
 	instrumentationName = "github.com/nexusrun/nexus_aigateway/internal/telemetry"
 	// closeTimeout bounds the final flush so an unreachable collector cannot
 	// hold up gateway shutdown.
@@ -71,7 +71,7 @@ type Service struct {
 // instrumentation together with the other operational endpoints.
 // serviceName is the default service.name resource attribute — the product
 // name of the running distribution — used unless OTEL_SERVICE_NAME or the
-// YAML service_name overrides it. Empty falls back to "gomodel".
+// YAML service_name overrides it. Empty falls back to "aigateway".
 func New(ctx context.Context, cfg config.OpenTelemetryConfig, metricsEndpoint, serviceName string) (*Service, error) {
 	exportEnvironment(cfg.Environment())
 

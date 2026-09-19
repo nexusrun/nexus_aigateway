@@ -6,7 +6,7 @@ import (
 	"net/http"
 )
 
-// Host is what GoModel offers a plugin instance. It is passed to
+// Host is what AIGateway offers a plugin instance. It is passed to
 // [Plugin.Init] and stays valid until [Plugin.Close].
 type Host interface {
 	// Logger returns a logger pre-tagged with the plugin and instance name.

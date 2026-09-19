@@ -19,9 +19,9 @@ type StorageConfig struct {
 
 // SQLiteStorageConfig holds SQLite-specific storage configuration
 type SQLiteStorageConfig struct {
-	// Path is the database file path. Default: ./data/gomodel.db when a
+	// Path is the database file path. Default: ./data/aigateway.db when a
 	// ./data directory exists, otherwise the OS per-user data directory
-	// (e.g. ~/.local/share/gomodel/gomodel.db).
+	// (e.g. ~/.local/share/aigateway/aigateway.db).
 	Path string `yaml:"path" env:"SQLITE_PATH"`
 }
 
@@ -38,11 +38,11 @@ type PostgreSQLStorageConfig struct {
 // MongoDBStorageConfig holds MongoDB-specific storage configuration
 type MongoDBStorageConfig struct {
 	// URL is the connection string; a database named in its path is honored
-	// (e.g., mongodb://localhost:27017/gomodel). MONGO_URI / MONGO_URL /
+	// (e.g., mongodb://localhost:27017/aigateway). MONGO_URI / MONGO_URL /
 	// MONGODB_URI are accepted as aliases for platforms (e.g. NexusAI) that
 	// inject one of those names.
 	URL string `yaml:"url" env:"MONGODB_URL,MONGO_URI,MONGO_URL,MONGODB_URI"`
-	// Database overrides the database named in the URL (default: gomodel).
+	// Database overrides the database named in the URL (default: aigateway).
 	// MONGO_DATABASE is accepted as an alias.
 	Database string `yaml:"database" env:"MONGODB_DATABASE,MONGO_DATABASE"`
 }

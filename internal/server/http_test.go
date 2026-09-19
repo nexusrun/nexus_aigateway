@@ -18,7 +18,7 @@ import (
 	"github.com/nexusrun/nexus_aigateway/internal/providers"
 	"github.com/nexusrun/nexus_aigateway/internal/usage"
 
-	_ "github.com/nexusrun/nexus_aigateway/cmd/gomodel/docs"
+	_ "github.com/nexusrun/nexus_aigateway/cmd/aigateway/docs"
 
 	"github.com/labstack/echo/v5"
 )

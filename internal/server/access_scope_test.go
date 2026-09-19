@@ -30,7 +30,7 @@ func (a scopeRequestAuthenticator) AuthenticateRequest(_ context.Context, r *htt
 
 // TestAuthMiddleware_AccessScopeFollowsCredential pins that the access scope
 // is derived from the credential's bound user path only: the master key and
-// unscoped keys stay global even when they send X-GoModel-User-Path, and a
+// unscoped keys stay global even when they send X-AIGateway-User-Path, and a
 // bound key or extension identity is confined to its path.
 func TestAuthMiddleware_AccessScopeFollowsCredential(t *testing.T) {
 	authenticator := mockAuthenticator{

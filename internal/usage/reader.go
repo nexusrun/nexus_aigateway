@@ -182,7 +182,7 @@ type SessionUsageResult struct {
 // group's input, folded per row from raw_data exactly like the daily series
 // (local-cache hits excluded). LocalCachedInputTokens and
 // LocalCachedOutputTokens count the input and output tokens of rows served
-// from GoModel's local response cache within the same period and filters —
+// from AIGateway's local response cache within the same period and filters —
 // populated regardless of the query's cache mode, since uncached aggregates
 // exclude those rows by design. CachedInputCost is a read-time estimate
 // priced by the admin layer from current catalog pricing (see
@@ -298,7 +298,7 @@ func foldPeriodInputSegments(rows inputSegmentRows) (map[string]periodInputSplit
 	return out, rows.Err()
 }
 
-// isLocalCacheType reports whether a usage row was served from GoModel's local
+// isLocalCacheType reports whether a usage row was served from AIGateway's local
 // response cache (cache_type set), and so is not provider input.
 func isLocalCacheType(cacheType *string) bool {
 	if cacheType == nil {

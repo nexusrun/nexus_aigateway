@@ -5,7 +5,7 @@ Date: 2026-07-05
 
 ## 1. Why
 
-GoModel has spend controls (budgets) but no traffic controls. Operators cannot
+AIGateway has spend controls (budgets) but no traffic controls. Operators cannot
 cap how *fast* a team or key consumes the gateway, protect provider quotas from
 a runaway client, or give tenants predictable request/token allowances. Every
 comparable gateway ships this; it is the most-used governance feature after
@@ -24,10 +24,10 @@ Table stakes (all serious gateways):
   `request_max_limit`/`token_max_limit` with independent reset durations per
   virtual key; Portkey: request- or token-based limits per provider key;
   Kong: `tokens_count_strategy` with fixed/sliding windows.
-- **Money budgets as a separate feature** with longer horizons (GoModel already
+- **Money budgets as a separate feature** with longer horizons (AIGateway already
   has this; Bifrost splits 402 budget vs 429 rate, LiteLLM `max_budget`).
 - **Hierarchy**: key → team → org scoping (LiteLLM key/user/team/org; Bifrost
-  VK/team/customer). GoModel's `user_path` tree already models this.
+  VK/team/customer). AIGateway's `user_path` tree already models this.
 - **Concurrency caps**: LiteLLM `max_parallel_requests` is a first-class,
   commonly set knob (protects against long-streaming pileups RPM cannot catch).
 
@@ -332,7 +332,7 @@ backends.
    LiteLLM v3 style) to close the one-request TPM overshoot.
 4. **Priority / fairness**: reserve capacity fractions per label or path
    instead of hard 429s (top LiteLLM enterprise upsell).
-5. Upstream `x-ratelimit-*` passthrough when GoModel itself imposes no limit.
+5. Upstream `x-ratelimit-*` passthrough when AIGateway itself imposes no limit.
 6. Workflow `features.rate_limit` gating, if a use case appears.
 7. ~~Counter persistence across restarts (periodic flush) for day windows.~~
    Done: `docs/dev/2026-08-16_rate-limit-counter-persistence-spec.md`.

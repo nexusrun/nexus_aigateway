@@ -88,7 +88,7 @@ func TestLoad_Fixture(t *testing.T) {
 func TestOpen_MissingSymbol(t *testing.T) {
 	so := fixtureSO(t, "nosymbol")
 	_, err := Open(so)
-	if err == nil || !strings.Contains(err.Error(), "does not export GoModelPlugin") {
+	if err == nil || !strings.Contains(err.Error(), "does not export AIGatewayPlugin") {
 		t.Fatalf("Open(nosymbol) error = %v", err)
 	}
 }
@@ -96,7 +96,7 @@ func TestOpen_MissingSymbol(t *testing.T) {
 func TestOpen_WrongSymbolType(t *testing.T) {
 	so := fixtureSO(t, "badsymbol")
 	_, err := Open(so)
-	if err == nil || !strings.Contains(err.Error(), "symbol GoModelPlugin has type *int") {
+	if err == nil || !strings.Contains(err.Error(), "symbol AIGatewayPlugin has type *int") {
 		t.Fatalf("Open(badsymbol) error = %v", err)
 	}
 }

@@ -106,7 +106,7 @@ func TestApplyEdits(t *testing.T) {
 		"request_set": "X-Team: platform\nX-Env: prod",
 		"request_remove": "X-Debug\nX-Missing",
 		"response_set": "Cache-Control: no-store",
-		"response_add": "X-Served-By: gomodel",
+		"response_add": "X-Served-By: aigateway",
 		"response_remove": "X-Internal",
 		"upstream_set": "X-Tenant: acme"
 	}`)
@@ -125,7 +125,7 @@ func TestApplyEdits(t *testing.T) {
 	if !reflect.DeepEqual(x.Headers.Request, wantReq) {
 		t.Errorf("request = %v, want %v", x.Headers.Request, wantReq)
 	}
-	wantResp := http.Header{"Cache-Control": {"no-store"}, "X-Served-By": {"upstream", "gomodel"}, "X-Internal": {""}}
+	wantResp := http.Header{"Cache-Control": {"no-store"}, "X-Served-By": {"upstream", "aigateway"}, "X-Internal": {""}}
 	if !reflect.DeepEqual(x.Headers.Response, wantResp) {
 		t.Errorf("response = %v, want %v", x.Headers.Response, wantResp)
 	}
@@ -146,7 +146,7 @@ func TestApplyEdits(t *testing.T) {
 }
 
 func TestIdempotentAcrossPhases(t *testing.T) {
-	p := newPlugin(t, `{"response_add": "X-Served-By: gomodel", "response_set": "X-Mode: strict"}`)
+	p := newPlugin(t, `{"response_add": "X-Served-By: aigateway", "response_set": "X-Mode: strict"}`)
 	x := &pluginapi.Exchange{Headers: &pluginapi.Headers{}, Values: pluginapi.Values{}}
 	if _, err := p.OnPrompt(context.Background(), x); err != nil {
 		t.Fatal(err)
@@ -155,7 +155,7 @@ func TestIdempotentAcrossPhases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := x.Headers.Response.Values("X-Served-By"); !reflect.DeepEqual(got, []string{"gomodel"}) {
+	if got := x.Headers.Response.Values("X-Served-By"); !reflect.DeepEqual(got, []string{"aigateway"}) {
 		t.Errorf("X-Served-By = %v, want added once", got)
 	}
 	if got := x.Headers.Response.Values("X-Mode"); !reflect.DeepEqual(got, []string{"strict"}) {
@@ -170,7 +170,7 @@ func TestIdempotentAcrossPhases(t *testing.T) {
 	if _, err := other.OnResponse(context.Background(), x); err != nil {
 		t.Fatal(err)
 	}
-	if got := x.Headers.Response.Values("X-Served-By"); !reflect.DeepEqual(got, []string{"gomodel", "other"}) {
+	if got := x.Headers.Response.Values("X-Served-By"); !reflect.DeepEqual(got, []string{"aigateway", "other"}) {
 		t.Errorf("X-Served-By after second instance = %v", got)
 	}
 }

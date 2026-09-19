@@ -1,21 +1,21 @@
 ---
 title: "Audio API"
-description: "OpenAI-compatible text-to-speech and transcription through GoModel, routed by model with the same access rules, budgets, and virtual models as chat."
+description: "OpenAI-compatible text-to-speech and transcription through AIGateway, routed by model with the same access rules, budgets, and virtual models as chat."
 icon: "audio-lines"
 keywords: ["audio API", "text-to-speech", "speech-to-text", "transcription", "TTS", "STT"]
 ---
 
 ## Overview
 
-GoModel exposes the **OpenAI-compatible audio endpoints** for text-to-speech (TTS)
+AIGateway exposes the **OpenAI-compatible audio endpoints** for text-to-speech (TTS)
 and speech-to-text (STT). Clients and SDKs that already call OpenAI's
-`/v1/audio/*` routes can point at GoModel unchanged.
+`/v1/audio/*` routes can point at AIGateway unchanged.
 
 Requests route **by model** through the same registry used for chat and
 embeddings, so `model` selection, `provider` hints, virtual models, per-key model
 access rules ([user paths](/features/user-path)), and budgets all apply. Audio is
 served by OpenAI and the OpenAI-compatible providers (OpenRouter, Azure OpenAI,
-vLLM, Oracle, Z.ai), plus providers whose **native audio APIs GoModel translates**
+vLLM, Oracle, Z.ai), plus providers whose **native audio APIs AIGateway translates**
 behind the same endpoints: [Xiaomi MiMo](/providers/xiaomi) (TTS and ASR via chat
 completions), [Cohere](/providers/cohere) (transcription), and
 [MiniMax](/providers/minimax) (TTS via its native `t2a_v2` API). A provider that
@@ -39,11 +39,11 @@ responses, so a client written against OpenAI sees the same fields everywhere.
 
 ```bash curl
 curl https://your-gateway/v1/audio/speech \
-  -H "Authorization: Bearer $GOMODEL_KEY" \
+  -H "Authorization: Bearer $AIGATEWAY_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-4o-mini-tts",
-    "input": "Hello from GoModel.",
+    "input": "Hello from AIGateway.",
     "voice": "alloy",
     "response_format": "wav"
   }' \
@@ -57,12 +57,12 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="https://your-gateway/v1",
-    api_key=os.environ["GOMODEL_KEY"],
+    api_key=os.environ["AIGATEWAY_KEY"],
 )
 
 speech = client.audio.speech.create(
     model="gpt-4o-mini-tts",
-    input="Hello from GoModel.",
+    input="Hello from AIGateway.",
     voice="alloy",
     response_format="wav",
 )
@@ -75,12 +75,12 @@ import OpenAI from "openai";
 
 const client = new OpenAI({
   baseURL: "https://your-gateway/v1",
-  apiKey: process.env.GOMODEL_KEY,
+  apiKey: process.env.AIGATEWAY_KEY,
 });
 
 const speech = await client.audio.speech.create({
   model: "gpt-4o-mini-tts",
-  input: "Hello from GoModel.",
+  input: "Hello from AIGateway.",
   voice: "alloy",
   response_format: "wav",
 });
@@ -101,7 +101,7 @@ from `response_format` (for example `wav` → `audio/wav`).
 
 ```bash curl
 curl https://your-gateway/v1/audio/transcriptions \
-  -H "Authorization: Bearer $GOMODEL_KEY" \
+  -H "Authorization: Bearer $AIGATEWAY_KEY" \
   -F "file=@speech.wav" \
   -F "model=gpt-4o-transcribe" \
   -F "response_format=json"
@@ -114,7 +114,7 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="https://your-gateway/v1",
-    api_key=os.environ["GOMODEL_KEY"],
+    api_key=os.environ["AIGATEWAY_KEY"],
 )
 
 with open("speech.wav", "rb") as audio_file:
@@ -133,7 +133,7 @@ import OpenAI from "openai";
 
 const client = new OpenAI({
   baseURL: "https://your-gateway/v1",
-  apiKey: process.env.GOMODEL_KEY,
+  apiKey: process.env.AIGATEWAY_KEY,
 });
 
 const transcription = await client.audio.transcriptions.create({
@@ -153,15 +153,15 @@ console.log(transcription.text);
 JSON object; `text`, `srt`, and `vtt` return a `text/plain` body.
 
 <Tip>
-  The bracketed `timestamp_granularities[]` form key is canonical, but GoModel
+  The bracketed `timestamp_granularities[]` form key is canonical, but AIGateway
   also accepts the unbracketed `timestamp_granularities` for client compatibility.
 </Tip>
 
 ## Parameter forwarding
 
-Any parameter GoModel does not name above is **forwarded to the provider
+Any parameter AIGateway does not name above is **forwarded to the provider
 unchanged**, so newer OpenAI options and provider-native extras work without
-waiting for a gateway release ([ADR-0011](https://github.com/saifelyzal/nexusruntime/blob/main/docs/adr/0011-field-forwarding-on-translated-paths.md)
+waiting for a gateway release ([ADR-0011](https://github.com/nexusrun/nexus_aigateway/blob/main/docs/adr/0011-field-forwarding-on-translated-paths.md)
 rule 1):
 
 - `/v1/audio/speech` — unknown JSON members (for example `stream_format`) are
@@ -173,7 +173,7 @@ rule 1):
 The provider stays the authority on what it accepts: a field it rejects comes
 back as that provider's own error rather than a silent 200.
 
-Two things never travel: the fields GoModel controls itself (`model`, `file`,
+Two things never travel: the fields AIGateway controls itself (`model`, `file`,
 and the routing hint `provider`, plus the transcription options it re-emits —
 `language`, `prompt`, `response_format`, `temperature`, and both
 `timestamp_granularities[]` and its unbracketed alias
@@ -187,7 +187,7 @@ the entry records only the field **names** under `forwarded_fields`.
 <Note>
   **Streaming is relayed, not streamed.** A forwarded `stream_format: "sse"`
   (speech) or `stream: true` (transcription) makes the upstream answer with
-  server-sent events, and GoModel returns that body with its
+  server-sent events, and AIGateway returns that body with its
   `text/event-stream` Content-Type — but the bytes are buffered and delivered
   in one piece, so a client sees the complete event sequence at the end of the
   call rather than incrementally.
@@ -195,7 +195,7 @@ the entry records only the field **names** under `forwarded_fields`.
 
 <Note>
   Forwarding applies to the OpenAI-compatible upstreams. Providers whose native
-  audio API GoModel translates (Xiaomi MiMo, Cohere, MiniMax, ElevenLabs) build
+  audio API AIGateway translates (Xiaomi MiMo, Cohere, MiniMax, ElevenLabs) build
   their own request shape and ignore extra parameters.
 </Note>
 ## Cost tracking
@@ -211,7 +211,7 @@ bills, not by tokens:
   the returned `wav`, `pcm`, or `mp3`; other codecs (`opus`, `aac`, `flac`) cannot
   be measured without decoding, and the row carries a cost caveat saying so.
 - **Transcriptions and translations** are priced by the duration of the uploaded
-  audio (`audio_seconds`, priced with `per_second_input`). GoModel takes the
+  audio (`audio_seconds`, priced with `per_second_input`). AIGateway takes the
   duration the provider reports in `usage.seconds` or `verbose_json`'s
   `duration`, and otherwise measures the upload itself — so the cost does not
   depend on the `response_format` the client asked for, and providers that report
@@ -222,7 +222,7 @@ bills, not by tokens:
   whichever unit the provider reported, never both.
 
 When nothing billable is available — the provider reported no usage and the
-upload is in a container GoModel cannot measure (`m4a`, `ogg`, `flac`, `webm`) —
+upload is in a container AIGateway cannot measure (`m4a`, `ogg`, `flac`, `webm`) —
 the usage row is flagged with a cost-calculation caveat instead of a $0 cost.
 
 ## Limitations

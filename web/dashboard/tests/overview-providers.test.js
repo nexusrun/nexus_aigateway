@@ -139,47 +139,47 @@ test("providerDocUrl links provider types with docs and stays empty otherwise", 
   // Types with a dedicated docs page.
   assert.equal(
     providerDocUrl({ type: "anthropic" }),
-    "https://aigateway.nexusai.run/docs/providers/anthropic?utm_source=gomodel_dashboard",
+    "https://aigateway.nexusai.run/docs/providers/anthropic?utm_source=aigateway_dashboard",
   );
   assert.equal(
     providerDocUrl({ config: { type: "bedrock" } }),
-    "https://aigateway.nexusai.run/docs/providers/bedrock?utm_source=gomodel_dashboard",
+    "https://aigateway.nexusai.run/docs/providers/bedrock?utm_source=aigateway_dashboard",
   );
   assert.equal(
     providerDocUrl({ type: "bedrock-mantle" }),
-    "https://aigateway.nexusai.run/docs/providers/bedrock-mantle?utm_source=gomodel_dashboard",
+    "https://aigateway.nexusai.run/docs/providers/bedrock-mantle?utm_source=aigateway_dashboard",
   );
   assert.equal(
     providerDocUrl({ type: "cohere" }),
-    "https://aigateway.nexusai.run/docs/providers/cohere?utm_source=gomodel_dashboard",
+    "https://aigateway.nexusai.run/docs/providers/cohere?utm_source=aigateway_dashboard",
   );
   // Type slug differs from the docs slug.
   assert.equal(
     providerDocUrl({ type: "opencode_go" }),
-    "https://aigateway.nexusai.run/docs/providers/opencode-go?utm_source=gomodel_dashboard",
+    "https://aigateway.nexusai.run/docs/providers/opencode-go?utm_source=aigateway_dashboard",
   );
   // Resolves even when the (type) label is hidden because name === type.
   assert.equal(
     providerDocUrl({ name: "gemini", type: "GEMINI" }),
-    "https://aigateway.nexusai.run/docs/providers/gemini?utm_source=gomodel_dashboard",
+    "https://aigateway.nexusai.run/docs/providers/gemini?utm_source=aigateway_dashboard",
   );
   assert.equal(
     providerDocUrl({ type: "llmd" }),
-    "https://aigateway.nexusai.run/docs/providers/llmd?utm_source=gomodel_dashboard",
+    "https://aigateway.nexusai.run/docs/providers/llmd?utm_source=aigateway_dashboard",
   );
   assert.equal(
     providerDocUrl({ type: "sglang" }),
-    "https://aigateway.nexusai.run/docs/providers/sglang?utm_source=gomodel_dashboard",
+    "https://aigateway.nexusai.run/docs/providers/sglang?utm_source=aigateway_dashboard",
   );
   // Types registered but without a provider-specific doc page → fall back
   // to the providers overview so every card still surfaces a help link.
   assert.equal(
     providerDocUrl({ type: "openai" }),
-    "https://aigateway.nexusai.run/docs/providers/overview?utm_source=gomodel_dashboard",
+    "https://aigateway.nexusai.run/docs/providers/overview?utm_source=aigateway_dashboard",
   );
   assert.equal(
     providerDocUrl({ type: "ollama" }),
-    "https://aigateway.nexusai.run/docs/providers/multiple-ollama?utm_source=gomodel_dashboard",
+    "https://aigateway.nexusai.run/docs/providers/multiple-ollama?utm_source=aigateway_dashboard",
   );
   // Provider with no type at all → no link.
   assert.equal(providerDocUrl({ name: "mystery" }), "");
@@ -191,12 +191,12 @@ test("provider detail preferences start collapsed, persist, and last-check text 
 
   let prefs = loadProviderPreferences(storage);
   assert.equal(prefs.detailsExpanded, false);
-  assert.equal(storage.getItem("gomodel_provider_status_details_expanded"), "false");
+  assert.equal(storage.getItem("aigateway_provider_status_details_expanded"), "false");
 
   saveDetailsPreference(storage, true);
   prefs = loadProviderPreferences(storage);
   assert.equal(prefs.detailsExpanded, true);
-  assert.equal(storage.getItem("gomodel_provider_status_details_expanded"), "true");
+  assert.equal(storage.getItem("aigateway_provider_status_details_expanded"), "true");
 
   const formatTimestamp = (value) =>
     value === "2026-04-10T12:00:00Z" ? "2026-04-10 14:00:00" : "-";
@@ -301,12 +301,12 @@ test("per-card override wins over the section-wide default and persists", () => 
   saveCardOverrides(storage, {});
   const master = loadProviderPreferences(storage);
   assert.equal(providerCardExpanded(master.cardOverrides, master.detailsExpanded, ollama), true);
-  assert.equal(storage.getItem("gomodel_provider_card_expanded_overrides"), "{}");
+  assert.equal(storage.getItem("aigateway_provider_card_expanded_overrides"), "{}");
 });
 
 test("preference loading tolerates corrupt storage and nameless providers", () => {
   const storage = createStorageStub();
-  storage.setItem("gomodel_provider_card_expanded_overrides", "not-json");
+  storage.setItem("aigateway_provider_card_expanded_overrides", "not-json");
   const prefs = loadProviderPreferences(storage);
 
   assert.deepEqual(prefs.cardOverrides, {});

@@ -7,7 +7,7 @@ keywords: ["model metadata", "pricing", "context window", "capabilities", "model
 
 Every model in the catalog carries metadata — pricing, context window, max output
 tokens, capabilities, and modes (which decide whether it shows up as a chat,
-embeddings, image, or audio model). GoModel assembles it from five sources,
+embeddings, image, or audio model). AIGateway assembles it from five sources,
 strongest first:
 
 ```mermaid
@@ -39,7 +39,7 @@ flowchart LR
    source that can know the real context window. Models declared via configured
    model lists skip this step.
 4. **The model catalog** — the
-   [`ai-model-list`](https://github.com/ENTERPILOT/ai-model-list) registry,
+   [`ai-model-list`](https://github.com/nexusrun/ai-model-list) registry,
    fetched from `MODEL_LIST_URL` (default: the registry's `models.min.json` on
    GitHub) at startup and on every catalog refresh. It supplies the rich
    defaults — pricing, context windows, capabilities, modes — for most hosted
@@ -75,14 +75,14 @@ and the ID heuristic still apply.
 `MODEL_LIST_URL` accepts a local file as well as an HTTP URL:
 
 ```bash
-MODEL_LIST_URL=/etc/gomodel/models.json          # bare path
-MODEL_LIST_URL=file:///etc/gomodel/models.json   # file URL
+MODEL_LIST_URL=/etc/aigateway/models.json          # bare path
+MODEL_LIST_URL=file:///etc/aigateway/models.json   # file URL
 ```
 
 A file is read on startup and on every cache refresh, and re-parsed only when
 its content changes, so you can update pricing by replacing the file. Because
 a file involves no network request, it keeps working under
-`GOMODEL_OFFLINE=true`, which drops HTTP catalog URLs. Set `MODEL_LIST_URL=off`
+`AIGATEWAY_OFFLINE=true`, which drops HTTP catalog URLs. Set `MODEL_LIST_URL=off`
 to turn the catalog off entirely and declare metadata in `config.yaml`; see the
 [production guide](/guides/production#air-gapped-and-offline-deployments) for
 the full air-gap checklist.

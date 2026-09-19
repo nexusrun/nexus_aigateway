@@ -61,8 +61,8 @@ func TestBudget_EnforcesAndPersistsAcrossDatabases(t *testing.T) {
 			firstRequestID := uuid.NewString()
 			firstResp := sendChatRequestWithHeaders(t, fixture.ServerURL, newChatRequest("gpt-4", "first"), map[string]string{
 				"X-Request-ID":          firstRequestID,
-				"X-GoModel-User-Path":   integrationBudgetPath + "/app",
-				"X-GoModel-Test-Budget": tt.name,
+				"X-AIGateway-User-Path":   integrationBudgetPath + "/app",
+				"X-AIGateway-Test-Budget": tt.name,
 			})
 			require.Equal(t, http.StatusOK, firstResp.StatusCode)
 			closeBody(firstResp)
@@ -75,7 +75,7 @@ func TestBudget_EnforcesAndPersistsAcrossDatabases(t *testing.T) {
 			secondRequestID := uuid.NewString()
 			secondResp := sendChatRequestWithHeaders(t, fixture.ServerURL, newChatRequest("gpt-4", "second"), map[string]string{
 				"X-Request-ID":        secondRequestID,
-				"X-GoModel-User-Path": integrationBudgetPath + "/app",
+				"X-AIGateway-User-Path": integrationBudgetPath + "/app",
 			})
 			defer closeBody(secondResp)
 			require.Equal(t, http.StatusTooManyRequests, secondResp.StatusCode)

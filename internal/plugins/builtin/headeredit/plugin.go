@@ -59,7 +59,7 @@ func (p *Plugin) Manifest() pluginapi.Manifest {
 			{
 				Key: "response_add", Label: "Response headers to add", Input: pluginapi.InputTextarea, Default: "",
 				Help:        "One \"Name: value\" per line. Appends a value to the client response header, keeping existing values. Applied once per request even when the instance runs in several phases.",
-				Placeholder: "X-Served-By: gomodel",
+				Placeholder: "X-Served-By: aigateway",
 			},
 			{
 				Key: "response_remove", Label: "Response headers to remove", Input: pluginapi.InputTextarea, Default: "",

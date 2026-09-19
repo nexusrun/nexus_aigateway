@@ -148,13 +148,13 @@ func TestMetaFromContextAndRequestState(t *testing.T) {
 		t.Fatalf("request headers = %v", x.Headers.Request)
 	}
 	x.Values.Set("k", 1)
-	x.Headers.Response.Set("X-GoModel-Guardrail", "warn; code=x")
+	x.Headers.Response.Set("X-AIGateway-Guardrail", "warn; code=x")
 	if v, _ := state.Values.Get("k"); v != 1 {
 		t.Fatal("values not shared with state")
 	}
 	dst := http.Header{}
 	state.ApplyResponseHeaders(dst)
-	if dst.Get("X-GoModel-Guardrail") != "warn; code=x" {
+	if dst.Get("X-AIGateway-Guardrail") != "warn; code=x" {
 		t.Fatalf("headers = %v", dst)
 	}
 	state.Record(DecisionRecord{Phase: pluginapi.KindPrompt, Instance: "a"})

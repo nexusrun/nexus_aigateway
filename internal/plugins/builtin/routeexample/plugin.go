@@ -1,7 +1,7 @@
 // Package routeexample is the built-in cheapest_healthy routing strategy: it
 // sends a virtual model's traffic to the cheapest (or fastest) target whose
 // recent error rate is acceptable, learning target health from the attempt
-// outcomes GoModel reports. It doubles as the reference implementation of a
+// outcomes AIGateway reports. It doubles as the reference implementation of a
 // pluginapi.RouteStrategy plugin.
 package routeexample
 
@@ -73,7 +73,7 @@ func (p *Plugin) Init(context.Context, json.RawMessage, pluginapi.Host) error { 
 // Close releases nothing.
 func (p *Plugin) Close(context.Context) error { return nil }
 
-// routeConfig is the per-virtual-model config, as GoModel validates it.
+// routeConfig is the per-virtual-model config, as AIGateway validates it.
 type routeConfig struct {
 	Prefer       string   `json:"prefer"`
 	MaxErrorRate *float64 `json:"max_error_rate"`

@@ -80,7 +80,7 @@ export function strategyLabel(strategy, pluginName = "") {
     case "adaptive":
       return m.models_strategy_name_adaptive();
     case "schedule":
-      return "Time schedule";
+      return m.models_strategy_name_schedule();
     case "plugin":
       return String(pluginName || "").trim() || m.models_strategy_name_plugin();
     case "round_robin":
@@ -133,7 +133,7 @@ const STRATEGY_OPTION_LABELS = {
   cost: m.models_strategy_cost(),
   adaptive: m.models_strategy_adaptive(),
   failover: m.models_strategy_failover(),
-  schedule: "Time schedule",
+  schedule: m.models_strategy_schedule(),
 };
 
 function strategyOptionLabel(value) {

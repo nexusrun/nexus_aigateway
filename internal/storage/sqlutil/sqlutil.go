@@ -43,7 +43,7 @@ func ClampLimitOffset(limit, offset, defaultLimit, maxLimit int) (int, int) {
 	return limit, offset
 }
 
-// ParseSQLiteTimestamp parses a SQLite text timestamp in the formats GoModel
+// ParseSQLiteTimestamp parses a SQLite text timestamp in the formats AIGateway
 // writes (RFC3339Nano, SQLite datetime with offset, or bare UTC seconds).
 // Returns the zero time and false when no format matches.
 func ParseSQLiteTimestamp(ts string) (time.Time, bool) {

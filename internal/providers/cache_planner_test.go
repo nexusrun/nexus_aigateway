@@ -367,7 +367,7 @@ func legacyCacheAffinityKey(t *testing.T, providerType string, selector core.Mod
 		hash.Write([]byte{0})
 	}
 	hash.Write(body)
-	return "gomodel-" + hex.EncodeToString(hash.Sum(nil)[:16]), (len(body) + 3) / 4
+	return "aigateway-" + hex.EncodeToString(hash.Sum(nil)[:16]), (len(body) + 3) / 4
 }
 
 func TestPrefixDigestMatchesLegacyMarshaledPrefix(t *testing.T) {

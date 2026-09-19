@@ -332,7 +332,7 @@ export function playgroundModelOptions(inventory) {
 
 // Header name the gateway reads user paths from unless USER_PATH_HEADER is
 // customized server-side.
-const DEFAULT_USER_PATH_HEADER = "X-GoModel-User-Path";
+const DEFAULT_USER_PATH_HEADER = "X-AIGateway-User-Path";
 
 // User paths the selected inventory entry is restricted to
 // (access.user_paths), as { value, label } objects; empty when the model is

@@ -1,13 +1,13 @@
 ---
 title: "FAQ"
-description: "Updating, pinning, and uninstalling GoModel; where the gateway stores its data, and why part of the project is commercial."
+description: "Updating, pinning, and uninstalling AIGateway; where the gateway stores its data, and why part of the project is commercial."
 icon: "lightbulb"
 keywords: ["faq", "update", "uninstall", "data location", "version pinning", "open source", "license", "pro"]
 ---
 
-## How do I update GoModel?
+## How do I update AIGateway?
 
-Back up your database first — [Updating GoModel](/guides/updating) has the
+Back up your database first — [Updating AIGateway](/guides/updating) has the
 backup commands for each storage backend, plus verification and rollback. Then:
 
 <Tabs>
@@ -42,22 +42,22 @@ Restart the gateway after updating; there is no in-place hot upgrade.
 ## How do I check which version I'm running?
 
 ```bash
-gomodel --version
+aigateway --version
 ```
 
 The version is also printed on the first line of the startup log.
 
 ## Can I install a specific version, or roll back?
 
-Yes — set `GOMODEL_VERSION` before running the installer:
+Yes — set `AIGATEWAY_VERSION` before running the installer:
 
 ```bash
-curl -fsSL https://aigateway.nexusai.run/install.sh | GOMODEL_VERSION=vX.Y.Z sh
+curl -fsSL https://aigateway.nexusai.run/install.sh | AIGATEWAY_VERSION=vX.Y.Z sh
 ```
 
-On Windows set `$env:GOMODEL_VERSION` first. With Docker, use a version tag
+On Windows set `$env:AIGATEWAY_VERSION` first. With Docker, use a version tag
 (`nexusrun/nexus_aigateway:X.Y.Z`) instead of `latest`. Replace `X.Y.Z` with a
-[published GoModel release](https://github.com/saifelyzal/nexusruntime/releases).
+[published AIGateway release](https://github.com/nexusrun/nexus_aigateway/releases).
 
 ## Is updating safe for my data?
 
@@ -67,24 +67,24 @@ or deletes your database, configuration, or cache.
 Rolling back needs care. Most migrations are additive, and an older binary
 ignores what it does not know about — but some releases rebuild storage into a
 new shape, as scoped budgets and rate limits did, and the older binary will not
-find what it expects. Restore a backup taken before the update instead. GoModel
+find what it expects. Restore a backup taken before the update instead. AIGateway
 ships fast, so take one every update:
-[Updating GoModel](/guides/updating#1-back-up-the-database) has the commands.
+[Updating AIGateway](/guides/updating#1-back-up-the-database) has the commands.
 
-## Where does GoModel store its data?
+## Where does AIGateway store its data?
 
-When a `./data` directory exists next to where you launch GoModel (existing
-deployments, the Docker image), the database stays at `./data/gomodel.db`.
+When a `./data` directory exists next to where you launch AIGateway (existing
+deployments, the Docker image), the database stays at `./data/aigateway.db`.
 Otherwise the binary uses your OS's conventional per-user directories:
 
 | | Database | Model cache |
 | --- | --- | --- |
-| Linux | `~/.local/share/gomodel/` | `~/.cache/gomodel/` |
-| macOS | `~/Library/Application Support/gomodel/` | `~/Library/Caches/gomodel/` |
-| Windows | `%LocalAppData%\gomodel\` | `%LocalAppData%\gomodel\cache\` |
+| Linux | `~/.local/share/aigateway/` | `~/.cache/aigateway/` |
+| macOS | `~/Library/Application Support/aigateway/` | `~/Library/Caches/aigateway/` |
+| Windows | `%LocalAppData%\aigateway\` | `%LocalAppData%\aigateway\cache\` |
 
 The resolved database path is printed at startup (`storage configured`).
-`SQLITE_PATH` overrides the database path, and `GOMODEL_CACHE_DIR` overrides the
+`SQLITE_PATH` overrides the database path, and `AIGATEWAY_CACHE_DIR` overrides the
 model cache directory. Available from
 v0.1.54; older binaries always use `./data` relative to the working
 directory.
@@ -94,19 +94,19 @@ directory.
 Remove the binary and, if you want a clean slate, the data directories:
 
 ```bash
-rm "$(command -v gomodel)"
-rm -rf ~/.local/share/gomodel ~/.cache/gomodel   # Linux
-rm -rf ~/Library/"Application Support"/gomodel ~/Library/Caches/gomodel   # macOS
+rm "$(command -v aigateway)"
+rm -rf ~/.local/share/aigateway ~/.cache/aigateway   # Linux
+rm -rf ~/Library/"Application Support"/aigateway ~/Library/Caches/aigateway   # macOS
 ```
 
-On Windows, delete `%LOCALAPPDATA%\Programs\gomodel` (and
-`%LOCALAPPDATA%\gomodel` for data), then remove the folder from your user
+On Windows, delete `%LOCALAPPDATA%\Programs\aigateway` (and
+`%LOCALAPPDATA%\aigateway` for data), then remove the folder from your user
 PATH. For Docker, remove the container and image as usual.
 
-## Why isn't GoModel 100% open source?
+## Why isn't AIGateway 100% open source?
 
 Almost all of it is. The gateway is MIT-licensed and stays that way. A small
-commercial distribution — [GoModel Pro](/pro/overview), adding OIDC SSO and a
+commercial distribution — [AIGateway Pro](/pro/overview), adding OIDC SSO and a
 couple of other extensions — is coming; it accounts for roughly 3% of the
 codebase.
 
@@ -115,7 +115,7 @@ would keep the whole codebase readable, auditable, and forkable while still
 protecting it commercially. Opening the project is fairer than closing it, so
 that is the direction we lean.
 
-**But the project has to pay for itself.** After nine months of work, GoModel
+**But the project has to pay for itself.** After nine months of work, AIGateway
 had earned $90 in total (August 2026). That is not a living. Keeping a small
 part commercial asks the companies that profit from a well-built AI gateway to
 pay for it, and leaves it free for everyone else. That seems like the fairest
@@ -125,4 +125,4 @@ trade available.
 feature you need as a developer and paying for Pro doesn't make sense for you,
 say so. A cheaper personal-use license — or open-sourcing that particular
 feature — is on the table. Ask on [Discord](https://discord.gg/gaEB9BQSPH) or
-[GitHub](https://github.com/saifelyzal/nexusruntime/issues).
+[GitHub](https://github.com/nexusrun/nexus_aigateway/issues).

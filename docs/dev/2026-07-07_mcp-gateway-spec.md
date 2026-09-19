@@ -11,7 +11,7 @@ hit the same wall they hit with model providers before gateways existed:
 credentials scattered across every client config, no access control, no audit
 trail, no usage attribution, and each client limited to a handful of
 configured servers. Every comparable gateway (LiteLLM, Bifrost, Kong,
-Portkey) now ships an MCP gateway; GoModel has none.
+Portkey) now ships an MCP gateway; AIGateway has none.
 
 ### What users of other gateways need and use
 
@@ -64,12 +64,12 @@ Loudest unmet needs / complaints:
 Differentiators worth building:
 
 - Per-key/user-path filtered `tools/list` (Kong-style least-privilege
-  discovery) mapped onto GoModel's existing `user_paths` idiom.
-- Config-as-code seeds + read-only-in-dashboard overlay (GoModel's existing
+  discovery) mapped onto AIGateway's existing `user_paths` idiom.
+- Config-as-code seeds + read-only-in-dashboard overlay (AIGateway's existing
   virtual-models/tagging pattern) — directly answers LiteLLM's drift issues.
 - Usage/audit/labels on every tool call through the existing pipeline.
 - Honest health: a failed `tools/list` marks the server degraded and keeps
-  re-probing (GoModel's stale-inventory carry-forward, applied to MCP).
+  re-probing (AIGateway's stale-inventory carry-forward, applied to MCP).
 
 ## 2. Requirements
 
@@ -138,7 +138,7 @@ Docker MCP Gateway and Envoy AI Gateway made the same choice.
   (enabled ∩ user_paths ∩ X-MCP-Servers header ∩ per-server tool filters),
   namespaced registration with forwarding handlers, composed `Instructions`.
 - `store.go` + `store_sqlite/postgresql/mongodb.go` + `factory.go` — the
-  standard GoModel store trio for admin-managed servers.
+  standard AIGateway store trio for admin-managed servers.
 - `usage.go` — usage-entry emission per tool call.
 
 Upstream session topology: **shared** — one session per upstream serves all
@@ -272,7 +272,7 @@ rows shown read-only, mirroring virtual models.
 
 - Per-user upstream auth (client-scoped header forwarding, OAuth
   client-credentials with cached tokens, then full PKCE relay).
-- Serving MCP `sampling/createMessage` with GoModel's own model routing (an
+- Serving MCP `sampling/createMessage` with AIGateway's own model routing (an
   AI gateway is uniquely positioned; LiteLLM's acknowledged gap).
 - Inline tool injection into chat completions + `POST /v1/mcp/tools/execute`
   (Bifrost's suggest-then-execute), provider-native `mcp` tool shapes.

@@ -6,9 +6,9 @@ import * as m from "../../lib/paraglide/messages.js";
 import { providerDocsUrl } from "../../lib/utils/providerDocs.js";
 
 const PROVIDER_STATUS_DETAILS_STORAGE_KEY =
-  "gomodel_provider_status_details_expanded";
+  "aigateway_provider_status_details_expanded";
 const PROVIDER_CARD_OVERRIDES_STORAGE_KEY =
-  "gomodel_provider_card_expanded_overrides";
+  "aigateway_provider_card_expanded_overrides";
 export const PROVIDER_STATUS_POLL_MS = 3000;
 
 export function emptyProviderStatus() {

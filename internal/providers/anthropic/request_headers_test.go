@@ -30,7 +30,7 @@ func TestSetRequestHeaders_AddsHookHeadersToEveryRequest(t *testing.T) {
 	provider.SetRequestHeaders(func(ctx context.Context) http.Header {
 		return http.Header{
 			"X-Extra":    {"from-hook", "second"},
-			"User-Agent": {"gomodel-test"},
+			"User-Agent": {"aigateway-test"},
 		}
 	})
 
@@ -46,8 +46,8 @@ func TestSetRequestHeaders_AddsHookHeadersToEveryRequest(t *testing.T) {
 	if v := got.Values("X-Extra"); len(v) != 2 || v[0] != "from-hook" || v[1] != "second" {
 		t.Fatalf("X-Extra = %v, want [from-hook second]", v)
 	}
-	if v := got.Get("User-Agent"); v != "gomodel-test" {
-		t.Fatalf("User-Agent = %q, want gomodel-test (hook replaces the default)", v)
+	if v := got.Get("User-Agent"); v != "aigateway-test" {
+		t.Fatalf("User-Agent = %q, want aigateway-test (hook replaces the default)", v)
 	}
 	if got.Get("x-api-key") != "test-api-key" || got.Get("anthropic-version") == "" {
 		t.Fatalf("standard headers must survive the hook, got %v", got)

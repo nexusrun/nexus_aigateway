@@ -22,7 +22,7 @@ const defaultReasoningEffortEnvVar = "OPENCODE_GO_DEFAULT_REASONING_EFFORT"
 const defaultReasoningEffort = "low"
 
 // adaptChatRequest returns the AdaptChatRequest hook for OpenCode Zen's
-// /chat/completions dialect. It maps GoModel's nested reasoning shape onto the
+// /chat/completions dialect. It maps AIGateway's nested reasoning shape onto the
 // top-level "reasoning_effort" string the upstream documents, and fills in
 // defaultEffort when the client asked for no reasoning at all. An empty
 // defaultEffort disables injection.
@@ -31,7 +31,7 @@ func adaptChatRequest(defaultEffort string) func(*core.ChatRequest) (*core.ChatR
 		if req == nil {
 			return req, nil
 		}
-		// GoModel's nested reasoning.effort is the canonical field: as with
+		// AIGateway's nested reasoning.effort is the canonical field: as with
 		// every other provider using AdaptReasoningEffortRequest, it wins over
 		// a flat reasoning_effort the client sent alongside it.
 		if req.Reasoning != nil && strings.TrimSpace(req.Reasoning.Effort) != "" {
@@ -46,10 +46,10 @@ func adaptChatRequest(defaultEffort string) func(*core.ChatRequest) (*core.ChatR
 	}
 }
 
-// normalizeReasoningEffort maps GoModel's effort levels onto the low/high/max
+// normalizeReasoningEffort maps AIGateway's effort levels onto the low/high/max
 // set OpenCode Zen accepts, downgrading the levels it does not know to their
 // nearest supported equivalent. "none" becomes "low" because the models that
-// enforce this cannot turn thinking off. Values outside GoModel's vocabulary
+// enforce this cannot turn thinking off. Values outside AIGateway's vocabulary
 // pass through for the upstream to judge.
 func normalizeReasoningEffort(effort string) string {
 	normalized := strings.ToLower(strings.TrimSpace(effort))

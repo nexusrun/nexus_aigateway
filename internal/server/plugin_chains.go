@@ -39,7 +39,7 @@ func (s *translatedInferenceService) hasPostResponsePlugins(ctx context.Context)
 }
 
 // applyPluginResponseHeaders copies headers set by plugins (for example
-// X-GoModel-Guardrail warnings) onto the client response.
+// X-AIGateway-Guardrail warnings) onto the client response.
 func applyPluginResponseHeaders(c *echo.Context) {
 	if state := plugins.RequestStateFromContext(c.Request().Context()); state != nil {
 		state.ApplyResponseHeaders(c.Response().Header())

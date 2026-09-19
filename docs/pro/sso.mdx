@@ -1,10 +1,10 @@
 ---
 title: "OIDC Single Sign-On"
 sidebarTitle: "OIDC SSO"
-description: "Protect the GoModel Dashboard with your OIDC identity provider using Authorization Code flow with PKCE."
+description: "Protect the AIGateway Dashboard with your OIDC identity provider using Authorization Code flow with PKCE."
 icon: "key-round"
 tag: "Pro"
-keywords: ["GoModel Pro", "OIDC", "SSO", "single sign-on", "PKCE", "dashboard authentication"]
+keywords: ["AIGateway Pro", "OIDC", "SSO", "single sign-on", "PKCE", "dashboard authentication"]
 ---
 
 ## Overview
@@ -20,18 +20,18 @@ silently.
 
 ## Configure SSO
 
-Configure it under `extensions.sso` in the main GoModel YAML configuration:
+Configure it under `extensions.sso` in the main AIGateway YAML configuration:
 
 ```yaml
 extensions:
   sso:
     enabled: true
     issuer_url: https://login.example.com
-    client_id: gomodel
+    client_id: aigateway
     client_secret: ${PRO_SSO_CLIENT_SECRET}
-    redirect_url: https://gomodel.example.com/sso/callback
+    redirect_url: https://aigateway.example.com/sso/callback
     session_secret: ${PRO_SSO_SESSION_SECRET}
-    admin_groups: [gomodel-admins]
+    admin_groups: [aigateway-admins]
 ```
 
 `PRO_SSO_*` environment variables override the YAML values. The redirect URL
@@ -42,7 +42,7 @@ an intentionally unrestricted OIDC client.
 
 <Warning>
   SSO session revocation is process-local. Deploy SSO on exactly one active
-  GoModel Pro replica until a shared session or revocation store is available.
+  AIGateway Pro replica until a shared session or revocation store is available.
 </Warning>
 
 ## Audit and access control

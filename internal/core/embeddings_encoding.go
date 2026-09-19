@@ -24,7 +24,7 @@ const maxEmbeddingDims = 1 << 20
 // default and decode it client-side. Some OpenAI-compatible servers (notably
 // LM Studio) ignore encoding_format and always return float arrays, which makes
 // those SDKs mis-decode the floats as packed bytes and produce corrupted,
-// wrong-dimension vectors. Following Postel's Law, GoModel accepts whatever the
+// wrong-dimension vectors. Following Postel's Law, AIGateway accepts whatever the
 // upstream returns and re-encodes each vector into the format the caller asked
 // for: base64 (little-endian float32, matching OpenAI) or a float array.
 //

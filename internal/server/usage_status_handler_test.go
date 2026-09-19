@@ -305,8 +305,8 @@ func TestUsageStatusMasterKeyUsesHeaderPath(t *testing.T) {
 	cfg := &Config{MasterKey: "secret", UsageSummarizer: summarizer}
 
 	rec, body := getUsageStatus(t, cfg, "/v1/usage?start_date=2026-07-01&end_date=2026-07-06", map[string]string{
-		"Authorization":       "Bearer secret",
-		"X-GoModel-User-Path": "/team",
+		"Authorization":         "Bearer secret",
+		"X-AIGateway-User-Path": "/team",
 	})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 (body: %s)", rec.Code, rec.Body.String())
@@ -402,7 +402,7 @@ func TestUsageStatusClampsOversizedDays(t *testing.T) {
 
 func TestUsageStatusRejectsInvalidUserPathHeader(t *testing.T) {
 	rec, _ := getUsageStatus(t, &Config{}, "/v1/usage", map[string]string{
-		"X-GoModel-User-Path": "/team/../secrets",
+		"X-AIGateway-User-Path": "/team/../secrets",
 	})
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400 (body: %s)", rec.Code, rec.Body.String())

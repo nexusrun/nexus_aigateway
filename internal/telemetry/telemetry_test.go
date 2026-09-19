@@ -213,11 +213,11 @@ func TestNewResourceServiceName(t *testing.T) {
 		return ""
 	}
 
-	res, err := newResource(t.Context(), "gomodel-pro")
+	res, err := newResource(t.Context(), "aigateway-pro")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := serviceName(t, res); got != "gomodel-pro" {
+	if got := serviceName(t, res); got != "aigateway-pro" {
 		t.Fatalf("service.name = %q, want the product name", got)
 	}
 
@@ -225,12 +225,12 @@ func TestNewResourceServiceName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := serviceName(t, res); got != "gomodel" {
-		t.Fatalf("service.name = %q, want the gomodel default", got)
+	if got := serviceName(t, res); got != "aigateway" {
+		t.Fatalf("service.name = %q, want the aigateway default", got)
 	}
 
 	t.Setenv("OTEL_SERVICE_NAME", "from-env")
-	res, err = newResource(t.Context(), "gomodel-pro")
+	res, err = newResource(t.Context(), "aigateway-pro")
 	if err != nil {
 		t.Fatal(err)
 	}

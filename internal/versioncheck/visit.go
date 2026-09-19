@@ -12,7 +12,7 @@ import (
 // generated on the first visit. Dashboard JavaScript reads the date half to
 // decide whether today's check has already happened, so the cookie is
 // deliberately not HttpOnly.
-const CookieName = "gomodel_version_check"
+const CookieName = "aigateway_version_check"
 
 // CookieMaxAge keeps a browser's id stable for a year.
 const CookieMaxAge = 31536000

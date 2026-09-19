@@ -58,7 +58,7 @@ type messagesProvider interface {
 // /chat/completions (most models) and Anthropic-style /messages (a few models
 // rejected by /chat/completions). The embedded ChatCompatible handles the
 // former; chat requests for models in messagesModels are delegated to an
-// Anthropic provider pinned to the same base URL, mirroring how GoModel already
+// Anthropic provider pinned to the same base URL, mirroring how AIGateway already
 // serves /v1/messages for native Anthropic. Both paths normalize to the
 // canonical OpenAI-shaped response, so callers see one consistent surface.
 type Provider struct {

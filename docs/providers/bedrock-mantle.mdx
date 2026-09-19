@@ -6,7 +6,7 @@ keywords: ["Amazon Bedrock Mantle", "Responses API", "OpenAI-compatible Bedrock"
 ---
 
 Bedrock Mantle is Amazon Bedrock's OpenAI-compatible inference endpoint.
-GoModel calls its Responses API directly, so Responses-only models are not
+AIGateway calls its Responses API directly, so Responses-only models are not
 translated to Chat Completions or Bedrock Converse.
 
 <Note>
@@ -29,7 +29,7 @@ chain.
 ```bash
 BEDROCK_MANTLE_API_KEY=ABSK...
 BEDROCK_MANTLE_BASE_URL=us-east-1
-GOMODEL_MASTER_KEY=change-me
+AIGATEWAY_MASTER_KEY=change-me
 ```
 
   </Tab>
@@ -40,13 +40,13 @@ BEDROCK_MANTLE_BASE_URL=us-east-1
 AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
 # AWS_SESSION_TOKEN=...       # temporary credentials only
-GOMODEL_MASTER_KEY=change-me
+AIGATEWAY_MASTER_KEY=change-me
 ```
 
   </Tab>
 </Tabs>
 
-For SigV4, GoModel uses the AWS SDK credential chain, including
+For SigV4, AIGateway uses the AWS SDK credential chain, including
 `AWS_PROFILE`, IAM Identity Center, and container or instance roles. In
 production, prefer workload credentials over long-lived access keys.
 
@@ -61,7 +61,7 @@ BEDROCK_MANTLE_BASE_URL=us-west-2
 # Equivalent host: https://bedrock-mantle.us-west-2.api.aws
 ```
 
-For an API-key or YAML configuration where the base URL is omitted, GoModel
+For an API-key or YAML configuration where the base URL is omitted, AIGateway
 uses `BEDROCK_MANTLE_REGION`, then `AWS_REGION`, then `AWS_DEFAULT_REGION`, and
 finally `us-east-1`. With only IAM credentials, set
 `BEDROCK_MANTLE_BASE_URL` so provider discovery enables Mantle.
@@ -82,7 +82,7 @@ providers:
 
 ```bash curl
 curl -s http://localhost:8080/v1/responses \
-  -H "Authorization: Bearer $GOMODEL_MASTER_KEY" \
+  -H "Authorization: Bearer $AIGATEWAY_MASTER_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "openai.gpt-5.6-sol",
@@ -97,7 +97,7 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="http://localhost:8080/v1",
-    api_key=os.environ["GOMODEL_MASTER_KEY"],
+    api_key=os.environ["AIGATEWAY_MASTER_KEY"],
 )
 
 response = client.responses.create(
@@ -113,7 +113,7 @@ import OpenAI from "openai";
 
 const client = new OpenAI({
   baseURL: "http://localhost:8080/v1",
-  apiKey: process.env.GOMODEL_MASTER_KEY,
+  apiKey: process.env.AIGATEWAY_MASTER_KEY,
 });
 
 const response = await client.responses.create({
@@ -139,13 +139,13 @@ fields are forwarded to Mantle without translating the request to chat.
 | Luna | `openai.gpt-5.6-luna` | 272K | `us-east-1`, `us-east-2`, `us-west-2` |
 
 These models support the Responses API, not Chat Completions, Converse, or
-Invoke. GoModel automatically sends them to `/openai/v1/responses`, the model-
+Invoke. AIGateway automatically sends them to `/openai/v1/responses`, the model-
 specific path required by AWS. Other Mantle models use `/v1/responses` or
 `/v1/chat/completions` as appropriate.
 
 ## Endpoint path selection
 
-`BEDROCK_MANTLE_API_MODE` controls which OpenAI-compatible path GoModel uses:
+`BEDROCK_MANTLE_API_MODE` controls which OpenAI-compatible path AIGateway uses:
 
 | Value | Behavior |
 | ----- | -------- |
@@ -154,7 +154,7 @@ specific path required by AWS. Other Mantle models use `/v1/responses` or
 | `standard` | Forces `/v1` for inference requests. |
 
 The model catalog always uses `/v1/models`. Use an override when AWS adds a
-model before GoModel's automatic path list is updated.
+model before AIGateway's automatic path list is updated.
 
 In YAML, set the same option with `api_mode`:
 

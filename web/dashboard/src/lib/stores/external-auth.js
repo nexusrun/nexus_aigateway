@@ -1,6 +1,6 @@
-const LOGIN_HEADER = "X-GoModel-Auth-Login";
-const LOGOUT_HEADER = "X-GoModel-Auth-Logout";
-const USER_HEADER = "X-GoModel-Auth-User";
+const LOGIN_HEADER = "X-AIGateway-Auth-Login";
+const LOGOUT_HEADER = "X-AIGateway-Auth-Logout";
+const USER_HEADER = "X-AIGateway-Auth-User";
 
 export function safeAuthenticationPath(value) {
   const path = String(value || "").trim();

@@ -38,7 +38,7 @@ func requestModel(body any) string {
 // AWS exposes a second OpenAI-compatible route for select model families.
 // These models reject the generic /v1 route even though their payloads use
 // the same OpenAI schema. Keep the list narrow; api_mode lets operators force
-// either route when AWS adds a model before GoModel is updated.
+// either route when AWS adds a model before AIGateway is updated.
 func usesOpenAIPath(model string) bool {
 	model = strings.ToLower(strings.TrimSpace(model))
 	return strings.HasPrefix(model, "openai.gpt-5.") ||

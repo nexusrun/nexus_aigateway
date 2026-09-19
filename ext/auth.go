@@ -14,14 +14,14 @@ type clearedAuthentication struct{}
 // extension-managed browser authentication flow without knowing whether the
 // provider uses OIDC, SAML, or another protocol. Values are app-local paths.
 const (
-	AuthenticationLoginHeader  = "X-GoModel-Auth-Login"
-	AuthenticationLogoutHeader = "X-GoModel-Auth-Logout"
-	AuthenticationUserHeader   = "X-Gomodel-Auth-User" // canonical textproto spelling; header names are case-insensitive
+	AuthenticationLoginHeader  = "X-AIGateway-Auth-Login"
+	AuthenticationLogoutHeader = "X-AIGateway-Auth-Logout"
+	AuthenticationUserHeader   = "X-Aigateway-Auth-User" // canonical textproto spelling; header names are case-insensitive
 )
 
 // Authentication describes an identity established by an extension.
 // PrincipalID must be a stable, non-secret identifier within the
-// authenticator's namespace. UserPath is the existing GoModel authorization
+// authenticator's namespace. UserPath is the existing AIGateway authorization
 // and accounting subject; it is deliberately separate because a login identity
 // and a policy hierarchy are not the same thing.
 type Authentication struct {

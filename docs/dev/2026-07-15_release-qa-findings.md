@@ -67,7 +67,7 @@ Fix options: register bare aliases when unique, or resolve in a
 
 `/mcp` is deliberately not `IngressManaged`
 (`internal/core/endpoints.go:147`), so `RequestSnapshotCapture` returns
-before stamping `X-GoModel-User-Path` into the request snapshot. As a result
+before stamping `X-AIGateway-User-Path` into the request snapshot. As a result
 `core.UserPathFromContext` is `""` for every MCP request whose identity
 comes from the header (unsafe mode, or master-key mode using the header to
 separate consumers). Managed-key callers are unaffected

@@ -81,7 +81,7 @@ func (p *Provider) SetBaseURL(url string) {
 }
 
 // ChatCompletion sends a chat completion request to Groq, renaming Groq's
-// "reasoning" member to GoModel's canonical "reasoning_content".
+// "reasoning" member to AIGateway's canonical "reasoning_content".
 func (p *Provider) ChatCompletion(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
 	resp, err := p.compat.ChatCompletion(ctx, req)
 	if err != nil {

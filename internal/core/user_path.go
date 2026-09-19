@@ -3,11 +3,29 @@ package core
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/textproto"
 	"strings"
 )
 
-const UserPathHeader = "X-GoModel-User-Path"
+const UserPathHeader = "X-AIGateway-User-Path"
+
+// LegacyUserPathHeader is the header name used before the gateway was renamed.
+// Clients still sending it stay scoped to their user path instead of silently
+// falling back to the root scope.
+const LegacyUserPathHeader = "X-GoModel-User-Path"
+
+// ReadUserPathHeader returns the user path carried by name, falling back to
+// LegacyUserPathHeader when name is the current default and is absent.
+func ReadUserPathHeader(header http.Header, name string) string {
+	if value := header.Get(name); value != "" {
+		return value
+	}
+	if UserPathHeaderName(name) != UserPathHeader {
+		return ""
+	}
+	return header.Get(LegacyUserPathHeader)
+}
 
 // UserPathHeaderName canonicalizes the configured user-path header name.
 func UserPathHeaderName(raw string) string {

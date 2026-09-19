@@ -1,4 +1,4 @@
-// Package mcpgateway aggregates upstream MCP servers behind GoModel's
+// Package mcpgateway aggregates upstream MCP servers behind AIGateway's
 // authenticated /mcp endpoints. The gateway terminates the MCP protocol on
 // both legs: it is an MCP server to clients and an MCP client to upstreams.
 // It is also the credential boundary — client bearer tokens never reach an

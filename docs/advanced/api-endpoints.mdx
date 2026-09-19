@@ -1,11 +1,11 @@
 ---
 title: "API Endpoints"
-description: "Reference for GoModel's OpenAI-compatible and Anthropic-compatible endpoints, provider passthrough, and operations routes."
+description: "Reference for AIGateway's OpenAI-compatible and Anthropic-compatible endpoints, provider passthrough, and operations routes."
 icon: "list-tree"
 keywords: ["API endpoints", "OpenAI-compatible API", "routes", "passthrough", "reference"]
 ---
 
-GoModel exposes OpenAI-compatible and Anthropic-compatible APIs, provider-native
+AIGateway exposes OpenAI-compatible and Anthropic-compatible APIs, provider-native
 passthrough, and a set of operations endpoints. Admin and dashboard routes are
 documented separately in [Admin Endpoints](/advanced/admin-endpoints).
 
@@ -67,7 +67,7 @@ session surface, so the gateway mirrors it. Connect to `/v1/realtime/translation
 target language after the socket opens:
 
 ```bash
-wscat -H "Authorization: Bearer $GOMODEL_API_KEY" \
+wscat -H "Authorization: Bearer $AIGATEWAY_API_KEY" \
   -c "ws://localhost:8080/v1/realtime/translations?model=gpt-realtime-translate"
 ```
 
@@ -137,7 +137,7 @@ curl http://localhost:8080/v1/auth/verify \
 An unknown, disabled, or expired key is rejected by the gateway's normal
 authentication with `401`, so a `200` means the key authenticates. `method`
 says which mechanism accepted it: `api_key` is a managed key stored in the
-database, `master_key` the bootstrap key from `GOMODEL_MASTER_KEY`. `key_id`
+database, `master_key` the bootstrap key from `AIGATEWAY_MASTER_KEY`. `key_id`
 and `user_path` are present only for managed keys bound to them.
 
 <Note>

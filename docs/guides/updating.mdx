@@ -1,16 +1,16 @@
 ---
-title: "Updating GoModel"
-description: "Update GoModel on Docker or the standalone binary, back up your database first, and understand what the automatic schema migrations do."
+title: "Updating AIGateway"
+description: "Update AIGateway on Docker or the standalone binary, back up your database first, and understand what the automatic schema migrations do."
 icon: "refresh-cw"
 keywords: ["update", "upgrade", "docker", "migration", "backup", "rollback", "version pinning"]
 ---
 
-Updating GoModel is a pull and a restart. Schema migrations are built into the
+Updating AIGateway is a pull and a restart. Schema migrations are built into the
 binary and run automatically on the first start of the new version, so there is
 no separate migration step and no maintenance window beyond the restart.
 
 <Warning>
-  **Back up your database before every update.** GoModel is under active
+  **Back up your database before every update.** AIGateway is under active
   development and ships often, and some upgrades transform stored data. A copy
   is the only thing that makes a bad upgrade a five-minute problem instead of a
   lost audit trail, usage history, and set of managed API keys.
@@ -24,13 +24,13 @@ no separate migration step and no maintenance window beyond the restart.
     volume:
 
     ```bash
-    docker compose stop gomodel
+    docker compose stop aigateway
     docker run --rm \
-      -v gomodel_data:/data -v "$PWD":/backup alpine \
-      tar czf /backup/gomodel-$(date +%F).tar.gz -C /data .
+      -v aigateway_data:/data -v "$PWD":/backup alpine \
+      tar czf /backup/aigateway-$(date +%F).tar.gz -C /data .
     ```
 
-    Replace `gomodel_data` with your volume name (`docker volume ls`). If you
+    Replace `aigateway_data` with your volume name (`docker volume ls`). If you
     bind-mount a host directory instead, `cp -a ./data ./data.bak-$(date +%F)`
     is enough.
   </Tab>
@@ -39,21 +39,21 @@ no separate migration step and no maintenance window beyond the restart.
     `storage configured`:
 
     ```bash
-    cp -a ~/.local/share/gomodel/gomodel.db gomodel-$(date +%F).db   # Linux
+    cp -a ~/.local/share/aigateway/aigateway.db aigateway-$(date +%F).db   # Linux
     ```
 
     On macOS the default is
-    `~/Library/Application Support/gomodel/gomodel.db`. See
-    [where GoModel stores its data](/about/faq#where-does-gomodel-store-its-data).
+    `~/Library/Application Support/aigateway/aigateway.db`. See
+    [where AIGateway stores its data](/about/faq#where-does-aigateway-store-its-data).
   </Tab>
   <Tab title="PostgreSQL">
     ```bash
-    pg_dump "$POSTGRES_URL" > gomodel-$(date +%F).sql
+    pg_dump "$POSTGRES_URL" > aigateway-$(date +%F).sql
     ```
   </Tab>
   <Tab title="MongoDB">
     ```bash
-    mongodump --uri="$MONGODB_URL" --out "gomodel-$(date +%F)"
+    mongodump --uri="$MONGODB_URL" --out "aigateway-$(date +%F)"
     ```
   </Tab>
 </Tabs>
@@ -63,9 +63,9 @@ no separate migration step and no maintenance window beyond the restart.
 ### Docker Compose
 
 ```bash
-docker compose pull gomodel
-docker compose up -d gomodel
-docker compose logs -f gomodel
+docker compose pull aigateway
+docker compose up -d aigateway
+docker compose logs -f aigateway
 ```
 
 The logs should show the new version on the first line and a
@@ -85,7 +85,7 @@ Recreating the container discards its flags, so read them off the running one
 first:
 
 ```bash
-docker inspect gomodel --format '{{json .Mounts}} {{.Config.Env}}'
+docker inspect aigateway --format '{{json .Mounts}} {{.Config.Env}}'
 ```
 
 If nothing is mounted at `/app/data`, the database lives in the container
@@ -94,8 +94,8 @@ about to mount, while the old container still exists — an empty volume hides t
 copy, and the gateway starts with no keys, usage, or logs:
 
 ```bash
-docker cp gomodel:/app/data/. ./gomodel-data
-docker run --rm -v gomodel_data:/data -v "$PWD/gomodel-data":/seed alpine \
+docker cp aigateway:/app/data/. ./aigateway-data
+docker run --rm -v aigateway_data:/data -v "$PWD/aigateway-data":/seed alpine \
   sh -c 'cp -a /seed/. /data/ && chown -R 65532:65532 /data'
 ```
 
@@ -106,9 +106,9 @@ Then replace the container, passing the same mount and environment flags back:
 
 ```bash
 docker pull nexusrun/nexus_aigateway
-docker rm -f gomodel
-docker run -d --name gomodel -p 8080:8080 \
-  -v gomodel_data:/app/data \
+docker rm -f aigateway
+docker run -d --name aigateway -p 8080:8080 \
+  -v aigateway_data:/app/data \
   --env-file .env \
   nexusrun/nexus_aigateway
 ```
@@ -136,7 +136,7 @@ Restart the gateway afterwards — there is no in-place hot upgrade.
 ## 3. Verify
 
 ```bash
-gomodel --version
+aigateway --version
 curl -s http://localhost:8080/version
 ```
 
@@ -145,7 +145,7 @@ whether an update is available:
 
 ```json
 {
-  "app": "GoModel",
+  "app": "AIGateway",
   "version": "0.1.60",
   "latest": "0.1.60",
   "update_available": false,
@@ -183,19 +183,19 @@ Updates default to the latest release. To stay on a known version, pin it:
   </Tab>
   <Tab title="macOS / Linux">
     ```bash
-    curl -fsSL https://aigateway.nexusai.run/install.sh | GOMODEL_VERSION=vX.Y.Z sh
+    curl -fsSL https://aigateway.nexusai.run/install.sh | AIGATEWAY_VERSION=vX.Y.Z sh
     ```
   </Tab>
   <Tab title="Windows">
     ```powershell
-    $env:GOMODEL_VERSION = "vX.Y.Z"
+    $env:AIGATEWAY_VERSION = "vX.Y.Z"
     irm https://aigateway.nexusai.run/install.ps1 | iex
     ```
   </Tab>
 </Tabs>
 
 Replace `X.Y.Z` with a
-[published release](https://github.com/saifelyzal/nexusruntime/releases).
+[published release](https://github.com/nexusrun/nexus_aigateway/releases).
 
 ## Rolling back
 
@@ -206,12 +206,12 @@ outside, so **restore the step 1 backup** unless the older version is known to
 start against the migrated database.
 
 Restoring a SQLite volume backup replaces the volume's contents, so stop the
-gateway first — `docker compose stop gomodel`, or `docker stop gomodel` for a
+gateway first — `docker compose stop aigateway`, or `docker stop aigateway` for a
 standalone container — then unpack the archive and start it again:
 
 ```bash
-docker run --rm -v gomodel_data:/data -v "$PWD":/backup alpine \
-  sh -c 'rm -rf /data/* && tar xzf /backup/gomodel-YYYY-MM-DD.tar.gz -C /data \
+docker run --rm -v aigateway_data:/data -v "$PWD":/backup alpine \
+  sh -c 'rm -rf /data/* && tar xzf /backup/aigateway-YYYY-MM-DD.tar.gz -C /data \
          && chown -R 65532:65532 /data'
 ```
 
@@ -221,7 +221,7 @@ docker run --rm -v gomodel_data:/data -v "$PWD":/backup alpine \
 | --- | --- |
 | Dashboard is empty after the update: no keys, no usage, no logs | The database was not on a volume, or `SQLITE_PATH` resolved somewhere else. Compare the `storage configured` path before and after. |
 | Gateway will not start after the update | Read the first error line. Configuration that was previously ignored can become validated; the release notes list breaking changes. |
-| The version did not change | The old container is still running (`docker ps`), or a second `gomodel` binary earlier in `PATH` is being launched. |
+| The version did not change | The old container is still running (`docker ps`), or a second `aigateway` binary earlier in `PATH` is being launched. |
 
 Still stuck? Ask on [Discord](https://discord.gg/gaEB9BQSPH) or open a
-[GitHub issue](https://github.com/saifelyzal/nexusruntime/issues).
+[GitHub issue](https://github.com/nexusrun/nexus_aigateway/issues).

@@ -61,7 +61,7 @@ func TestUserPathHeaderName(t *testing.T) {
 		want string
 	}{
 		{name: "empty defaults", raw: "", want: UserPathHeader},
-		{name: "default preserves GoModel spelling", raw: "x-gomodel-user-path", want: UserPathHeader},
+		{name: "default preserves AIGateway spelling", raw: "x-aigateway-user-path", want: UserPathHeader},
 		{name: "custom canonicalized", raw: "x-tenant-path", want: "X-Tenant-Path"},
 		{name: "trim custom", raw: " X-Custom-User-Path ", want: "X-Custom-User-Path"},
 	}

@@ -13,7 +13,7 @@ import {
   isDateKey,
 } from "../utils/dateKeys.js";
 
-export const DATE_RANGE_STORAGE_KEY = "gomodel_date_range";
+export const DATE_RANGE_STORAGE_KEY = "aigateway_date_range";
 
 /** The window a dashboard with no saved preference opens on. */
 export const DEFAULT_PRESET_DAYS = "30";

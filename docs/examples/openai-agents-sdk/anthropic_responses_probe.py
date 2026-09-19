@@ -7,7 +7,7 @@ from openai import AsyncOpenAI
 
 
 BASE_URL = os.getenv("OPENAI_BASE_URL", "http://localhost:8080/v1")
-API_KEY = os.getenv("GOMODEL_MASTER_KEY") or os.getenv("OPENAI_API_KEY", "change-me")
+API_KEY = os.getenv("AIGATEWAY_MASTER_KEY") or os.getenv("OPENAI_API_KEY", "change-me")
 MODEL = (
     os.getenv("ANTHROPIC_MODEL")
     or os.getenv("OPENAI_MODEL")

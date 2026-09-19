@@ -105,7 +105,7 @@ type Config struct {
 	MCPGateway                      *mcpgateway.Service                    // MCP gateway service (nil if disabled or not wired)
 	EnabledPassthroughProviders     []string                               // Provider types enabled on /p/{provider}/... passthrough routes
 	AllowPassthroughV1Alias         *bool                                  // Allow /p/{provider}/v1/... aliases; nil defaults to true
-	UserPathHeader                  string                                 // Header carrying the request user path (default: X-GoModel-User-Path)
+	UserPathHeader                  string                                 // Header carrying the request user path (default: X-AIGateway-User-Path)
 	AdminEndpointsEnabled           bool                                   // Whether admin API endpoints are enabled
 	AdminUIEnabled                  bool                                   // Whether admin dashboard UI is enabled
 	AdminAuth                       *adminauth.Service                     // Optional database-backed browser authentication

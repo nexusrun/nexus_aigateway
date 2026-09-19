@@ -38,8 +38,8 @@ const (
 	adminWorkflowGuardrailsPath = "/admin/workflows/guardrails"
 	messagesPath                = "/v1/messages"
 
-	guardrailHeader = "X-GoModel-Guardrail"
-	userPathHeader  = "X-GoModel-User-Path"
+	guardrailHeader = "X-AIGateway-Guardrail"
+	userPathHeader  = "X-AIGateway-User-Path"
 
 	pluginsWorkflowName = "e2e-plugins"
 )

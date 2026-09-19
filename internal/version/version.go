@@ -42,14 +42,14 @@ func init() {
 
 // Info returns a formatted version string
 func Info() string {
-	return fmt.Sprintf("gomodel %s (commit: %s, built: %s, %s)", Version, Commit, Date, runtime.Version())
+	return fmt.Sprintf("aigateway %s (commit: %s, built: %s, %s)", Version, Commit, Date, runtime.Version())
 }
 
-// Distribution names carried in the X-GoModel-App header and used to pick
+// Distribution names carried in the X-AIGateway-App header and used to pick
 // which version manifest an update check reads.
 const (
-	AppCore = "GoModel"
-	AppPro  = "GoModel Pro"
+	AppCore = "AIGateway"
+	AppPro  = "AIGateway Pro"
 )
 
 // App names the running distribution. Custom builds set it through
@@ -61,7 +61,7 @@ var App = AppCore
 func Channel() string { return ChannelFor(App) }
 
 // ChannelFor is the manifest basename for a distribution name: "pro" for
-// GoModel Pro, "core" for everything else. It is the single place that rule
+// AIGateway Pro, "core" for everything else. It is the single place that rule
 // lives, so the update check and the version banner can never disagree.
 func ChannelFor(app string) string {
 	if strings.EqualFold(strings.TrimSpace(app), AppPro) {

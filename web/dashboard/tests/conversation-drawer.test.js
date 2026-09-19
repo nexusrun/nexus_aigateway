@@ -668,7 +668,7 @@ test("branch projection admits compatible snapshots and explicit parent links", 
   const linkedPending = {
     id: "log-3",
     timestamp: "2026-08-03T11:02:00Z",
-    data: { request_headers: { "X-GoModel-Interaction-Parent": "log-2" } },
+    data: { request_headers: { "X-AIGateway-Interaction-Parent": "log-2" } },
   };
 
   const view = buildConversationView([linkedPending, compatible, anchor], "log-1");
@@ -689,7 +689,7 @@ test("a follow-up anchored from history selects its new fork instead of a newer 
     id: "existing-branch",
     timestamp: "2026-08-03T11:03:00Z",
     data: {
-      request_headers: { "X-GoModel-Interaction-Parent": anchor.id },
+      request_headers: { "X-AIGateway-Interaction-Parent": anchor.id },
       request_body: { messages: [
         { role: "user", content: "start" },
         { role: "assistant", content: "original" },
@@ -701,7 +701,7 @@ test("a follow-up anchored from history selects its new fork instead of a newer 
     id: "sent-follow-up",
     timestamp: "2026-08-03T11:02:00Z",
     data: {
-      request_headers: { "X-GoModel-Interaction-Parent": anchor.id },
+      request_headers: { "X-AIGateway-Interaction-Parent": anchor.id },
       request_body: { messages: [
         { role: "user", content: "start" },
         { role: "assistant", content: "original" },
@@ -919,7 +919,7 @@ test("follow-latest waits for request data before moving to a classified live en
     id: "pending",
     timestamp: "2026-08-03T11:02:00Z",
     _live: true,
-    data: { request_headers: { "X-GoModel-Interaction-Parent": "selected" } },
+    data: { request_headers: { "X-AIGateway-Interaction-Parent": "selected" } },
   };
   const entries = [pending, unrelated, anchor];
   const view = buildConversationView(entries, anchor.id);
@@ -1026,8 +1026,8 @@ test("follow-up headers preserve application context without replaying credentia
   assert.equal(headers["Idempotency-Key"], undefined);
   assert.equal(headers["X-Custom"], "keep");
   assert.equal(headers["X-Session-Id"], "session-9");
-  assert.equal(headers["X-GoModel-User-Path"], undefined);
-  assert.equal(headers["X-GoModel-Interaction-Parent"], "log-1");
+  assert.equal(headers["X-AIGateway-User-Path"], undefined);
+  assert.equal(headers["X-AIGateway-Interaction-Parent"], "log-1");
   assert.equal(interactionParentID({ data: { request_headers: headers } }), "log-1");
 });
 
@@ -1069,7 +1069,7 @@ test("follow-up correlation clears for the persisted child and accepts its desce
   const descendant = {
     id: "descendant",
     request_id: "request-descendant",
-    data: { request_headers: { "X-GoModel-Interaction-Parent": submitted.id } },
+    data: { request_headers: { "X-AIGateway-Interaction-Parent": submitted.id } },
   };
   const descendantMatch = matchLiveConversationEntry(
     [parent, submitted], submitted.id, parent.session_id,
@@ -1086,7 +1086,7 @@ test("follow-up headers do not change session scoping", () => {
     } },
   }, "root-log");
   assert.equal(rootSession["X-Session-Id"], "ses_038f24fd0ffepd013fh3piDcdV");
-  assert.equal(rootSession["X-GoModel-User-Path"], undefined);
+  assert.equal(rootSession["X-AIGateway-User-Path"], undefined);
 
   const scopedSession = buildFollowUpHeaders({
     id: "scoped-log",
@@ -1095,7 +1095,7 @@ test("follow-up headers do not change session scoping", () => {
     } },
   }, "scoped-log");
   assert.equal(scopedSession["X-Session-Id"], "scoped-529bff5b6264795393a9fb1e1da35906");
-  assert.equal(scopedSession["X-GoModel-User-Path"], undefined);
+  assert.equal(scopedSession["X-AIGateway-User-Path"], undefined);
 
   const autoSession = buildFollowUpHeaders({
     id: "auto-log",
@@ -1107,20 +1107,20 @@ test("follow-up headers do not change session scoping", () => {
 
   const capturedUserPath = buildFollowUpHeaders({
     id: "team-log",
-    data: { request_headers: { "X-GoModel-User-Path": "/team" } },
+    data: { request_headers: { "X-AIGateway-User-Path": "/team" } },
   }, "team-log");
-  assert.equal(capturedUserPath["X-GoModel-User-Path"], "/team");
+  assert.equal(capturedUserPath["X-AIGateway-User-Path"], "/team");
 });
 
 test("follow-up headers replace a captured parent instead of duplicating it", () => {
   const headers = buildFollowUpHeaders({
     id: "log-2",
-    data: { request_headers: { "X-Gomodel-Interaction-Parent": "log-1" } },
+    data: { request_headers: { "X-Aigateway-Interaction-Parent": "log-1" } },
   }, "log-2");
   const parentNames = Object.keys(headers).filter((name) =>
-    name.toLowerCase() === "x-gomodel-interaction-parent");
-  assert.deepEqual(parentNames, ["X-GoModel-Interaction-Parent"]);
-  assert.equal(new Headers(headers).get("x-gomodel-interaction-parent"), "log-2");
+    name.toLowerCase() === "x-aigateway-interaction-parent");
+  assert.deepEqual(parentNames, ["X-AIGateway-Interaction-Parent"]);
+  assert.equal(new Headers(headers).get("x-aigateway-interaction-parent"), "log-2");
 });
 
 // --- Request-step preview (ingress rewrites) --------------------------------

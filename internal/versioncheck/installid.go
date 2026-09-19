@@ -26,7 +26,7 @@ const InstallIDKey = "install_id"
 // derivedIDPurpose is the fixed message signed with the operator's secret
 // when the identifier has to be derived. It ties the derivation to this use,
 // so the same secret used for anything else yields an unrelated value.
-const derivedIDPurpose = "gomodel install identifier v1"
+const derivedIDPurpose = "aigateway install identifier v1"
 
 // Store is the durable key/value the identifier is kept in. It is satisfied
 // by runtimesettings.Store: the identifier is per-deployment state exactly

@@ -1,11 +1,11 @@
 ---
 title: "Azure OpenAI"
-description: "Configure Azure OpenAI in GoModel using deployment-based URLs and the api-version query parameter."
+description: "Configure Azure OpenAI in AIGateway using deployment-based URLs and the api-version query parameter."
 icon: "/brand/azure.svg"
 keywords: ["Azure OpenAI", "deployment", "api-version", "provider setup"]
 ---
 
-Azure OpenAI speaks the OpenAI API shape with two GoModel-handled differences:
+Azure OpenAI speaks the OpenAI API shape with two AIGateway-handled differences:
 an `api-key` header instead of `Authorization: Bearer`, and a required
 `api-version` query parameter on every request.
 
@@ -15,7 +15,7 @@ an `api-key` header instead of `Authorization: Bearer`, and a required
 AZURE_API_KEY=...
 AZURE_BASE_URL=https://your-resource.openai.azure.com/openai/deployments/your-deployment
 AZURE_API_VERSION=2024-10-21   # optional, defaults to 2024-10-21
-GOMODEL_MASTER_KEY=change-me
+AIGATEWAY_MASTER_KEY=change-me
 ```
 
 Or in `config.yaml`:
@@ -29,7 +29,7 @@ providers:
     api_version: "2024-10-21"
 ```
 
-## Run GoModel
+## Run AIGateway
 
 <CodeGroup>
 
@@ -39,7 +39,7 @@ docker run --rm -p 8080:8080 --env-file .env nexusrun/nexus_aigateway
 
 ```bash Docker (inline -e)
 docker run --rm -p 8080:8080 \
-  -e GOMODEL_MASTER_KEY="change-me" \
+  -e AIGATEWAY_MASTER_KEY="change-me" \
   -e AZURE_API_KEY="..." \
   -e AZURE_BASE_URL="https://your-resource.openai.azure.com/openai/deployments/your-deployment" \
   nexusrun/nexus_aigateway
@@ -47,7 +47,7 @@ docker run --rm -p 8080:8080 \
 
 ```bash Binary (make build)
 make build
-./bin/gomodel
+./bin/aigateway
 ```
 
 </CodeGroup>
@@ -58,7 +58,7 @@ make build
 
 ```bash curl
 curl -s http://localhost:8080/v1/chat/completions \
-  -H "Authorization: Bearer $GOMODEL_MASTER_KEY" \
+  -H "Authorization: Bearer $AIGATEWAY_MASTER_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-5",
@@ -74,7 +74,7 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="http://localhost:8080/v1",
-    api_key=os.environ["GOMODEL_MASTER_KEY"],
+    api_key=os.environ["AIGATEWAY_MASTER_KEY"],
 )
 
 completion = client.chat.completions.create(
@@ -91,7 +91,7 @@ import OpenAI from "openai";
 
 const client = new OpenAI({
   baseURL: "http://localhost:8080/v1",
-  apiKey: process.env.GOMODEL_MASTER_KEY,
+  apiKey: process.env.AIGATEWAY_MASTER_KEY,
 });
 
 const completion = await client.chat.completions.create({
@@ -129,8 +129,8 @@ root (no `/deployments/...`) and use [virtual models](/features/virtual-models) 
 
 ## Notes
 
-- GoModel accepts the deployment-scoped URL the portal hands you. For
-  account-wide operations (model listing, batches) GoModel strips the
+- AIGateway accepts the deployment-scoped URL the portal hands you. For
+  account-wide operations (model listing, batches) AIGateway strips the
   `/openai/deployments/<deployment>` suffix automatically, so one
   `AZURE_BASE_URL` covers both chat and resource-level calls.
 - `AZURE_API_VERSION` only needs to be set explicitly when you need a different

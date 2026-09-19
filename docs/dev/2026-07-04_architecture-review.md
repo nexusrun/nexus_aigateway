@@ -46,7 +46,7 @@ A median feature touches **7–9 packages**. Five root causes, each detailed lat
 4. **Field lists maintained in many places (§3).** The Responses API field set is
    repeated in ~8 sites; chat decode in 3; every new IR field is shotgun surgery.
 5. **Checked-in generated artifacts + documentation quadruplication (§8, §9).**
-   `cmd/gomodel/docs/docs.go` (8,056 lines) + `docs/openapi.json` churn in every
+   `cmd/aigateway/docs/docs.go` (8,056 lines) + `docs/openapi.json` churn in every
    API-touching PR; each config knob is described in `.env.template`,
    `config.example.yaml`, `CLAUDE.md`, and `README.md`. Bailian (#392): 12 files
    changed, only **1** was the provider implementation.
@@ -178,7 +178,7 @@ OpenAI-dialect client *can* reach Anthropic `cache_control` via `ExtraFields`
 foreign dialect but not the home dialect. Related: thinking-budget quantization —
 `budget_tokens: 15000` → effort bucket → re-expanded to `10000` upstream
 (`request.go:419–433` ↔ `request_translation.go:83–92`). Both are ADR-0007
-"accepted negatives," but given translation fidelity is a GoModel selling point,
+"accepted negatives," but given translation fidelity is a AIGateway selling point,
 the ADR's own deferred mitigation — an **Anthropic→Anthropic fast path** (preserve
 original body, apply patches to it) — is the highest-value dialect fix available.
 
@@ -294,7 +294,7 @@ files only build URL+headers; the dial happens at `realtime/proxy.go:46` via
 no retry/CB. Transparent-proxy design makes retry arguably wrong, but the
 untuned transport is an oversight.
 
-**[GOOD]** Explicit registration per ADR-0001 (`cmd/gomodel/main.go:139–156`,
+**[GOOD]** Explicit registration per ADR-0001 (`cmd/aigateway/main.go:139–156`,
 `factory.Add` panicking on bad registrations, `providers/factory.go:70–86`) — no
 `init()` magic. **[GOOD]** `internal/failover`'s providers dependency is *types
 only* (`providers.ModelInfo`/`ModelWithProvider`), with failover declaring its own
@@ -481,7 +481,7 @@ guardrails error).
 
 ## 9. Generated artifacts, docs, tests — smaller findings
 
-- **[SMELL]** `cmd/gomodel/docs/docs.go` (8,056 lines) + `docs/openapi.json` are
+- **[SMELL]** `cmd/aigateway/docs/docs.go` (8,056 lines) + `docs/openapi.json` are
   checked-in generated files that churn in most PRs. Minimum: mark
   `linguist-generated` in `.gitattributes`; better: verify-in-CI
   (`make swagger && git diff --exit-code`) so PRs stop hand-carrying them.

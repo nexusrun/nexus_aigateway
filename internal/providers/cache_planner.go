@@ -507,7 +507,7 @@ func (d *prefixDigest) writeResponsesPrefix(instructions string, tools []map[str
 func (d *prefixDigest) tokens() int { return (d.bytes + 3) / 4 }
 
 func (d *prefixDigest) key() string {
-	return "gomodel-" + hex.EncodeToString(d.hash.Sum(nil)[:16])
+	return "aigateway-" + hex.EncodeToString(d.hash.Sum(nil)[:16])
 }
 
 func providerCacheMinimum(profile promptCacheProfile, model string) int {

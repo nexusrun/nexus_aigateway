@@ -25,7 +25,7 @@ test("normalizePlugins fills every field and drops nameless rows", () => {
       name: "latency-aware",
       version: "1.0.0",
       kinds: ["route"],
-      source: "/etc/gomodel/plugins/latency.so",
+      source: "/etc/aigateway/plugins/latency.so",
       route_fields: [{ key: "p95_window", input: "text", scope: "route" }],
     },
     { name: "string_replace", source: "builtin", health: "error", error: "init failed", guardrail: true },

@@ -37,7 +37,7 @@ func rejectUnmigratedLegacyData(ctx context.Context, store Store, conn storage.S
 		}
 		if rows > 0 {
 			return fmt.Errorf("the legacy %s table holds %d row(s) that were never migrated into virtual_models; "+
-				"upgrade through any GoModel release from v0.1.44 to v0.1.80 first so its one-time seed imports them, "+
+				"upgrade through any AIGateway release from v0.1.44 to v0.1.80 first so its one-time seed imports them, "+
 				"or drop the table if those entries are no longer wanted", table, rows)
 		}
 	}

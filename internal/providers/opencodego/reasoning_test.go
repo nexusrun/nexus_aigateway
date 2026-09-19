@@ -116,7 +116,7 @@ func TestChatCompletion_KeepsClientSuppliedFlatReasoningEffort(t *testing.T) {
 }
 
 // TestChatCompletion_NestedReasoningWinsOverFlatField pins the precedence a
-// self-contradicting request gets: reasoning.effort is GoModel's canonical
+// self-contradicting request gets: reasoning.effort is AIGateway's canonical
 // field, so it wins over a flat reasoning_effort sent alongside it, matching
 // every other provider built on AdaptReasoningEffortRequest. The flat field is
 // only authoritative when no canonical reasoning is present, where it stops the

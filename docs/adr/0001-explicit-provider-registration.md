@@ -2,7 +2,7 @@
 
 ## Context
 
-GoModel supports multiple LLM providers, including OpenAI, Anthropic, Gemini, DeepSeek, xAI, Groq, OpenRouter, Z.ai, Azure OpenAI, Oracle, Ollama, and custom OpenAI-compatible endpoints. Each provider must be registered with the factory before use.
+AIGateway supports multiple LLM providers, including OpenAI, Anthropic, Gemini, DeepSeek, xAI, Groq, OpenRouter, Z.ai, Azure OpenAI, Oracle, Ollama, and custom OpenAI-compatible endpoints. Each provider must be registered with the factory before use.
 
 ## Decision
 

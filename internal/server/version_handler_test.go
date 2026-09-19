@@ -40,7 +40,7 @@ func versionTestServer(t *testing.T, handler http.HandlerFunc) (*Server, *atomic
 	checker := versioncheck.New(versioncheck.Config{
 		Enabled:   true,
 		URL:       origin.URL + "/version",
-		App:       "GoModel",
+		App:       "AIGateway",
 		Version:   "0.1.81",
 		InstallID: "install-abc",
 		Client:    origin.Client(),
@@ -103,8 +103,8 @@ func TestVersionEndpointChecksOnFirstVisit(t *testing.T) {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 	awaitChecks(t, calls, 1)
-	if value := headers().Get("X-GoModel-Host"); value != "" {
-		t.Errorf("X-GoModel-Host = %q, want the dashboard hostname kept local", value)
+	if value := headers().Get("X-AIGateway-Host"); value != "" {
+		t.Errorf("X-AIGateway-Host = %q, want the dashboard hostname kept local", value)
 	}
 	if value := headers().Get("X-Forwarded-For"); value != "" {
 		t.Errorf("X-Forwarded-For = %q, want the client address kept local", value)
@@ -117,8 +117,8 @@ func TestVersionEndpointChecksOnFirstVisit(t *testing.T) {
 	if date != time.Now().Format(time.DateOnly) || id == "" {
 		t.Fatalf("visit cookie = %q, want today plus a fresh id", visitCookie(t, rec))
 	}
-	if headers().Get("X-GoModel-Date") != visitCookie(t, rec) {
-		t.Errorf("X-GoModel-Date = %q, want the cookie value %q", headers().Get("X-GoModel-Date"), visitCookie(t, rec))
+	if headers().Get("X-AIGateway-Date") != visitCookie(t, rec) {
+		t.Errorf("X-AIGateway-Date = %q, want the cookie value %q", headers().Get("X-AIGateway-Date"), visitCookie(t, rec))
 	}
 	if cache := rec.Header().Get("Cache-Control"); cache != "no-store" {
 		t.Errorf("Cache-Control = %q, want no-store", cache)
@@ -174,7 +174,7 @@ func TestVersionEndpointNeverForwardsCredentials(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer sk-master-key")
 	req.Header.Set("X-API-Key", "sk-provider-key")
 	req.Header.Set("Referer", "https://gateway.example.com/admin/dashboard?token=leak")
-	req.AddCookie(&http.Cookie{Name: "gomodel_session", Value: "super-secret"})
+	req.AddCookie(&http.Cookie{Name: "aigateway_session", Value: "super-secret"})
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 	awaitChecks(t, calls, 1)
@@ -326,8 +326,8 @@ func TestVersionEndpointRejectsAForgedVisitID(t *testing.T) {
 	srv.ServeHTTP(rec, req)
 	awaitChecks(t, calls, 1)
 
-	if sent := headers().Get("X-GoModel-Date"); strings.Contains(sent, "injected") || strings.Contains(sent, "AAAA") {
-		t.Errorf("X-GoModel-Date = %q, want the forged id discarded", sent)
+	if sent := headers().Get("X-AIGateway-Date"); strings.Contains(sent, "injected") || strings.Contains(sent, "AAAA") {
+		t.Errorf("X-AIGateway-Date = %q, want the forged id discarded", sent)
 	}
 	issued := visitCookie(t, rec)
 	if strings.Contains(issued, "injected") || strings.Contains(issued, "AAAA") {

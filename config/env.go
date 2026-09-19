@@ -187,7 +187,7 @@ func applyEnvOverridesValue(v reflect.Value) error {
 
 // lookupEnv resolves an `env` struct tag that may list several names separated
 // by commas. It returns the first name set to a non-empty value, along with
-// that name. The canonical GoModel variable is listed first and compatibility
+// that name. The canonical AIGateway variable is listed first and compatibility
 // aliases (e.g. platform-injected names) after it, so the canonical name always
 // wins when both are present.
 func lookupEnv(tag string) (name, value string) {

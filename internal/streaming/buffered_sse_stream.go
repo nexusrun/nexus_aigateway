@@ -12,7 +12,7 @@ import (
 const (
 	defaultBufferMaxBytes         = 4 * 1024 * 1024
 	defaultBufferKeepAlive        = 15 * time.Second
-	defaultBufferKeepAliveComment = ": gomodel-buffering"
+	defaultBufferKeepAliveComment = ": aigateway-buffering"
 	bufferReadSize                = 32 * 1024
 )
 
@@ -28,7 +28,7 @@ type BufferOptions struct {
 	// upstream is being drained; 0 selects 15s, a negative value disables
 	// them.
 	KeepAliveInterval time.Duration
-	// KeepAliveComment is the comment text; default ": gomodel-buffering".
+	// KeepAliveComment is the comment text; default ": aigateway-buffering".
 	KeepAliveComment string
 	// OnError receives the buffer limit and finisher errors behind a
 	// fail-closed replay.

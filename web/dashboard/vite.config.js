@@ -31,10 +31,10 @@ export default defineConfig(({ command }) => ({
   },
   server: {
     // Local dev against a running gateway: `npm run dev` proxies API calls
-    // to the Go server (default :8080, override with GOMODEL_DEV_PROXY).
+    // to the Go server (default :8080, override with AIGATEWAY_DEV_PROXY).
     proxy: {
       "/admin": {
-        target: process.env.GOMODEL_DEV_PROXY || "http://localhost:8080",
+        target: process.env.AIGATEWAY_DEV_PROXY || "http://localhost:8080",
         changeOrigin: true,
         bypass: (req) => {
           // Keep the SPA and its assets served by Vite.
@@ -48,13 +48,13 @@ export default defineConfig(({ command }) => ({
         },
       },
       "/v1": {
-        target: process.env.GOMODEL_DEV_PROXY || "http://localhost:8080",
+        target: process.env.AIGATEWAY_DEV_PROXY || "http://localhost:8080",
         changeOrigin: true,
       },
       // The update check and its visit cookie are served by the gateway, not
       // by Vite; without this the daily check 404s in frontend dev mode.
       "/version": {
-        target: process.env.GOMODEL_DEV_PROXY || "http://localhost:8080",
+        target: process.env.AIGATEWAY_DEV_PROXY || "http://localhost:8080",
         changeOrigin: true,
       },
     },

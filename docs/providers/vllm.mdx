@@ -1,12 +1,12 @@
 ---
 title: "vLLM"
-description: "Route OpenAI-compatible GoModel requests to one or more vLLM servers, including slash-shaped Hugging Face model IDs."
+description: "Route OpenAI-compatible AIGateway requests to one or more vLLM servers, including slash-shaped Hugging Face model IDs."
 icon: "server"
 keywords: ["vLLM", "self-hosted", "Hugging Face models", "OpenAI-compatible server"]
 ---
 
-GoModel talks to vLLM through its OpenAI-compatible HTTP server. Hugging Face
-model IDs with slashes (e.g. `meta-llama/Llama-3.1-8B-Instruct`) work — GoModel
+AIGateway talks to vLLM through its OpenAI-compatible HTTP server. Hugging Face
+model IDs with slashes (e.g. `meta-llama/Llama-3.1-8B-Instruct`) work — AIGateway
 splits provider-qualified selectors on the first slash only.
 
 Start vLLM first:
@@ -21,17 +21,17 @@ vllm serve meta-llama/Llama-3.1-8B-Instruct
 ```bash
 VLLM_BASE_URL=http://host.docker.internal:8000/v1   # include /v1
 # VLLM_API_KEY=token-abc123                         # only if vLLM was started with --api-key
-GOMODEL_MASTER_KEY=change-me
+AIGATEWAY_MASTER_KEY=change-me
 ```
 
 <Note>
-  These examples assume GoModel runs in Docker and vLLM is on the host at
+  These examples assume AIGateway runs in Docker and vLLM is on the host at
   `localhost:8000` — hence `host.docker.internal`. If both run in the same
-  Docker network, use the vLLM service name. If GoModel runs on the host
+  Docker network, use the vLLM service name. If AIGateway runs on the host
   directly, use `http://localhost:8000/v1`.
 </Note>
 
-## Run GoModel
+## Run AIGateway
 
 <CodeGroup>
 
@@ -41,14 +41,14 @@ docker run --rm -p 8080:8080 --env-file .env nexusrun/nexus_aigateway
 
 ```bash Docker (inline -e)
 docker run --rm -p 8080:8080 \
-  -e GOMODEL_MASTER_KEY="change-me" \
+  -e AIGATEWAY_MASTER_KEY="change-me" \
   -e VLLM_BASE_URL="http://host.docker.internal:8000/v1" \
   nexusrun/nexus_aigateway
 ```
 
 ```bash Binary (make build)
 make build
-./bin/gomodel
+./bin/aigateway
 ```
 
 </CodeGroup>
@@ -165,7 +165,7 @@ console.log(tokens);
 
 </CodeGroup>
 
-GoModel strips client auth headers before forwarding and applies `VLLM_API_KEY`
+AIGateway strips client auth headers before forwarding and applies `VLLM_API_KEY`
 to upstream requests when configured.
 
 <Note>

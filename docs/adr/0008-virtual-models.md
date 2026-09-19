@@ -2,7 +2,7 @@
 
 ## Context
 
-GoModel exposes two operator-defined ways to shape model routing:
+AIGateway exposes two operator-defined ways to shape model routing:
 
 - **Aliases** map a new, addressable name to one real model (`fast` ->
   `openai/gpt-4o`). They are resolved early, as a rewrite.

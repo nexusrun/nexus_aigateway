@@ -138,7 +138,7 @@ func CompletionToChatResponse(c *pluginapi.Completion, model string) *core.ChatR
 		model = c.Model
 	}
 	resp := &core.ChatResponse{
-		ID:      randomID("gomodel-plugin-"),
+		ID:      randomID("aigateway-plugin-"),
 		Object:  "chat.completion",
 		Model:   model,
 		Created: time.Now().Unix(),

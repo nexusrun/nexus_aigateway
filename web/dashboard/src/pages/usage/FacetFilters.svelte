@@ -5,6 +5,7 @@
   import { debounced } from "$lib/utils/debounce.js";
   import { access } from "$lib/stores/access.svelte.js";
   import { usagePage } from "./usage.svelte.js";
+  import { providerLabel } from "$lib/utils/providerLabel.js";
   import * as m from "$lib/paraglide/messages.js";
 
   const onUserPathInput = debounced(() => usagePage.onUsageFilterChanged());
@@ -35,7 +36,7 @@
   >
     <option value="">{m.usage_all_providers()}</option>
     {#each usagePage.usageFilterProviderOptions() as p (p)}
-      <option value={p}>{p}</option>
+      <option value={p}>{providerLabel(p)}</option>
     {/each}
   </select>
   {#if usagePage.usageFilterLabelOptions().length > 0}

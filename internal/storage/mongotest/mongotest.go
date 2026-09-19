@@ -107,7 +107,7 @@ func disconnect(client *mongo.Client) {
 // rather than concatenated whole: a nested subtest name easily runs past the
 // limit on its own.
 func DatabaseName(testName string, counter uint64) string {
-	const prefix = "gomodel_test_"
+	const prefix = "aigateway_test_"
 
 	suffix := "_" + strconv.Itoa(os.Getpid()) + "_" + strconv.FormatUint(counter, 10)
 	sanitized := sanitize(testName)

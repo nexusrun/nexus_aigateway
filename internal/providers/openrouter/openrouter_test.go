@@ -242,7 +242,7 @@ func TestChatCompletion_AddsDefaultAttributionHeaders(t *testing.T) {
 	}
 }
 
-func TestChatCompletion_ForwardsGoModelSessionID(t *testing.T) {
+func TestChatCompletion_ForwardsAIGatewaySessionID(t *testing.T) {
 	gotSessionID := make(chan string, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotSessionID <- r.Header.Get("X-Session-Id")

@@ -14,6 +14,7 @@
     formatTimestampUTC,
     providerDisplayValue,
   } from "$lib/utils/format.js";
+  import { providerLabel } from "$lib/utils/providerLabel.js";
   import { usagePage } from "./usage.svelte.js";
   import SessionIDChip from "./SessionIDChip.svelte";
   import {
@@ -118,7 +119,7 @@
                 >{timezone.formatTimestamp(entry.timestamp)}</td
               >
               <td>
-                <span class="provider-badge">{providerDisplayValue(entry) || "-"}</span>
+                <span class="provider-badge">{providerLabel(providerDisplayValue(entry)) || "-"}</span>
               </td>
               <td class="mono font-size-md">{entry.model}</td>
               <td class="mono font-size-md">{entry.user_path || "-"}</td>

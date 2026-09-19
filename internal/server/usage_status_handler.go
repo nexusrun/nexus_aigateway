@@ -175,7 +175,7 @@ func (h *Handler) usageStatusUserPath(c *echo.Context) (string, error) {
 	if headerName == "" {
 		headerName = core.UserPathHeader
 	}
-	userPath, err := core.NormalizeUserPath(c.Request().Header.Get(headerName))
+	userPath, err := core.NormalizeUserPath(core.ReadUserPathHeader(c.Request().Header, headerName))
 	if err != nil {
 		return "", core.NewInvalidRequestError("invalid "+headerName+" header", err)
 	}

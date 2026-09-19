@@ -28,10 +28,10 @@ import {
 } from "./playgroundLogic.js";
 
 const STORAGE = {
-  endpoint: "gomodel_playground_endpoint",
-  model: "gomodel_playground_model",
-  stream: "gomodel_playground_stream",
-  panel: "gomodel_playground_json_panel",
+  endpoint: "aigateway_playground_endpoint",
+  model: "aigateway_playground_model",
+  stream: "aigateway_playground_stream",
+  panel: "aigateway_playground_json_panel",
 };
 
 class PlaygroundStore {
@@ -82,7 +82,7 @@ class PlaygroundStore {
   }
 
   // Header name the selected user path is sent under: the deployment's
-  // USER_PATH_HEADER when customized, otherwise X-GoModel-User-Path.
+  // USER_PATH_HEADER when customized, otherwise X-AIGateway-User-Path.
   get userPathHeaderName() {
     return effectiveUserPathHeaderName(runtimeConfig.userPathHeader());
   }

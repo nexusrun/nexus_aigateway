@@ -158,7 +158,7 @@ func TestValidateCacheConfig_SemanticSimilarityThresholdInvalid(t *testing.T) {
 					Type: "pgvector",
 					PGVector: PGVectorConfig{
 						URL:       "postgres://localhost/test",
-						Table:     "gomodel_semantic_cache",
+						Table:     "aigateway_semantic_cache",
 						Dimension: 1536,
 					},
 				},

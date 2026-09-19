@@ -64,7 +64,7 @@ class LiveLogsStore {
   // Both live here so the live merge engine can fold displaced heads into a
   // thread's children.
   auditGroupSessions = $state(
-    readStored("gomodel_audit_group_sessions", "true") !== "false",
+    readStored("aigateway_audit_group_sessions", "true") !== "false",
   );
   auditThreadChildren = $state({});
   usageLogSearch = $state("");

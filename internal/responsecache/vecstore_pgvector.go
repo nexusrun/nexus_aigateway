@@ -29,7 +29,7 @@ func newPGVectorStore(cfg config.PGVectorConfig) (*pgVecStore, error) {
 	}
 	tbl := strings.TrimSpace(cfg.Table)
 	if tbl == "" {
-		tbl = "gomodel_semantic_cache"
+		tbl = "aigateway_semantic_cache"
 	}
 	if err := validatePGIdentifier(tbl); err != nil {
 		return nil, fmt.Errorf("vecstore pgvector: table: %w", err)

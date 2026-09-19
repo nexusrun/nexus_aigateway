@@ -21,7 +21,7 @@
     maxJsonPanelWidth,
   } from "./playgroundLogic.js";
 
-  const WIDTH_KEY = "gomodel_playground_json_panel_width";
+  const WIDTH_KEY = "aigateway_playground_json_panel_width";
 
   const initialViewport = typeof window === "undefined" ? 1280 : window.innerWidth;
   // preferredWidth is the width the user chose (persisted); panelWidth is

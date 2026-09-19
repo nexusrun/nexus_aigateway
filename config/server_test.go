@@ -8,7 +8,7 @@ import (
 	"github.com/nexusrun/nexus_aigateway/internal/platformdir"
 )
 
-// The pid file follows the database instead of scattering GoModel's state
+// The pid file follows the database instead of scattering AIGateway's state
 // across the filesystem: a Docker image with /app/data keeps both
 // project-local, and a binary install started from an arbitrary working
 // directory keeps both in the per-user data directory.
@@ -35,7 +35,7 @@ func TestDefaultPIDFilePath(t *testing.T) {
 		{
 			name:  "no data directory uses the platform path",
 			setup: func(t *testing.T, dir string) {},
-			want:  filepath.Join(platformDataDir, "gomodel.pid"),
+			want:  filepath.Join(platformDataDir, "aigateway.pid"),
 		},
 	}
 
@@ -61,8 +61,8 @@ func TestPIDFilePathResolution(t *testing.T) {
 	}{
 		{
 			name: "env var wins",
-			env:  "/var/run/gomodel/custom.pid",
-			want: "/var/run/gomodel/custom.pid",
+			env:  "/var/run/aigateway/custom.pid",
+			want: "/var/run/aigateway/custom.pid",
 		},
 		{
 			// Empty env vars are "unset" everywhere in this config, so PID_FILE=
