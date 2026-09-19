@@ -257,9 +257,10 @@ func New(provider core.RoutableProvider, cfg *Config) *Server {
 		authSkipPaths = append(authSkipPaths, metricsPath)
 	}
 
-	// Admin dashboard pages and static assets skip auth (/* enables prefix matching)
+	// Admin dashboard pages and static assets skip auth (/* enables prefix matching).
+	// "/" is an exact match here, and only serves a redirect to the dashboard.
 	if cfg != nil && cfg.AdminUIEnabled && cfg.DashboardHandler != nil {
-		authSkipPaths = append(authSkipPaths, "/admin/dashboard", "/admin/dashboard/*", "/admin/static/*")
+		authSkipPaths = append(authSkipPaths, "/", "/admin/dashboard", "/admin/dashboard/*", "/admin/static/*")
 	}
 	// When no bootstrap master key is configured, keep admin APIs reachable so
 	// the dashboard can recover managed-key access instead of locking itself out.

@@ -821,6 +821,47 @@ func TestAdminUI_Disabled(t *testing.T) {
 	}
 }
 
+func TestRootRedirectsToDashboard(t *testing.T) {
+	mock := &mockProvider{}
+	srv := New(mock, &Config{
+		MasterKey:             "test-secret-key",
+		AdminEndpointsEnabled: true,
+		AdminUIEnabled:        true,
+		AdminHandler:          admin.NewHandler(nil, nil),
+		DashboardHandler:      newDashboardHandler(t),
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+
+	// Unauthenticated visitors must reach the redirect, not a 401 from the
+	// auth middleware; the dashboard renders its own login screen.
+	if rec.Code != http.StatusFound {
+		t.Fatalf("expected 302, got %d", rec.Code)
+	}
+	if got := rec.Header().Get("Location"); got != "/admin/dashboard" {
+		t.Errorf("expected Location /admin/dashboard, got %q", got)
+	}
+}
+
+func TestRootNotRegisteredWhenAdminUIDisabled(t *testing.T) {
+	mock := &mockProvider{}
+	srv := New(mock, &Config{
+		AdminEndpointsEnabled: true,
+		AdminUIEnabled:        false,
+		AdminHandler:          admin.NewHandler(nil, nil),
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", rec.Code)
+	}
+}
+
 func TestAdminDashboard_SkipsAuth(t *testing.T) {
 	mock := &mockProvider{}
 	dashHandler := newDashboardHandler(t)
