@@ -1,5 +1,5 @@
 // Package anthropicapi translates the Anthropic Messages API dialect to and from
-// GoModel's canonical chat types. It is an ingress concern: it accepts the
+// AIGateway's canonical chat types. It is an ingress concern: it accepts the
 // Anthropic wire format from clients and renders responses back in that format,
 // independent of which provider ultimately serves the request.
 package anthropicapi

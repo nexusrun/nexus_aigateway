@@ -1,48 +1,48 @@
 ---
-title: "GoModel & oh-my-pi"
-description: "Route the oh-my-pi (omp) coding agent through GoModel with auto-discovered models, working tool calls, and reasoning effort."
+title: "AIGateway & oh-my-pi"
+description: "Route the oh-my-pi (omp) coding agent through AIGateway with auto-discovered models, working tool calls, and reasoning effort."
 icon: "square-terminal"
 keywords: ["oh-my-pi", "omp", "pi", "models.yml", "coding agent", "reasoning effort", "setup guide"]
 ---
 
-[oh-my-pi](https://github.com/can1357/oh-my-pi) (`omp`) can use GoModel as a
+[oh-my-pi](https://github.com/can1357/oh-my-pi) (`omp`) can use AIGateway as a
 custom provider. One provider block in omp's `models.yml` auto-discovers every
-model GoModel exposes, so you configure the gateway once instead of defining
+model AIGateway exposes, so you configure the gateway once instead of defining
 each model by hand.
 
 Flow:
 
-`oh-my-pi (omp) -> GoModel -> upstream model providers`
+`oh-my-pi (omp) -> AIGateway -> upstream model providers`
 
 ## Before you start
 
 - Install [oh-my-pi](https://github.com/can1357/oh-my-pi#install), for example
   with `curl -fsSL https://omp.sh/install | sh`.
-- Choose a GoModel master key for gateway administration, for example
+- Choose a AIGateway master key for gateway administration, for example
   `change-me`.
-- Make sure GoModel has an upstream credential for the models you want to use.
+- Make sure AIGateway has an upstream credential for the models you want to use.
 
-## 1. Run GoModel
+## 1. Run AIGateway
 
-Start GoModel with a master key and at least one upstream provider. This
+Start AIGateway with a master key and at least one upstream provider. This
 example uses Anthropic:
 
 ```bash
 docker run --rm -p 8080:8080 \
-  -e GOMODEL_MASTER_KEY="change-me" \
+  -e AIGATEWAY_MASTER_KEY="change-me" \
   -e ANTHROPIC_API_KEY="sk-ant-..." \
   nexusrun/nexus_aigateway
 ```
 
-`GOMODEL_MASTER_KEY` is the gateway's bootstrap and administrator credential.
-Do not put it in omp's configuration. `ANTHROPIC_API_KEY` belongs to GoModel
+`AIGATEWAY_MASTER_KEY` is the gateway's bootstrap and administrator credential.
+Do not put it in omp's configuration. `ANTHROPIC_API_KEY` belongs to AIGateway
 and is used only for the upstream request.
 
 ## 2. Create a dedicated omp API key
 
-Open the GoModel dashboard at
+Open the AIGateway dashboard at
 [http://localhost:8080/admin/dashboard](http://localhost:8080/admin/dashboard)
-and sign in with `GOMODEL_MASTER_KEY`. Go to
+and sign in with `AIGATEWAY_MASTER_KEY`. Go to
 `API Keys -> Create API Key`, then:
 
 1. Name the key `oh-my-pi`.
@@ -55,18 +55,18 @@ gateway-wide [model access policies](/features/user-path#model-access), allow
 the selectors omp needs for `/agents/omp`.
 
 <Warning>
-  Use this managed key in omp, not `GOMODEL_MASTER_KEY`. A managed key without
+  Use this managed key in omp, not `AIGATEWAY_MASTER_KEY`. A managed key without
   dashboard access can call model endpoints but cannot read audit logs, create
   keys, or change gateway settings.
 </Warning>
 
 ## 3. Configure omp
 
-Create or edit `~/.omp/agent/models.yml` and add a `gomodel` provider:
+Create or edit `~/.omp/agent/models.yml` and add a `aigateway` provider:
 
 ```yaml
 providers:
-  gomodel:
+  aigateway:
     baseUrl: http://localhost:8080/v1
     apiKey: sk_gom_...
     api: openai-completions
@@ -74,20 +74,20 @@ providers:
       type: openai-models-list
 ```
 
-The `discovery` block makes omp fetch GoModel's `/v1/models` catalog at
-startup, so every model GoModel can route appears in omp automatically —
-including context window and output limits from GoModel's model metadata. You
+The `discovery` block makes omp fetch AIGateway's `/v1/models` catalog at
+startup, so every model AIGateway can route appears in omp automatically —
+including context window and output limits from AIGateway's model metadata. You
 do not list models by hand.
 
 Restrict access to the file with `chmod 600 ~/.omp/agent/models.yml`. If you
 prefer not to store the key inline, `apiKey` also accepts the *name* of an
-environment variable (for example `apiKey: GOMODEL_API_KEY`) or a command
+environment variable (for example `apiKey: AIGATEWAY_API_KEY`) or a command
 prefixed with `!` whose stdout is the secret (for example
-`apiKey: "!op read op://dev/gomodel/api-key"`).
+`apiKey: "!op read op://dev/aigateway/api-key"`).
 
-If GoModel runs on another host, replace `localhost:8080` with an `https://`
+If AIGateway runs on another host, replace `localhost:8080` with an `https://`
 URL, with TLS terminated at a reverse proxy or load balancer in front of
-GoModel; use plain HTTP only for loopback development. Keep `/v1` in the base
+AIGateway; use plain HTTP only for loopback development. Keep `/v1` in the base
 URL.
 
 ## 4. Choose a model and run omp
@@ -95,21 +95,21 @@ URL.
 List what omp discovered through the gateway:
 
 ```bash
-omp models gomodel
+omp models aigateway
 ```
 
-omp model selectors are `<provider>/<model-id>`. GoModel model IDs are already
+omp model selectors are `<provider>/<model-id>`. AIGateway model IDs are already
 provider-qualified (`anthropic/claude-sonnet-5`), so the full selector carries
 two prefixes:
 
 ```bash
-omp --model "gomodel/anthropic/claude-sonnet-5"
+omp --model "aigateway/anthropic/claude-sonnet-5"
 ```
 
 Or verify headlessly first:
 
 ```bash
-omp -p --model "gomodel/anthropic/claude-sonnet-5" \
+omp -p --model "aigateway/anthropic/claude-sonnet-5" \
   'Reply with exactly ok and no punctuation.'
 ```
 
@@ -117,13 +117,13 @@ The expected output is `ok`.
 
 <Note>
   omp caches discovered catalogs in a local database. After adding models or
-  providers to GoModel, run `omp models refresh` to force a fresh fetch.
+  providers to AIGateway, run `omp models refresh` to force a fresh fetch.
 </Note>
 
 ## 5. Enable reasoning effort
 
 omp's `--thinking` levels (`low`, `medium`, `high`, ...) are sent as the
-OpenAI-compatible `reasoning_effort` field, and GoModel translates that field
+OpenAI-compatible `reasoning_effort` field, and AIGateway translates that field
 for each upstream — for Anthropic models it becomes a thinking budget, and the
 model's thinking streams back as `reasoning_content`, which omp renders as
 thought blocks.
@@ -134,7 +134,7 @@ Opt them in with `modelOverrides`:
 
 ```yaml
 providers:
-  gomodel:
+  aigateway:
     baseUrl: http://localhost:8080/v1
     apiKey: sk_gom_...
     api: openai-completions
@@ -149,27 +149,27 @@ Then:
 
 ```bash
 omp -p --print-thoughts --thinking high \
-  --model "gomodel/anthropic/claude-sonnet-5" 'What is 17*23?'
+  --model "aigateway/anthropic/claude-sonnet-5" 'What is 17*23?'
 ```
 
 With the override in place the response includes the model's thinking;
 without it, `--thinking` is silently dropped for that model.
 
-## Optional: use GoModel's Anthropic Messages endpoint
+## Optional: use AIGateway's Anthropic Messages endpoint
 
-omp can also talk to GoModel over the Anthropic wire via GoModel's
+omp can also talk to AIGateway over the Anthropic wire via AIGateway's
 [`/v1/messages`](/advanced/anthropic-messages-api) endpoint. Discovery is not
 available on this path, so define models explicitly:
 
 ```yaml
 providers:
-  gomodel-anthropic:
+  aigateway-anthropic:
     baseUrl: http://localhost:8080/v1
     apiKey: sk_gom_...
     api: anthropic-messages
     models:
       - id: anthropic/claude-sonnet-5
-        name: Claude Sonnet 5 (GoModel)
+        name: Claude Sonnet 5 (AIGateway)
         reasoning: true
         contextWindow: 1000000
         maxTokens: 128000
@@ -179,14 +179,14 @@ Both paths route through the same gateway key, budgets, and audit trail. The
 OpenAI-compatible path with discovery is the recommended default; use the
 Anthropic wire when you specifically want Messages API semantics end to end.
 
-## 6. Check the traffic in GoModel
+## 6. Check the traffic in AIGateway
 
-Open the GoModel dashboard audit logs:
+Open the AIGateway dashboard audit logs:
 
 [http://localhost:8080/admin/dashboard/audit](http://localhost:8080/admin/dashboard/audit)
 
 Confirm omp's streaming requests to `POST /v1/chat/completions` under the
-`/agents/omp` user path, and that GoModel routes them to the intended
+`/agents/omp` user path, and that AIGateway routes them to the intended
 provider. Sign in with the master key; the omp key intentionally cannot open
 this page.
 
@@ -200,23 +200,23 @@ variable is exported in the shell that launches omp.
 
 ### Model not found
 
-omp selectors need the full discovered ID including GoModel's provider
-prefix: `gomodel/anthropic/claude-sonnet-5`, not `gomodel/claude-sonnet-5`.
-Copy the exact ID from `omp models gomodel`.
+omp selectors need the full discovered ID including AIGateway's provider
+prefix: `aigateway/anthropic/claude-sonnet-5`, not `aigateway/claude-sonnet-5`.
+Copy the exact ID from `omp models aigateway`.
 
-### New GoModel models do not appear
+### New AIGateway models do not appear
 
 Run `omp models refresh`. omp otherwise serves the cached catalog.
 
 ### `--thinking` has no effect
 
 Add `reasoning: true` for that model under `modelOverrides` as shown above.
-Without it omp does not send `reasoning_effort`, so GoModel never receives an
+Without it omp does not send `reasoning_effort`, so AIGateway never receives an
 effort to translate.
 
 ### Thinking works on Anthropic models but not others
 
-GoModel maps `reasoning_effort` per provider. Check the model's
+AIGateway maps `reasoning_effort` per provider. Check the model's
 `capabilities.reasoning` flag in `/v1/models` metadata; non-reasoning models
 ignore or reject effort values.
 
@@ -224,25 +224,25 @@ ignore or reject effort values.
 
 - oh-my-pi: [Model and provider configuration (`models.yml`)](https://github.com/can1357/oh-my-pi/blob/main/docs/models.md)
 - oh-my-pi: [CLI reference](https://github.com/can1357/oh-my-pi/blob/main/docs/cli-reference.md)
-- GoModel: [Anthropic Messages API](/advanced/anthropic-messages-api)
+- AIGateway: [Anthropic Messages API](/advanced/anthropic-messages-api)
 
 ## Validated on August 31, 2026
 
 This guide was validated against:
 
-- a local GoModel instance on `http://localhost:8080`
+- a local AIGateway instance on `http://localhost:8080`
 - oh-my-pi `18.0.11` (`omp`)
-- `anthropic/claude-haiku-4-5-20251001` through GoModel
+- `anthropic/claude-haiku-4-5-20251001` through AIGateway
 
 Local validation confirmed:
 
-- `discovery: openai-models-list` imported the full GoModel catalog (955
+- `discovery: openai-models-list` imported the full AIGateway catalog (955
   models) with context windows and output limits
 - `omp -p` headless prompts and shell tool calls completed through
-  `omp -> GoModel -> Anthropic` with a dedicated managed key
+  `omp -> AIGateway -> Anthropic` with a dedicated managed key
 - with the `modelOverrides` reasoning opt-in, `--thinking high` produced
-  `reasoning_effort: "high"` on the wire, GoModel translated it to Anthropic
+  `reasoning_effort: "high"` on the wire, AIGateway translated it to Anthropic
   thinking, and omp rendered the returned `reasoning_content` thought blocks;
   without the opt-in, omp omitted the field
 - the `api: anthropic-messages` provider variant completed the same prompts
-  through GoModel's `/v1/messages` endpoint
+  through AIGateway's `/v1/messages` endpoint

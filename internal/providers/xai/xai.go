@@ -80,7 +80,7 @@ func compatibleConfig(baseURL string) openai.CompatibleProviderConfig {
 	}
 }
 
-// adaptChatRequest rewrites GoModel's common reasoning shape into xAI's
+// adaptChatRequest rewrites AIGateway's common reasoning shape into xAI's
 // OpenAI-compatible chat extension. The xAI Chat Completions API accepts
 // reasoning_effort as a top-level string (e.g. grok-4.5: low/medium/high,
 // default high), not "reasoning": {"effort": "..."}; the nested shape is
@@ -123,7 +123,7 @@ func rejectsReasoningEffort(model string) bool {
 	}
 }
 
-// normalizeReasoningEffort downgrades GoModel effort levels xAI does not
+// normalizeReasoningEffort downgrades AIGateway effort levels xAI does not
 // accept to their nearest equivalent. The multi-agent Grok family accepts
 // "xhigh" (it selects the agent count), and grok-4.6 and later frontier
 // models document it as a regular top effort level; older models top out
@@ -245,7 +245,7 @@ func generatedXGrokConversationID(ctx context.Context, req *core.ChatRequest) st
 		return ""
 	}
 	sum := sha256.Sum256(body)
-	return "gomodel-" + hex.EncodeToString(sum[:16])
+	return "aigateway-" + hex.EncodeToString(sum[:16])
 }
 
 func xGrokAnchorMessages(messages []core.Message) []core.Message {

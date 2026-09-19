@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	cookieName   = "gomodel_admin_session"
+	cookieName   = "aigateway_admin_session"
 	sessionTTL   = 12 * time.Hour
 	minSecretLen = 32
 )

@@ -138,7 +138,7 @@ Create a workflow scoped to one configured provider name, one model, and one use
 
 ```bash curl
 curl -X POST http://localhost:8080/admin/workflows \
-  -H "Authorization: Bearer $GOMODEL_MASTER_KEY" \
+  -H "Authorization: Bearer $AIGATEWAY_MASTER_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "scope_provider_name": "openai_primary",
@@ -172,7 +172,7 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="http://localhost:8080",
-    api_key=os.environ["GOMODEL_MASTER_KEY"],
+    api_key=os.environ["AIGATEWAY_MASTER_KEY"],
 )
 
 workflow = client.post(
@@ -210,7 +210,7 @@ import OpenAI from "openai";
 
 const client = new OpenAI({
   baseURL: "http://localhost:8080",
-  apiKey: process.env.GOMODEL_MASTER_KEY,
+  apiKey: process.env.AIGATEWAY_MASTER_KEY,
 });
 
 const workflow = await client.post("/admin/workflows", {

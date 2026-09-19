@@ -24,7 +24,7 @@ const (
 	maxVoiceRoutingOverhead = 5 * time.Millisecond
 )
 
-// TestVoiceRoutingLatency measures only GoModel's added latency by comparing the
+// TestVoiceRoutingLatency measures only AIGateway's added latency by comparing the
 // same request sent directly to a zero-delay mock provider and routed through the
 // gateway. The median keeps this guard stable on shared CI runners while still
 // catching millisecond-scale regressions in the four voice paths.
@@ -69,7 +69,7 @@ func TestVoiceRoutingLatency(t *testing.T) {
 	})
 
 	t.Run("webrtc", func(t *testing.T) {
-		body := []byte("v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=GoModel latency test\r\n")
+		body := []byte("v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=AIGateway latency test\r\n")
 		measureHTTPRoutingOverhead(t, providerServer.Client(), providerServer.URL+"/v1/realtime/calls?model=gpt-realtime-mini", gateway.URL+"/v1/realtime/calls?model=gpt-realtime-mini", "application/sdp", body)
 	})
 }
@@ -218,9 +218,9 @@ func timedWebsocketDial(t *testing.T, url string) time.Duration {
 func assertVoiceRoutingOverhead(t *testing.T, direct, routed, pairedOverhead time.Duration) {
 	t.Helper()
 
-	t.Logf("direct_p50=%s routed_p50=%s paired_gomodel_overhead_p50=%s threshold=%s", direct, routed, pairedOverhead, maxVoiceRoutingOverhead)
+	t.Logf("direct_p50=%s routed_p50=%s paired_aigateway_overhead_p50=%s threshold=%s", direct, routed, pairedOverhead, maxVoiceRoutingOverhead)
 	if pairedOverhead > maxVoiceRoutingOverhead {
-		t.Fatalf("GoModel median paired routing overhead = %s, want <= %s", pairedOverhead, maxVoiceRoutingOverhead)
+		t.Fatalf("AIGateway median paired routing overhead = %s, want <= %s", pairedOverhead, maxVoiceRoutingOverhead)
 	}
 }
 

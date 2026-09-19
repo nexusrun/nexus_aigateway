@@ -1,4 +1,4 @@
-// Package googlecommon holds infrastructure shared by GoModel's Google-backed
+// Package googlecommon holds infrastructure shared by AIGateway's Google-backed
 // providers (Gemini AI Studio + Vertex AI). It currently covers authentication
 // (ADC / service-account TokenSource resolution + quota project propagation
 // via X-Goog-User-Project) and Vertex URL transformations between the native

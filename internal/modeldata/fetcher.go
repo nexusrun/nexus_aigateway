@@ -109,8 +109,8 @@ func FetchIfChanged(ctx context.Context, url, etag string) (FetchResult, error) 
 }
 
 // localPath reports whether location names a file on the local filesystem
-// and returns the path. Both "file:///etc/gomodel/models.json" and a bare
-// "/etc/gomodel/models.json" (or a relative path) are accepted, so an
+// and returns the path. Both "file:///etc/aigateway/models.json" and a bare
+// "/etc/aigateway/models.json" (or a relative path) are accepted, so an
 // air-gapped install can ship the catalog next to the binary or mount it.
 func localPath(location string) (string, bool) {
 	trimmed := strings.TrimSpace(location)

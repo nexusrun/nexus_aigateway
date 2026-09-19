@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-GoModel exposes an OpenAI-compatible API (`/v1/*`) and an Anthropic Messages
+AIGateway exposes an OpenAI-compatible API (`/v1/*`) and an Anthropic Messages
 ingress, and routes each request to a provider whose native API may differ
 from what the client sent. ADR-0002 already decided that unknown JSON fields
 are preserved rather than dropped, and `ExtraFields` on the request types
@@ -36,7 +36,7 @@ that matches, in this order:
 1. **Unknown to the gateway.** Forward untouched, in both directions. This is
    the ADR-0002 forward-compatibility promise and is how clients reach
    provider-native extras (for example OpenRouter routing preferences) without
-   waiting for a GoModel release.
+   waiting for a AIGateway release.
 2. **Known, and the target accepts it.** Forward as-is.
 3. **Known, and the target needs a different shape.** Translate. The client
    asked for something the provider can do; only the spelling differs.

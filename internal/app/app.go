@@ -1,5 +1,5 @@
 // Package app provides the main application struct for centralized dependency management
-// and lifecycle control of the GoModel server.
+// and lifecycle control of the AIGateway server.
 package app
 
 import (
@@ -109,9 +109,9 @@ type Config struct {
 	// It does not change persistence or security behavior.
 	DemoMode bool
 
-	// ProductName names the running distribution (for example "gomodel-pro")
+	// ProductName names the running distribution (for example "aigateway-pro")
 	// and becomes the default OpenTelemetry service.name. Empty means
-	// "gomodel".
+	// "aigateway".
 	ProductName string
 }
 
@@ -359,9 +359,9 @@ func (a *App) logStartupInfo() {
 	case managedKeysConfigured:
 		slog.Info("authentication enabled", "mode", "managed_keys", "managed_key_total", a.authKeys.Service.Total(), "managed_key_active", a.authKeys.Service.ActiveCount())
 	case cfg.Server.MasterKey == "":
-		slog.Warn("SECURITY WARNING: GOMODEL_MASTER_KEY not set - server running in UNSAFE MODE",
+		slog.Warn("SECURITY WARNING: AIGATEWAY_MASTER_KEY not set - server running in UNSAFE MODE",
 			"security_risk", "unauthenticated access allowed",
-			"recommendation", "set GOMODEL_MASTER_KEY environment variable to secure this gateway")
+			"recommendation", "set AIGATEWAY_MASTER_KEY environment variable to secure this gateway")
 		if cfg.MCP.Enabled && len(cfg.MCP.Servers) > 0 {
 			// Worth calling out separately: an unauthenticated /mcp hands any
 			// caller that can reach the port every aggregated tool, together
@@ -369,7 +369,7 @@ func (a *App) logStartupInfo() {
 			slog.Warn("SECURITY WARNING: the MCP gateway is serving aggregated tools without authentication",
 				"security_risk", "any caller that can reach this port can invoke every configured MCP tool",
 				"configured_servers", len(cfg.MCP.Servers),
-				"recommendation", "set GOMODEL_MASTER_KEY, or set MCP_ENABLED=false")
+				"recommendation", "set AIGATEWAY_MASTER_KEY, or set MCP_ENABLED=false")
 		}
 	default:
 		slog.Info("authentication enabled", "mode", "master_key")

@@ -38,7 +38,7 @@ func RequestSnapshotCapture(userPathHeader ...string) echo.MiddlewareFunc {
 				// managed key's bound path still wins — auth middleware runs
 				// later and its context value shadows this one.
 				if desc.ModelInteraction {
-					userPath, err := core.NormalizeUserPath(req.Header.Get(userPathHeaderName))
+					userPath, err := core.NormalizeUserPath(core.ReadUserPathHeader(req.Header, userPathHeaderName))
 					if err != nil {
 						return handleError(c, core.NewInvalidRequestError("invalid "+userPathHeaderName+" header", err))
 					}
@@ -51,7 +51,7 @@ func RequestSnapshotCapture(userPathHeader ...string) echo.MiddlewareFunc {
 				return next(c)
 			}
 
-			userPath, err := core.NormalizeUserPath(req.Header.Get(userPathHeaderName))
+			userPath, err := core.NormalizeUserPath(core.ReadUserPathHeader(req.Header, userPathHeaderName))
 			if err != nil {
 				return handleError(c, core.NewInvalidRequestError("invalid "+userPathHeaderName+" header", err))
 			}

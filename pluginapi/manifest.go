@@ -1,7 +1,7 @@
 package pluginapi
 
 // Kind names a hook a plugin implements. A [Manifest] lists its Kinds so
-// GoModel can validate configuration before calling anything; at load time the
+// AIGateway can validate configuration before calling anything; at load time the
 // list is checked against the interfaces the plugin value actually satisfies.
 type Kind string
 
@@ -21,7 +21,7 @@ const (
 )
 
 // BuildInfo records the toolchain a plugin binary was built with. It is
-// filled by the `gomodel plugin build` helper and used only to produce a
+// filled by the `aigateway plugin build` helper and used only to produce a
 // readable error when a shared object cannot be loaded.
 type BuildInfo struct {
 	// GoVersion is the Go toolchain version, for example "go1.27.1".

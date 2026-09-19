@@ -1,7 +1,7 @@
 <!-- NEXUS AI Gateway brand artwork. The parent owns sizing and can choose
      between the compact gateway mark and the complete logo lockup. -->
 <script>
-  import { gomodelPath } from "$lib/api/paths.js";
+  import { aigatewayPath } from "$lib/api/paths.js";
 
   let { variant = "mark" } = $props();
 
@@ -17,7 +17,7 @@
 </script>
 
 <img
-  src={gomodelPath(source)}
+  src={aigatewayPath(source)}
   alt={variant === "full" ? "NEXUS AI Gateway" : ""}
   aria-hidden={variant === "full" ? undefined : "true"}
 />

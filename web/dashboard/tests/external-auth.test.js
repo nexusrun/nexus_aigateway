@@ -41,9 +41,9 @@ test("safeAuthenticationPath accepts only app-local paths", () => {
 test("authenticationResponseMetadata reads extension auth headers", () => {
   const response = {
     headers: new Headers({
-      "X-GoModel-Auth-Login": "/g/sso/login",
-      "X-GoModel-Auth-Logout": "/g/sso/logout",
-      "X-GoModel-Auth-User": "/users/person@example.com",
+      "X-AIGateway-Auth-Login": "/g/sso/login",
+      "X-AIGateway-Auth-Logout": "/g/sso/logout",
+      "X-AIGateway-Auth-User": "/users/person@example.com",
     }),
   };
   assert.deepEqual(authenticationResponseMetadata(response), {
@@ -56,9 +56,9 @@ test("authenticationResponseMetadata reads extension auth headers", () => {
 test("authenticationResponseMetadata clears inactive extension auth state", () => {
   const response = {
     headers: new Headers({
-      "X-GoModel-Auth-Login": "/g/sso/login",
-      "X-GoModel-Auth-Logout": "",
-      "X-GoModel-Auth-User": "",
+      "X-AIGateway-Auth-Login": "/g/sso/login",
+      "X-AIGateway-Auth-Logout": "",
+      "X-AIGateway-Auth-User": "",
     }),
   };
   assert.deepEqual(authenticationResponseMetadata(response), {

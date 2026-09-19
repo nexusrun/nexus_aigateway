@@ -6,7 +6,7 @@ import (
 
 // CreateConversation handles POST /v1/conversations.
 //
-// Conversations are a gateway-managed resource: GoModel generates the
+// Conversations are a gateway-managed resource: AIGateway generates the
 // conversation id and stores the conversation locally, so the endpoint behaves
 // identically regardless of which provider serves model traffic.
 //

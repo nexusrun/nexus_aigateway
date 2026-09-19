@@ -10,7 +10,7 @@ import (
 	"github.com/nexusrun/nexus_aigateway/internal/providers"
 )
 
-// adaptChatRequest maps GoModel's nested reasoning shape (set by the Messages
+// adaptChatRequest maps AIGateway's nested reasoning shape (set by the Messages
 // API's thinking and by clients sending reasoning.effort) onto Groq's flat
 // reasoning_effort, and asks Groq to parse chain of thought out of the answer.
 // Groq rejects "reasoning" outright and accepts reasoning_effort only on

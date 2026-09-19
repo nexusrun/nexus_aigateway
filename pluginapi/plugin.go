@@ -41,7 +41,7 @@ type ResponseHook interface {
 	OnResponse(ctx context.Context, x *Exchange) (Decision, error)
 }
 
-// StreamHook runs per parsed stream event. StreamPolicy tells GoModel how to
+// StreamHook runs per parsed stream event. StreamPolicy tells AIGateway how to
 // drive the hook (observe only, transform events in flight, or buffer the
 // whole stream). OnStreamEnd runs once after the last event.
 type StreamHook interface {
@@ -66,7 +66,7 @@ type CompleteHook interface {
 
 // HealthChecker is implemented by plugins whose instances depend on
 // something outside the process: a sidecar, a remote classifier, a policy
-// service. GoModel calls Health off the request path, once an instance is
+// service. AIGateway calls Health off the request path, once an instance is
 // built and again on every guardrail refresh (one minute by default), with
 // a short deadline. A non-nil error marks the instance degraded in the
 // admin views and the dashboard, with the error text as the reason. That
@@ -81,7 +81,7 @@ type HealthChecker interface {
 // ContentEditor is implemented by a plugin whose manifest declares Mutates
 // but whose configuration decides whether it actually edits content: a
 // presidio instance that only flags detections, a string_replace instance
-// that only blocks. GoModel asks a configured instance before work it does
+// that only blocks. AIGateway asks a configured instance before work it does
 // solely so an editing plugin sees the whole request — replaying the stored
 // history of a chained Responses request instead of letting the provider
 // resolve previous_response_id itself. It never relaxes how a hook runs.

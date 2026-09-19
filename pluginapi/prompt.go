@@ -18,7 +18,7 @@ type Tool struct {
 	Raw json.RawMessage
 }
 
-// Params are the request parameters GoModel models. Edit them through
+// Params are the request parameters AIGateway models. Edit them through
 // [Prompt.SetParam]; direct assignment is not applied.
 type Params struct {
 	// Model is the model the request is addressed to after routing.

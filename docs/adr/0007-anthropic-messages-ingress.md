@@ -6,9 +6,9 @@ Accepted
 
 ## Context
 
-GoModel exposes an OpenAI-compatible public API (`/v1/chat/completions`, `/v1/responses`,
+AIGateway exposes an OpenAI-compatible public API (`/v1/chat/completions`, `/v1/responses`,
 `/v1/embeddings`). A growing number of clients and SDKs speak the **Anthropic Messages API**
-dialect (`POST /v1/messages`) instead. Today those clients can only reach GoModel through the
+dialect (`POST /v1/messages`) instead. Today those clients can only reach AIGateway through the
 opaque passthrough route `/p/anthropic/v1/messages`, which:
 
 - forwards bytes verbatim to the Anthropic upstream only — it cannot route to OpenAI, Gemini,

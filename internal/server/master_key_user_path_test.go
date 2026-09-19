@@ -17,7 +17,7 @@ import (
 
 // TestMasterKeyUserPathHeaderScopesRestrictedModelAccess pins the contract the
 // dashboard Playground relies on: a master-key request may scope itself to a
-// user path through the user-path header (X-GoModel-User-Path by default, or
+// user path through the user-path header (X-AIGateway-User-Path by default, or
 // the configured USER_PATH_HEADER), and that path both lands in the request
 // snapshot and satisfies user_path-restricted virtual-model policies. Without
 // the header the same master-key request is denied.

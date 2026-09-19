@@ -16,7 +16,7 @@ class ThemeStore {
   tick = $state(0);
 
   init() {
-    this.theme = readStored("gomodel_theme", "system");
+    this.theme = readStored("aigateway_theme", "system");
     this.apply();
     window
       .matchMedia("(prefers-color-scheme: dark)")
@@ -29,7 +29,7 @@ class ThemeStore {
 
   set(t) {
     this.theme = t;
-    writeStored("gomodel_theme", t);
+    writeStored("aigateway_theme", t);
     this.apply();
     this.tick++;
   }
@@ -59,8 +59,8 @@ class SidebarStore {
   }
 
   init() {
-    const storedWidth = readStored("gomodel_sidebar_width");
-    const legacyCollapsed = readStored("gomodel_sidebar_collapsed") === "true";
+    const storedWidth = readStored("aigateway_sidebar_width");
+    const legacyCollapsed = readStored("aigateway_sidebar_collapsed") === "true";
     this.setWidth(
       storedWidth == null
         ? (legacyCollapsed ? MIN_SIDEBAR_WIDTH : MAX_SIDEBAR_WIDTH)
@@ -81,8 +81,8 @@ class SidebarStore {
       document.documentElement.style.setProperty("--sidebar-width", `${this.width}px`);
     }
     if (!persist) return;
-    writeStored("gomodel_sidebar_width", this.width);
-    writeStored("gomodel_sidebar_collapsed", this.collapsed);
+    writeStored("aigateway_sidebar_width", this.width);
+    writeStored("aigateway_sidebar_collapsed", this.collapsed);
   }
 }
 

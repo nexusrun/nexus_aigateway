@@ -8,7 +8,7 @@ import {
   PROVIDER_DOCS_OVERVIEW_SLUG,
 } from "../src/lib/utils/providerDocs.js";
 
-const UTM = "utm_source=gomodel_dashboard";
+const UTM = "utm_source=aigateway_dashboard";
 
 test("providerDocsUrl normalizes the registry type", () => {
   // Underscores become dashes so opencode_go resolves to the opencode-go page.

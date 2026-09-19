@@ -226,7 +226,7 @@ func supportsTextOutput(modalities []bedrocktypes.ModelModality) bool {
 // Embeddings returns an error: Bedrock embedding models use a different code
 // path (InvokeModel with model-specific bodies) which is not yet implemented.
 func (p *Provider) Embeddings(_ context.Context, _ *core.EmbeddingRequest) (*core.EmbeddingResponse, error) {
-	return nil, core.NewInvalidRequestError("bedrock embeddings are not yet supported by gomodel", nil)
+	return nil, core.NewInvalidRequestError("bedrock embeddings are not yet supported by aigateway", nil)
 }
 
 // Responses adapts the OpenAI Responses API onto Converse via the shared chat

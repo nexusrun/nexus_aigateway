@@ -10,7 +10,9 @@ func TestParseScheduleConfig(t *testing.T) {
 		"peak_targets":     []any{"fast/model"},
 		"off_peak_targets": []any{"cheap/model"},
 	})
-	if err != nil { t.Fatalf("parseScheduleConfig() error = %v", err) }
+	if err != nil {
+		t.Fatalf("parseScheduleConfig() error = %v", err)
+	}
 	if cfg.timezone.String() != "America/Phoenix" || len(cfg.peakTargets) != 1 || cfg.peakTargets[0] != "fast/model" {
 		t.Fatalf("unexpected schedule config: %+v", cfg)
 	}
@@ -27,6 +29,8 @@ func TestParseScheduleConfigRejectsInvalidValues(t *testing.T) {
 		{"peak_targets": []any{}, "off_peak_targets": []any{}},
 	}
 	for _, raw := range cases {
-		if _, err := parseScheduleConfig(raw); err == nil { t.Fatalf("parseScheduleConfig(%v) error = nil", raw) }
+		if _, err := parseScheduleConfig(raw); err == nil {
+			t.Fatalf("parseScheduleConfig(%v) error = nil", raw)
+		}
 	}
 }

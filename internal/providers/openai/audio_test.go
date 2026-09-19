@@ -104,7 +104,7 @@ func TestCreateTranslation_UsesTranslationMultipartShape(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "text/plain")
-		_, _ = w.Write([]byte("Hello from GoModel."))
+		_, _ = w.Write([]byte("Hello from AIGateway."))
 	})
 
 	resp, err := provider.CreateTranslation(context.Background(), &core.AudioTranscriptionRequest{
@@ -123,7 +123,7 @@ func TestCreateTranslation_UsesTranslationMultipartShape(t *testing.T) {
 	if resp.ContentType != "text/plain; charset=utf-8" {
 		t.Errorf("ContentType = %q, want text/plain; charset=utf-8", resp.ContentType)
 	}
-	if string(resp.Data) != "Hello from GoModel." {
+	if string(resp.Data) != "Hello from AIGateway." {
 		t.Errorf("Data = %q, want translated text", resp.Data)
 	}
 }

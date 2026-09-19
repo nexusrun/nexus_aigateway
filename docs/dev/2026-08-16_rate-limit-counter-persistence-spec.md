@@ -8,7 +8,7 @@ Depends on: `feat(quotas): add per-child user-path templates` (`#670`)
 ## 1. Why
 
 Request and token windows live only in process memory. A restart or
-`gomodel --reload` (SIGHUP) starts them at zero. Minute windows barely
+`aigateway --reload` (SIGHUP) starts them at zero. Minute windows barely
 notice; an hour or day cap — the thing operators use for daily provider
 quotas and team allowances — silently resets. The original spec documented
 this and listed two follow-ups:
@@ -41,7 +41,7 @@ build a seam for it in advance (§5).
   builds no limiter. `RATE_LIMITS_FLUSH_INTERVAL=0` is the escape hatch
   that turns off the periodic loop only.
 - Changing `#670` semantics or the `quota_templates` entitlement gate.
-  Persistence lives in OSS `internal/ratelimit`. Pro (`../gomodel-pro`)
+  Persistence lives in OSS `internal/ratelimit`. Pro (`../aigateway-pro`)
   only enables the capability; it gets snapshot restore of child
   partitions for free.
 

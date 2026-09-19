@@ -48,7 +48,7 @@ type ChatRequest struct {
 
 // GatewayCachePointField is the internal marker shared by provider cache
 // planners and native request translators. It is never forwarded verbatim.
-const GatewayCachePointField = "_gomodel_cache_point"
+const GatewayCachePointField = "_aigateway_cache_point"
 
 // PromptCachePlan identifies a provider-native cached prefix materialization.
 type PromptCachePlan struct {

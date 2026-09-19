@@ -57,8 +57,8 @@ func TestBuildIndexHTML_InjectsGlobalsAndBasePath(t *testing.T) {
 	html := string(got)
 	for _, want := range []string{
 		`src="/gateway/admin/static/assets/index-abc.js"`,
-		`window.GOMODEL_BASE_PATH="/gateway"`,
-		`window.GOMODEL_DEMO_MODE=true`,
+		`window.AIGATEWAY_BASE_PATH="/gateway"`,
+		`window.AIGATEWAY_DEMO_MODE=true`,
 	} {
 		if !strings.Contains(html, want) {
 			t.Errorf("expected %q in rendered index.html:\n%s", want, html)
@@ -111,13 +111,13 @@ func TestIndex_ReturnsHTML(t *testing.T) {
 	if !strings.Contains(lower, "<!doctype html") && !strings.Contains(lower, "<html") {
 		t.Errorf("expected HTML content, got: %.200s", body)
 	}
-	if !strings.Contains(body, `window.GOMODEL_BASE_PATH="/"`) {
+	if !strings.Contains(body, `window.AIGATEWAY_BASE_PATH="/"`) {
 		t.Errorf("expected injected base path global in page HTML")
 	}
-	if !regexp.MustCompile(`window\.GOMODEL_VERSION="[^"]+"`).MatchString(body) {
+	if !regexp.MustCompile(`window\.AIGATEWAY_VERSION="[^"]+"`).MatchString(body) {
 		t.Errorf("expected injected version global in page HTML")
 	}
-	if !strings.Contains(body, "window.GOMODEL_DEMO_MODE=false") {
+	if !strings.Contains(body, "window.AIGATEWAY_DEMO_MODE=false") {
 		t.Errorf("expected demo mode global false in page HTML")
 	}
 	if !regexp.MustCompile(`/admin/static/assets/index-[^"]+\.js`).MatchString(body) {
@@ -134,7 +134,7 @@ func TestIndex_DemoModeInjectsFlag(t *testing.T) {
 		t.Fatalf("NewWithDemoMode() returned error: %v", err)
 	}
 	body := serveIndex(t, h, "/admin/dashboard").Body.String()
-	if !strings.Contains(body, "window.GOMODEL_DEMO_MODE=true") {
+	if !strings.Contains(body, "window.AIGATEWAY_DEMO_MODE=true") {
 		t.Error("expected demo mode global true in page HTML")
 	}
 }
@@ -145,7 +145,7 @@ func TestIndex_StandardModeHidesDemoFlag(t *testing.T) {
 		t.Fatalf("NewWithBasePath() returned error: %v", err)
 	}
 	body := serveIndex(t, h, "/admin/dashboard").Body.String()
-	if !strings.Contains(body, "window.GOMODEL_DEMO_MODE=false") {
+	if !strings.Contains(body, "window.AIGATEWAY_DEMO_MODE=false") {
 		t.Error("expected demo mode global false in page HTML")
 	}
 }
@@ -157,7 +157,7 @@ func TestIndex_UsesBasePathForGeneratedURLs(t *testing.T) {
 	}
 	body := serveIndex(t, h, "/gw/admin/dashboard").Body.String()
 
-	if !strings.Contains(body, `window.GOMODEL_BASE_PATH="/gw"`) {
+	if !strings.Contains(body, `window.AIGATEWAY_BASE_PATH="/gw"`) {
 		t.Errorf("expected injected base path /gw in page HTML")
 	}
 	if !regexp.MustCompile(`"/gw/admin/static/assets/index-[^"]+\.js`).MatchString(body) {

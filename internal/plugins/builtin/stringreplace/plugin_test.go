@@ -520,7 +520,7 @@ func sortStrings(s []string) {
 	}
 }
 
-// TestStreamOverlapIsNotReprocessed replays the lookbehind windows GoModel
+// TestStreamOverlapIsNotReprocessed replays the lookbehind windows AIGateway
 // presents: the withheld tail comes back in front of the next delta with
 // Overlap set, already carrying the earlier replacement.
 func TestStreamOverlapIsNotReprocessed(t *testing.T) {

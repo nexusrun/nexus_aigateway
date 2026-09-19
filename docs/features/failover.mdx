@@ -9,7 +9,7 @@ keywords: ["failover", "fallback", "provider outage", "automatic retry", "high a
 
 Failover is part of [virtual models](/features/virtual-models). Every
 redirect with two or more targets fails over between them: when the target a
-request was sent to returns a failover-eligible error, GoModel retries the
+request was sent to returns a failover-eligible error, AIGateway retries the
 request against the redirect's remaining available targets, in declared order,
 and stops at the first success.
 
@@ -84,7 +84,7 @@ use [resilience settings with per-model breakers](/advanced/resilience#retry-clo
 Failover is attempted only after an attempt returns:
 
 - `5xx`
-- `429`, including a rate limit GoModel itself enforces on the target — a
+- `429`, including a rate limit AIGateway itself enforces on the target — a
   saturated target is skipped while another target has capacity
 - model unavailable, unsupported, or not found style errors
 - upstream failure messages relayed with a `4xx` status (aggregator providers
@@ -161,7 +161,7 @@ retry_on_errors:
 A non-streaming chat completion that returns `200` with an empty `choices`
 array is treated as a `502` (`provider returned no choices`), so it fails over
 under the default `5xx` status rule. Each such attempt is also logged and
-counted in `gomodel_empty_responses_total`.
+counted in `aigateway_empty_responses_total`.
 
 Example: try at most one backup, treat timeouts as failover-eligible but
 keep serving `429` responses to the client, and add a provider-specific

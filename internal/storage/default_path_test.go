@@ -13,7 +13,7 @@ func TestDefaultSQLitePath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("platformdir.DataDir() error: %v", err)
 	}
-	platformPath := filepath.Join(platformDataDir, "gomodel.db")
+	platformPath := filepath.Join(platformDataDir, "aigateway.db")
 
 	tests := []struct {
 		name  string

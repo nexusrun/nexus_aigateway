@@ -2,7 +2,7 @@
 
 ## Context
 
-GoModel supports multiple configured providers.
+AIGateway supports multiple configured providers.
 
 Some upstream model IDs from the OpenRouter provider also contain slashes, for
 example `google/gemini-xyz`.
@@ -33,7 +33,7 @@ If the request is:
 }
 ```
 
-then GoModel treats it as an unqualified model lookup.
+then AIGateway treats it as an unqualified model lookup.
 
 It checks the shared unqualified registry entry for `gpt-5-nano`.
 If multiple providers expose that model, the first registered provider wins.
@@ -42,7 +42,7 @@ This is the existing fallback behavior for bare model names.
 
 ### One or more slashes
 
-If the request has a slash, GoModel splits on the first slash only.
+If the request has a slash, AIGateway splits on the first slash only.
 
 Examples:
 

@@ -1,25 +1,25 @@
 ---
 title: "Prometheus Metrics"
-description: "Enable GoModel's experimental Prometheus metrics with METRICS_ENABLED, scrape the /metrics endpoint, and see which gateway metrics are exported."
+description: "Enable AIGateway's experimental Prometheus metrics with METRICS_ENABLED, scrape the /metrics endpoint, and see which gateway metrics are exported."
 icon: "chart-line"
 keywords: ["Prometheus", "metrics", "monitoring", "observability", "Grafana"]
 ---
 
 <Warning>
   Prometheus support is **experimental**. The metric names, labels, and
-  configuration surface may change without notice. Pin to a specific GoModel
+  configuration surface may change without notice. Pin to a specific AIGateway
   version if you depend on a stable schema.
 </Warning>
 
 This guide explains how to configure the experimental Prometheus metrics
-endpoint in GoModel.
+endpoint in AIGateway.
 
 ## Quick Start
 
 ### Disabled by Default
 
 Metrics are **disabled by default**. To enable metrics collection, set
-`METRICS_ENABLED=true` and start GoModel:
+`METRICS_ENABLED=true` and start AIGateway:
 
 <CodeGroup>
 
@@ -37,11 +37,11 @@ docker run --rm -p 8080:8080 \
 ```
 
 ```bash Binary (make build)
-# Requires Go 1.27.1+; produces bin/gomodel.
+# Requires Go 1.27.1+; produces bin/aigateway.
 make build
 
 export METRICS_ENABLED=true
-./bin/gomodel
+./bin/aigateway
 # Metrics available at http://localhost:8080/metrics
 ```
 
@@ -50,7 +50,7 @@ export METRICS_ENABLED=true
 <Note>
   The rest of this guide shows just the variable being set. Apply it via
   whichever launcher you picked above — `.env` plus `--env-file`, an inline
-  `-e` flag, or `export` before `./bin/gomodel` — and restart GoModel.
+  `-e` flag, or `export` before `./bin/aigateway` — and restart AIGateway.
 </Note>
 
 ### Disable Metrics
@@ -112,7 +112,7 @@ metrics:
 
 ```bash
 PORT=8080
-GOMODEL_MASTER_KEY=your-secret-key
+AIGATEWAY_MASTER_KEY=your-secret-key
 METRICS_ENABLED=true
 METRICS_ENDPOINT=/metrics
 OPENAI_API_KEY=sk-...
@@ -135,7 +135,7 @@ OPENAI_API_KEY=sk-...
 ```yaml
 server:
   port: "8080"
-  master_key: "${GOMODEL_MASTER_KEY}"
+  master_key: "${AIGATEWAY_MASTER_KEY}"
 
 metrics:
   enabled: true
@@ -279,15 +279,15 @@ If you need to protect the metrics endpoint further:
    location /metrics {
        auth_basic "Metrics";
        auth_basic_user_file /etc/nginx/.htpasswd;
-       proxy_pass http://gomodel:8080/metrics;
+       proxy_pass http://aigateway:8080/metrics;
    }
    ```
 
 ## Alerting on Empty Responses
 
 A provider sometimes answers `200` but returns no choices, no output, or no
-token usage. `gomodel_requests_total` counts those calls as successes, so
-GoModel also increments `gomodel_empty_responses_total` and logs a warning
+token usage. `aigateway_requests_total` counts those calls as successes, so
+AIGateway also increments `aigateway_empty_responses_total` and logs a warning
 (`provider returned 200 with an empty response`).
 
 | Label      | Values                                    |
@@ -301,7 +301,7 @@ over when a failover target exists. A response with content but no usage is
 still returned; it only breaks usage and cost tracking.
 
 ```promql
-sum(rate(gomodel_empty_responses_total[5m])) by (provider, model, reason) > 0
+sum(rate(aigateway_empty_responses_total[5m])) by (provider, model, reason) > 0
 ```
 
 ## Prometheus Configuration
@@ -312,7 +312,7 @@ sum(rate(gomodel_empty_responses_total[5m])) by (provider, model, reason) > 0
 
 ```yaml
 scrape_configs:
-  - job_name: "gomodel"
+  - job_name: "aigateway"
     static_configs:
       - targets: ["localhost:8080"]
     metrics_path: "/metrics" # Or your custom path
@@ -324,7 +324,7 @@ scrape_configs:
 
 ```yaml
 scrape_configs:
-  - job_name: "gomodel"
+  - job_name: "aigateway"
     static_configs:
       - targets: ["localhost:8080"]
     metrics_path: "/internal/prometheus" # Custom path
@@ -346,7 +346,7 @@ echo $METRICS_ENABLED  # "true" enables; empty or "false" disables
 
 Set `METRICS_ENABLED=true` via your `.env` file, an inline `-e METRICS_ENABLED=true`
 flag, or `export METRICS_ENABLED=true` (see the [Quick Start](#disabled-by-default)
-for the three launch forms), then restart GoModel.
+for the three launch forms), then restart AIGateway.
 
 ### No Metrics Data Appearing
 
@@ -363,7 +363,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
   -d '{"model": "gpt-4", "messages": [{"role": "user", "content": "Hi"}]}'
 
 # Then check metrics
-curl http://localhost:8080/metrics | grep gomodel_requests_total
+curl http://localhost:8080/metrics | grep aigateway_requests_total
 ```
 
 ```python Python
@@ -382,7 +382,7 @@ gateway = OpenAI(base_url="http://localhost:8080", api_key="your-master-key")
 metrics = gateway.get("/metrics", cast_to=str)
 
 for line in metrics.splitlines():
-    if "gomodel_requests_total" in line:
+    if "aigateway_requests_total" in line:
         print(line)
 ```
 
@@ -405,7 +405,7 @@ const gateway = new OpenAI({
 const metrics = await gateway.get("/metrics");
 
 for (const line of metrics.split("\n")) {
-  if (line.includes("gomodel_requests_total")) console.log(line);
+  if (line.includes("aigateway_requests_total")) console.log(line);
 }
 ```
 

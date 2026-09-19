@@ -1,6 +1,6 @@
 // Package presidio is the built-in presidio plugin: it sends prompt and
 // completion text to a Presidio analyzer sidecar, and anonymizes, flags, or
-// blocks the personal data it finds. Anonymization happens in GoModel with
+// blocks the personal data it finds. Anonymization happens in AIGateway with
 // numbered placeholders ("<PERSON_1>"), so the original values can be put
 // back into the response, and no anonymizer service is needed.
 package presidio

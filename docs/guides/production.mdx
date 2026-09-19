@@ -1,11 +1,11 @@
 ---
 title: "Production Deployment"
-description: "A production-grade deployment checklist for GoModel: storage backends, credential handling, air-gapped installs, multi-replica behavior, retention, and hardening."
+description: "A production-grade deployment checklist for AIGateway: storage backends, credential handling, air-gapped installs, multi-replica behavior, retention, and hardening."
 icon: "server-cog"
 keywords: ["production", "deployment", "self-hosted", "air-gapped", "offline", "Kubernetes", "hardening", "security"]
 ---
 
-This page collects the best practices for running GoModel in production. The
+This page collects the best practices for running AIGateway in production. The
 [Quick Start](/getting-started/quickstart) gets you serving traffic in a minute;
 this page covers what to decide before that install carries real load.
 
@@ -14,11 +14,11 @@ change it. A condensed [checklist](#production-checklist) is at the end.
 
 ## Small enough to run anywhere
 
-GoModel is a single static Go binary with no runtime dependencies. It is built
+AIGateway is a single static Go binary with no runtime dependencies. It is built
 with `CGO_ENABLED=0` and ships on `distroless/static`, so the container has no shell,
 no package manager, and no libc to patch.
 
-| | GoModel |
+| | AIGateway |
 | --- | --- |
 | Container image (compressed) | `14 MB` |
 | Peak RAM under load | `60 MB` |
@@ -27,7 +27,7 @@ no package manager, and no libc to patch.
 Those numbers are from the [benchmarks](/about/benchmarks) page, measured
 against other gateways on identical hardware.
 
-The practical consequence is that GoModel fits comfortably where size and cold
+The practical consequence is that AIGateway fits comfortably where size and cold
 starts are penalized: Cloud Run, Fargate, Container Apps, Fly.io, container
 Lambdas, or a small VM next to your app. It does not need a dedicated node pool.
 
@@ -41,7 +41,7 @@ Lambdas, or a small VM next to your app. It does not need a dedicated node pool.
 
 ## Choose a storage backend
 
-GoModel persists audit logs, usage records, budgets, virtual models, managed API
+AIGateway persists audit logs, usage records, budgets, virtual models, managed API
 keys, and other admin state through `STORAGE_TYPE`.
 
 | Backend | `STORAGE_TYPE` | Use it when |
@@ -50,7 +50,7 @@ keys, and other admin state through `STORAGE_TYPE`.
 | PostgreSQL | `postgresql` | More than one replica, or you already operate Postgres. The usual production choice. |
 | MongoDB | `mongodb` | You already operate MongoDB and prefer it over Postgres. |
 
-SQLite is the default so GoModel works with zero configuration, and it is a real
+SQLite is the default so AIGateway works with zero configuration, and it is a real
 production option for a single instance with a persistent volume. It removes a
 network hop and a component to operate.
 
@@ -68,25 +68,25 @@ high concurrency with budgets or rate limits enabled.
 
 <Warning>
   **The Docker image does not declare a volume.** The default database path
-  resolves to `/app/data/gomodel.db` inside the image, which is an image-layer
+  resolves to `/app/data/aigateway.db` inside the image, which is an image-layer
   directory. Without an explicit volume mount, every audit log, usage record,
   budget, managed API key, and stored credential is lost when the container is
   replaced. Always mount a volume at `/app/data`, or move to Postgres/MongoDB.
   The gateway logs a warning at startup when it detects this situation, and the
-  repository's `docker-compose.yaml` mounts the `gomodel_data` volume there.
+  repository's `docker-compose.yaml` mounts the `aigateway_data` volume there.
 </Warning>
 
-The default SQLite path is `./data/gomodel.db` when a `./data` directory already
+The default SQLite path is `./data/aigateway.db` when a `./data` directory already
 exists next to the binary, and the OS per-user data directory otherwise. That
 makes the default path dependent on the working directory, so set `SQLITE_PATH`
 explicitly in production. The resolved path is printed at startup as
 `storage configured`. See
-[Where does GoModel store its data?](/about/faq#where-does-gomodel-store-its-data).
+[Where does AIGateway store its data?](/about/faq#where-does-aigateway-store-its-data).
 
 ### Redis
 
 Redis is optional. It backs the shared model catalog snapshot and the exact
-[response cache](/features/cache). Without it, GoModel uses an in-process cache
+[response cache](/features/cache). Without it, AIGateway uses an in-process cache
 plus a local file cache, which is correct but not shared between replicas. Add
 Redis when several replicas should share discovery results and cache hits.
 
@@ -101,7 +101,7 @@ distributed lock.
 
 ## Provider credentials
 
-GoModel takes provider credentials from environment variables, from
+AIGateway takes provider credentials from environment variables, from
 `config.yaml`, or from the dashboard's Providers page. All three work. They do
 not carry the same risk.
 
@@ -138,7 +138,7 @@ as code means that change can only arrive through your deploy pipeline.
   or describe the pod.
 </Warning>
 
-GoModel does not support a `<VAR>_FILE` convention for reading secrets from
+AIGateway does not support a `<VAR>_FILE` convention for reading secrets from
 mounted files, with the single exception of the Vertex AI
 `SERVICE_ACCOUNT_FILE`. If your secret tooling mounts files, materialize them
 into environment variables in your entrypoint.
@@ -157,14 +157,14 @@ classify backups accordingly.
   `LOGGING_LOG_HEADERS=true`, `Authorization`, `x-api-key`, `Cookie`, and the
   other credential headers are replaced with `[REDACTED]` on the write path, so
   the audit store never receives them.
-- **Set `GOMODEL_MASTER_KEY`.** If it is empty and no managed keys exist, every
+- **Set `AIGATEWAY_MASTER_KEY`.** If it is empty and no managed keys exist, every
   request is allowed through unauthenticated, and `/admin/*` is added to the
   auth skip list as a lockout-recovery path. An internet-reachable gateway in
   that state hands anyone the full admin API.
 
 ### TLS
 
-GoModel does not terminate TLS. It serves plain HTTP and expects a reverse proxy
+AIGateway does not terminate TLS. It serves plain HTTP and expects a reverse proxy
 or load balancer in front of it. Run one for any deployment that is not
 loopback-only: without it, client API keys, managed gateway keys, and the master
 key all cross the network in cleartext.
@@ -174,7 +174,7 @@ call the gateway directly. Add the headers at your proxy if you need that.
 
 ## Air-gapped and offline deployments
 
-**GoModel runs fully air-gapped.** There is no telemetry, no analytics, and no
+**AIGateway runs fully air-gapped.** There is no telemetry, no analytics, and no
 license check. The admin dashboard is embedded in the binary and its fonts are
 vendored, so the UI loads no CDN assets. Paired with local model servers such
 as [Ollama](/providers/multiple-ollama), [SGLang](/providers/sglang), or
@@ -184,15 +184,15 @@ By default the gateway makes exactly two outbound calls that are not to a
 configured provider, and one switch turns both off:
 
 ```bash
-GOMODEL_OFFLINE=true
+AIGATEWAY_OFFLINE=true
 ```
 
 | Call | What it does | Default |
 | --- | --- | --- |
-| [Update check](/advanced/version-awareness) at `GOMODEL_VERSION_CHECK_URL` | Daily fetch of the latest release number, with an anonymous install id | on |
+| [Update check](/advanced/version-awareness) at `AIGATEWAY_VERSION_CHECK_URL` | Daily fetch of the latest release number, with an anonymous install id | on |
 | [Model catalog](/advanced/model-metadata) at `MODEL_LIST_URL` | Pricing, context windows, and capabilities, fetched at startup and on each cache refresh | on |
 
-`GOMODEL_OFFLINE=true` (or `offline: true` in `config.yaml`) disables the
+`AIGATEWAY_OFFLINE=true` (or `offline: true` in `config.yaml`) disables the
 update check and drops any HTTP catalog URL. It is applied after every other
 setting, so nothing in `config.yaml` or the environment can re-enable an
 outbound call underneath it. Calls to configured providers and to anything you
@@ -200,7 +200,7 @@ declared yourself, such as an OTLP collector, MCP upstreams, or a vector
 store, are untouched. The startup log confirms the mode.
 
 You can also control the two calls individually with
-`GOMODEL_VERSION_CHECK_ENABLED=false` and `MODEL_LIST_URL=off`.
+`AIGATEWAY_VERSION_CHECK_ENABLED=false` and `MODEL_LIST_URL=off`.
 
 The catalog fetch is best-effort. When it is off or fails, the gateway boots
 normally, `/health` and `/health/ready` return `200`, provider discovery still
@@ -218,17 +218,17 @@ Keep pricing in an air gap in one of three ways:
 
 1. **Ship the catalog as a file.** Download `models.min.json` outside the air
    gap, copy it in, and point the gateway at it. A local file is read, never
-   fetched, so it stays active under `GOMODEL_OFFLINE=true`:
+   fetched, so it stays active under `AIGATEWAY_OFFLINE=true`:
 
    ```bash
-   MODEL_LIST_URL=/etc/gomodel/models.json   # or file:///etc/gomodel/models.json
+   MODEL_LIST_URL=/etc/aigateway/models.json   # or file:///etc/aigateway/models.json
    ```
 
    The file is re-read on every cache refresh, so replacing it on disk updates
    pricing without a restart.
 2. **Mirror it.** Serve the file from an internal HTTP host and set
-   `MODEL_LIST_URL` to that URL. Leave `GOMODEL_OFFLINE` unset and disable the
-   update check separately, or point `GOMODEL_VERSION_CHECK_URL` at an
+   `MODEL_LIST_URL` to that URL. Leave `AIGATEWAY_OFFLINE` unset and disable the
+   update check separately, or point `AIGATEWAY_VERSION_CHECK_URL` at an
    internal mirror too.
 3. **Declare pricing per model** under `providers.<name>.models[].metadata.pricing`
    in `config.yaml`.
@@ -236,7 +236,7 @@ Keep pricing in an air gap in one of three ways:
 <Note>
   Setting `MODEL_LIST_URL` to an empty string does **not** disable the
   download: empty env values are skipped, so the default URL survives. Use
-  `off` or `GOMODEL_OFFLINE=true`.
+  `off` or `AIGATEWAY_OFFLINE=true`.
 </Note>
 
 If a Bedrock provider is configured, the AWS SDK may also probe the link-local
@@ -294,13 +294,13 @@ own refresh cadence, and two of them have none.
 
 ### Health probes and shutdown
 
-GoModel exposes liveness and readiness separately, and the binary can probe
+AIGateway exposes liveness and readiness separately, and the binary can probe
 itself, which works in a distroless image with no shell or `curl`.
 
 | Purpose | HTTP | CLI | Checks |
 | --- | --- | --- | --- |
-| Liveness | `GET /health` | `gomodel --health` | Nothing. Confirms the listener answers. |
-| Readiness | `GET /health/ready` | `gomodel --ready` | Storage (503 if down), Redis (degraded, still 200). |
+| Liveness | `GET /health` | `aigateway --health` | Nothing. Confirms the listener answers. |
+| Readiness | `GET /health/ready` | `aigateway --ready` | Storage (503 if down), Redis (degraded, still 200). |
 
 Point Kubernetes readiness at `/health/ready`, not `/health`. Run the gateway
 as a non-root user on a read-only filesystem, keep SQLite on a persistent
@@ -366,7 +366,7 @@ if the file size matters.
 - **Logs are JSON automatically when stdout is not a TTY**, so containers get
   structured logs with no configuration. Set `LOG_FORMAT` explicitly to override.
   `LOG_LEVEL` defaults to `info`; an invalid value fails startup.
-- **`gomodel_circuit_breaker_state`** is the gauge to alert on for provider
+- **`aigateway_circuit_breaker_state`** is the gauge to alert on for provider
   health. It updates per request, so an idle provider keeps its last observed
   value.
 - **Request duration for streaming responses measures time to stream
@@ -386,7 +386,7 @@ if the file size matters.
   auth by design; only the data they load is gated.
 - **Restrict the database file.** The SQLite data directory is created `0755`
   and the database file with default permissions, so on a shared host it can be
-  world-readable. Run GoModel as a dedicated user and tighten permissions,
+  world-readable. Run AIGateway as a dedicated user and tighten permissions,
   especially if any credentials are stored through the dashboard.
 - **Keep `BODY_SIZE_LIMIT` sane.** It defaults to `10M` and is what stops an
   oversized body becoming a memory-exhaustion vector. An unparseable value falls
@@ -402,7 +402,7 @@ if the file size matters.
 
 ## Production checklist
 
-- Set `GOMODEL_MASTER_KEY` to a strong value.
+- Set `AIGATEWAY_MASTER_KEY` to a strong value.
 - Terminate TLS in a proxy in front of the gateway.
 - Restrict `/admin/*`, the dashboard, and `/metrics` at the network perimeter.
 - Use Postgres or MongoDB for more than one replica or any ephemeral filesystem;
@@ -414,8 +414,8 @@ if the file size matters.
 - Decide on `LOGGING_LOG_BODIES` and set retention windows deliberately.
 - Point readiness at `/health/ready` and set
   `terminationGracePeriodSeconds` above 30.
-- Enable metrics and alert on `gomodel_circuit_breaker_state` and on
+- Enable metrics and alert on `aigateway_circuit_breaker_state` and on
   `usage log buffer full`.
-- For air-gapped installs, set `GOMODEL_OFFLINE=true`, then ship the model
+- For air-gapped installs, set `AIGATEWAY_OFFLINE=true`, then ship the model
   catalog as a file or declare model pricing in config so cost tracking and
   budgets keep working.

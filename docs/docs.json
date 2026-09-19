@@ -25,18 +25,18 @@
     "seo": {
         "indexing": "navigable",
         "metatags": {
-            "generator": "GoModel",
+            "generator": "AIGateway",
             "google-site-verification": "EhaMJtqC22YnPJetcCW5SCi3fdJF2BOai2WHjae8ymY",
             "robots": "index, follow, max-image-preview:large"
         },
         "organization": {
-            "id": "https://enterpilot.io/#organization",
-            "name": "enterpilot, Inc.",
-            "legalName": "enterpilot, Inc.",
-            "url": "https://enterpilot.io",
+            "id": "https://nexusai.run/#organization",
+            "name": "NEXUS AI",
+            "legalName": "NEXUS AI",
+            "url": "https://nexusai.run",
             "logo": "https://aigateway.nexusai.run/docs/logo.png",
             "sameAs": [
-                "https://github.com/saifelyzal/nexusruntime"
+                "https://github.com/nexusrun/nexus_aigateway"
             ]
         }
     },
@@ -62,7 +62,7 @@
         "links": [
             {
                 "type": "github",
-                "href": "https://github.com/saifelyzal/nexusruntime"
+                "href": "https://github.com/nexusrun/nexus_aigateway"
             }
         ]
     },

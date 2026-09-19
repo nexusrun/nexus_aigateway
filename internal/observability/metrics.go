@@ -16,7 +16,7 @@ var (
 	// RequestsTotal counts total LLM requests by provider, model, endpoint, and status
 	RequestsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "gomodel_requests_total",
+			Name: "aigateway_requests_total",
 			Help: "Total number of LLM requests",
 		},
 		[]string{"provider", "model", "endpoint", "status_code", "status_type", "stream"},
@@ -26,7 +26,7 @@ var (
 	// For streaming requests, this measures time to stream establishment, not total stream duration
 	RequestDuration = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "gomodel_request_duration_seconds",
+			Name:    "aigateway_request_duration_seconds",
 			Help:    "LLM request duration in seconds",
 			Buckets: []float64{0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60},
 		},
@@ -36,7 +36,7 @@ var (
 	// InFlightRequests tracks concurrent requests per provider
 	InFlightRequests = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "gomodel_requests_in_flight",
+			Name: "aigateway_requests_in_flight",
 			Help: "Number of LLM requests currently in flight",
 		},
 		[]string{"provider", "endpoint", "stream"},
@@ -45,18 +45,18 @@ var (
 	// ResponseSnapshotStoreFailures counts failures while storing response snapshots.
 	ResponseSnapshotStoreFailures = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "gomodel_response_snapshot_store_failures_total",
+			Name: "aigateway_response_snapshot_store_failures_total",
 			Help: "Total number of response snapshot store failures",
 		},
 		[]string{"provider", "provider_name", "operation"},
 	)
 
 	// EmptyResponsesTotal counts provider calls that returned 200 without
-	// choices, output, or usage. gomodel_requests_total records those calls as
+	// choices, output, or usage. aigateway_requests_total records those calls as
 	// successes, so alert on this counter instead.
 	EmptyResponsesTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "gomodel_empty_responses_total",
+			Name: "aigateway_empty_responses_total",
 			Help: "Total number of provider responses that returned 200 without choices, output, or usage",
 		},
 		[]string{"provider", "model", "reason"},
@@ -67,7 +67,7 @@ var (
 	// updated per request, so an idle provider keeps its last observed state.
 	CircuitBreakerState = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "gomodel_circuit_breaker_state",
+			Name: "aigateway_circuit_breaker_state",
 			Help: "Circuit breaker state per provider (0=closed, 1=half-open, 2=open)",
 		},
 		[]string{"provider"},
@@ -160,36 +160,36 @@ func NewPrometheusHooks() llmclient.Hooks {
 // Example query patterns for Prometheus:
 //
 // Request rate by provider:
-//   rate(gomodel_requests_total[5m])
+//   rate(aigateway_requests_total[5m])
 //
 // Error rate by provider:
-//   rate(gomodel_requests_total{status_type="error"}[5m])
+//   rate(aigateway_requests_total{status_type="error"}[5m])
 //
 // P95 latency by model:
-//   histogram_quantile(0.95, rate(gomodel_request_duration_seconds_bucket[5m]))
+//   histogram_quantile(0.95, rate(aigateway_request_duration_seconds_bucket[5m]))
 //
 // Concurrent requests:
-//   gomodel_requests_in_flight
+//   aigateway_requests_in_flight
 //
 // Empty 200 responses by provider and reason:
-//   sum(rate(gomodel_empty_responses_total[5m])) by (provider, reason)
+//   sum(rate(aigateway_empty_responses_total[5m])) by (provider, reason)
 
 // Example Grafana dashboard queries:
 //
 // Panel 1: Request Rate
-// Query: sum(rate(gomodel_requests_total[5m])) by (provider)
+// Query: sum(rate(aigateway_requests_total[5m])) by (provider)
 //
 // Panel 2: Error Rate %
-// Query: sum(rate(gomodel_requests_total{status_type="error"}[5m])) / sum(rate(gomodel_requests_total[5m])) * 100
+// Query: sum(rate(aigateway_requests_total{status_type="error"}[5m])) / sum(rate(aigateway_requests_total[5m])) * 100
 //
 // Panel 3: Latency Percentiles
-// Query: histogram_quantile(0.95, sum(rate(gomodel_request_duration_seconds_bucket[5m])) by (le, provider))
+// Query: histogram_quantile(0.95, sum(rate(aigateway_request_duration_seconds_bucket[5m])) by (le, provider))
 //
 // Panel 4: In-Flight Requests
-// Query: sum(gomodel_requests_in_flight) by (provider)
+// Query: sum(aigateway_requests_in_flight) by (provider)
 //
 // Panel 5: Requests by Model
-// Query: sum(rate(gomodel_requests_total[5m])) by (model)
+// Query: sum(rate(aigateway_requests_total[5m])) by (model)
 
 // ResetMetrics resets all metrics to zero (useful for testing)
 func ResetMetrics() {

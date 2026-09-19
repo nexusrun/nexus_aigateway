@@ -355,7 +355,7 @@ func TestParse_InvalidJSON(t *testing.T) {
 func TestParse_PricingTimeWindows(t *testing.T) {
 	// The registry's time_windows format (ai-model-list pricing.time_windows),
 	// including a per-range "days" list and an unrelated future field that an
-	// older GoModel must keep ignoring.
+	// older AIGateway must keep ignoring.
 	raw := []byte(`{
 		"version": 1,
 		"updated_at": "2026-08-24T00:00:00Z",
@@ -489,9 +489,9 @@ func TestLocalPath(t *testing.T) {
 	}{
 		{"https://example.com/m.json", "", false},
 		{"http://example.com/m.json", "", false},
-		{"file:///etc/gomodel/models.json", "/etc/gomodel/models.json", true},
+		{"file:///etc/aigateway/models.json", "/etc/aigateway/models.json", true},
 		{"file://localhost/etc/models.json", "/etc/models.json", true},
-		{"/etc/gomodel/models.json", "/etc/gomodel/models.json", true},
+		{"/etc/aigateway/models.json", "/etc/aigateway/models.json", true},
 		{"./models.json", "./models.json", true},
 		{"  /tmp/m.json  ", "/tmp/m.json", true},
 	}

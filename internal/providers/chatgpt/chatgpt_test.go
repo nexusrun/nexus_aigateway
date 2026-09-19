@@ -143,7 +143,7 @@ func TestStreamResponses_SendsCodexDialect(t *testing.T) {
 }
 
 // TestResponses_CollapsesUpstreamStream covers the non-streaming path: the
-// backend refuses stream:false, so GoModel streams and returns the final object.
+// backend refuses stream:false, so AIGateway streams and returns the final object.
 func TestResponses_CollapsesUpstreamStream(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")

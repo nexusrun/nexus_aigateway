@@ -12,7 +12,7 @@ import (
 	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
-const responseFeedbackObserversKey = "gomodel.response-feedback-observers"
+const responseFeedbackObserversKey = "aigateway.response-feedback-observers"
 
 func setResponseFeedbackObservers(c *echo.Context, observers []ext.ResponseFeedbackObserver) {
 	if c == nil || len(observers) == 0 {

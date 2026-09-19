@@ -1,4 +1,4 @@
-// Package builtin lists the plugins compiled into GoModel.
+// Package builtin lists the plugins compiled into AIGateway.
 package builtin
 
 import (

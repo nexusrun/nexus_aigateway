@@ -120,7 +120,7 @@ func padMissingToolCallReasoningContent(req *core.ChatRequest) (*core.ChatReques
 	return adapted, nil
 }
 
-// normalizeReasoningEffort maps GoModel's OpenAI-style effort levels to the two
+// normalizeReasoningEffort maps AIGateway's OpenAI-style effort levels to the two
 // levels DeepSeek V4 accepts ("high" and "max"). "low" and "medium" are mapped
 // up to "high" because DeepSeek does not support lower levels; clients that
 // want to disable reasoning should omit the field entirely. See

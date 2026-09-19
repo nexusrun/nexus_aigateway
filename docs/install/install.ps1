@@ -1,19 +1,19 @@
-# GoModel installer for Windows.
+# AIGateway installer for Windows.
 #
-#   irm https://gomodel.enterpilot.io/install.ps1 | iex
+#   irm https://aigateway.nexusai.run/install.ps1 | iex
 #
 # Downloads the latest release from GitHub, verifies its SHA-256 checksum,
-# and installs gomodel.exe to %LOCALAPPDATA%\Programs\gomodel (added to the
+# and installs aigateway.exe to %LOCALAPPDATA%\Programs\aigateway (added to the
 # user PATH when missing). No telemetry is sent by this script.
 #
 # Overrides (set before running):
-#   $env:GOMODEL_VERSION      install a specific version (e.g. v0.1.50); default: latest
-#   $env:GOMODEL_INSTALL_DIR  install directory; default: %LOCALAPPDATA%\Programs\gomodel
+#   $env:AIGATEWAY_VERSION      install a specific version (e.g. v0.1.50); default: latest
+#   $env:AIGATEWAY_INSTALL_DIR  install directory; default: %LOCALAPPDATA%\Programs\aigateway
 
 $ErrorActionPreference = 'Stop'
 
-$Repo = 'ENTERPILOT/GoModel'
-$Binary = 'gomodel'
+$Repo = 'nexusrun/nexus_aigateway'
+$Binary = 'aigateway'
 
 # PROCESSOR_ARCHITEW6432 reports the real machine architecture when running
 # in a 32-bit PowerShell on a 64-bit Windows.
@@ -24,7 +24,7 @@ $arch = switch ($rawArch) {
     default { throw "unsupported architecture: $rawArch" }
 }
 
-$tag = $env:GOMODEL_VERSION
+$tag = $env:AIGATEWAY_VERSION
 if (-not $tag) {
     # Resolve the latest tag from the releases/latest redirect, avoiding the
     # GitHub API and its per-IP rate limit (same approach as install.sh).
@@ -46,7 +46,7 @@ $version = $tag.TrimStart('v')
 $archive = "${Binary}_${version}_windows_${arch}.zip"
 $baseUrl = "https://github.com/$Repo/releases/download/$tag"
 
-$tmpDir = Join-Path ([IO.Path]::GetTempPath()) "gomodel-install-$([IO.Path]::GetRandomFileName())"
+$tmpDir = Join-Path ([IO.Path]::GetTempPath()) "aigateway-install-$([IO.Path]::GetRandomFileName())"
 New-Item -ItemType Directory -Path $tmpDir | Out-Null
 try {
     Write-Host "Downloading $Binary $tag (windows/$arch)..."
@@ -65,8 +65,8 @@ try {
 
     Expand-Archive -Path (Join-Path $tmpDir $archive) -DestinationPath $tmpDir -Force
 
-    $installDir = $env:GOMODEL_INSTALL_DIR
-    if (-not $installDir) { $installDir = Join-Path $env:LOCALAPPDATA 'Programs\gomodel' }
+    $installDir = $env:AIGATEWAY_INSTALL_DIR
+    if (-not $installDir) { $installDir = Join-Path $env:LOCALAPPDATA 'Programs\aigateway' }
     New-Item -ItemType Directory -Path $installDir -Force | Out-Null
     Copy-Item (Join-Path $tmpDir "$Binary.exe") (Join-Path $installDir "$Binary.exe") -Force
 
@@ -85,7 +85,7 @@ try {
     Write-Host '  $env:OPENAI_API_KEY = "sk-..."   # or any other provider key'
     Write-Host "  $Binary"
     Write-Host ''
-    Write-Host 'Docs: https://gomodel.enterpilot.io'
+    Write-Host 'Docs: https://aigateway.nexusai.run'
 }
 finally {
     Remove-Item -Recurse -Force $tmpDir -ErrorAction SilentlyContinue

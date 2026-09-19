@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # IaC virtual models (#433) — declarative VIRTUAL_MODELS env + config.yaml.
 #
-# These cases launch standalone gomodel gateways with custom configuration, so
+# These cases launch standalone aigateway gateways with custom configuration, so
 # they live outside the running-stack matrix in release-e2e-scenarios.md. They
 # cover: a valid declaration boots even on a COLD model catalog (the catalog
 # loads asynchronously after startup), managed entries are read-only to the admin
@@ -21,8 +21,8 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$SCRIPT_DIR/../.." && pwd)"
-BIN="${GOMODEL_RELEASE_BINARY:-$REPO/bin/gomodel}"
-WORK="${IAC_WORK_DIR:-/tmp/gomodel-iac-vm-$$}"
+BIN="${AIGATEWAY_RELEASE_BINARY:-$REPO/bin/aigateway}"
+WORK="${IAC_WORK_DIR:-/tmp/aigateway-iac-vm-$$}"
 
 PASS=0; FAIL=0
 ok(){ PASS=$((PASS+1)); printf 'PASS  %s\n' "$1"; }
@@ -49,8 +49,8 @@ start_gw(){ # uses $VM_ENV (may be empty) and $WORK/config.yaml if present
   for sp in $(lsof -nP -t -iTCP:$PORT -sTCP:LISTEN 2>/dev/null); do kill "$sp" 2>/dev/null; done
   sleep 1
   ( cd "$WORK"
-    nohup env GOMODEL_MASTER_KEY= PORT=$PORT BASE_PATH= STORAGE_TYPE=sqlite \
-      SQLITE_PATH="$WORK/data/gomodel.db" CONFIGURED_PROVIDER_MODELS_MODE=fallback \
+    nohup env AIGATEWAY_MASTER_KEY= PORT=$PORT BASE_PATH= STORAGE_TYPE=sqlite \
+      SQLITE_PATH="$WORK/data/aigateway.db" CONFIGURED_PROVIDER_MODELS_MODE=fallback \
       RESPONSE_CACHE_SIMPLE_ENABLED=false SEMANTIC_CACHE_ENABLED=false REDIS_URL= \
       VIRTUAL_MODELS="${VM_ENV:-}" "$BIN" >"$WORK/server.log" 2>&1 < /dev/null &
     echo $! >"$PIDF" )
@@ -103,7 +103,7 @@ managed_rejected PUT    "I6 rename of managed source rejected"       '{"source":
 stop_gw
 
 ############ managed overrides store row of same source (restart) ############
-export VM_ENV=""; rm -f "$WORK/data/gomodel.db"*
+export VM_ENV=""; rm -f "$WORK/data/aigateway.db"*
 start_gw >/dev/null || bad "I7 setup gateway"
 curl -sS -o /dev/null -X PUT "$B/admin/virtual-models" -H 'Content-Type: application/json' -d '{"source":"qa-iac-ovr","target_model":"groq/groq/compound-mini"}'
 note "store baseline qa-iac-ovr -> $(chat_provider qa-iac-ovr)"
@@ -120,7 +120,7 @@ start_gw >/dev/null || bad "I7b resurface gateway"
 stop_gw
 
 ############ env VIRTUAL_MODELS merges over config.yaml per source ############
-rm -f "$WORK/data/gomodel.db"*
+rm -f "$WORK/data/aigateway.db"*
 cat > "$WORK/config.yaml" <<'YAML'
 virtual_models:
   - source: qa-iac-merge
@@ -137,7 +137,7 @@ stop_gw; rm -f "$WORK/config.yaml"
 ############ STRUCTURALLY invalid declaration aborts startup (negative) ############
 fail_start(){ # name, VM_ENV  -> expect the process to EXIT with a clear error
   for sp in $(lsof -nP -t -iTCP:$NEG_PORT -sTCP:LISTEN 2>/dev/null); do kill "$sp" 2>/dev/null; done
-  ( cd "$WORK"; nohup env GOMODEL_MASTER_KEY= PORT=$NEG_PORT BASE_PATH= STORAGE_TYPE=sqlite SQLITE_PATH="$WORK/data/neg.db" REDIS_URL= RESPONSE_CACHE_SIMPLE_ENABLED=false VIRTUAL_MODELS="$2" "$BIN" >"$WORK/neg.log" 2>&1 < /dev/null & echo $! >"$WORK/neg.pid" )
+  ( cd "$WORK"; nohup env AIGATEWAY_MASTER_KEY= PORT=$NEG_PORT BASE_PATH= STORAGE_TYPE=sqlite SQLITE_PATH="$WORK/data/neg.db" REDIS_URL= RESPONSE_CACHE_SIMPLE_ENABLED=false VIRTUAL_MODELS="$2" "$BIN" >"$WORK/neg.log" 2>&1 < /dev/null & echo $! >"$WORK/neg.pid" )
   sleep 4
   if kill -0 "$(cat "$WORK/neg.pid")" 2>/dev/null; then bad "$1 (process still alive)";
   elif grep -qiE 'failed to initialize virtual models|strateg|cannot target itself|unknown target provider' "$WORK/neg.log"; then ok "$1"; note "$(grep -iE 'error' "$WORK/neg.log" | tail -1 | sed 's/.*"error"://')";
@@ -153,7 +153,7 @@ fail_start "I10 self-referential target aborts startup" '[{"source":"openai/gpt-
 fail_start "I12 misspelled target provider aborts startup" '[{"source":"qa-iac-badprov","targets":[{"provider":"opnai","model":"gpt-4.1-nano"}]}]'
 
 ############ availability is NOT a startup gate (F3 fix): unknown target boots, stays unavailable ############
-rm -f "$WORK/data/gomodel.db"*
+rm -f "$WORK/data/aigateway.db"*
 export VM_ENV='[{"source":"qa-iac-unknown","target":"openai/this-model-xyz-404"}]'
 if start_gw >/dev/null; then
   code=$(curl -sS -o /dev/null -w '%{http_code}' "$B/v1/chat/completions" -H 'Content-Type: application/json' \
@@ -170,7 +170,7 @@ stop_gw
 # A shared config.yaml may declare providers whose credentials are only set in
 # some environments. Two same-type entries keep the by-type env overlay from
 # credentialing them, so both stay declared-but-unregistered on every machine.
-rm -f "$WORK/data/gomodel.db"*
+rm -f "$WORK/data/aigateway.db"*
 cat > "$WORK/config.yaml" <<'YAML'
 providers:
   qa-keyless-a:

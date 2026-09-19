@@ -7,8 +7,8 @@ import "log/slog"
 //
 // A shared object is trusted code: loading one is equivalent to changing the
 // binary. Keep search_paths root-owned and pin files with sha256 in
-// production. Loading requires a cgo-enabled build of GoModel on Linux,
-// macOS, or FreeBSD (the gomodel:<version>-plugins image); the default static
+// production. Loading requires a cgo-enabled build of AIGateway on Linux,
+// macOS, or FreeBSD (the aigateway:<version>-plugins image); the default static
 // binary reports a clear error for any configured plugin file.
 type PluginsConfig struct {
 	// Enabled turns the plugin system on: the built-in and loaded plugin
@@ -26,7 +26,7 @@ type PluginsConfig struct {
 	SearchPaths []string `yaml:"search_paths" env:"PLUGINS_SEARCH_PATHS"`
 
 	// Load lists the shared objects to open at startup. Each file exports a
-	// GoModelPlugin symbol (see the pluginapi package). A file that cannot be
+	// AIGatewayPlugin symbol (see the pluginapi package). A file that cannot be
 	// resolved, verified, or opened is a startup error.
 	Load []PluginFileConfig `yaml:"load"`
 }

@@ -41,7 +41,7 @@ const (
 	PartReasoning PartKind = "reasoning"
 	// PartRefusal is a model refusal; Text is set.
 	PartRefusal PartKind = "refusal"
-	// PartOpaque is content GoModel does not model. Raw holds the original
+	// PartOpaque is content AIGateway does not model. Raw holds the original
 	// encoding and the part round-trips unchanged.
 	PartOpaque PartKind = "opaque"
 )
@@ -61,7 +61,7 @@ type Part struct {
 	ToolCall *ToolCall
 	// ToolResult is set for [PartToolResult].
 	ToolResult *ToolResult
-	// Raw is the original JSON encoding of parts GoModel keeps verbatim
+	// Raw is the original JSON encoding of parts AIGateway keeps verbatim
 	// (opaque parts, and media parts of the Responses dialect). Read-only.
 	Raw json.RawMessage
 }

@@ -13,7 +13,7 @@ import (
 
 const (
 	// DefaultRedisKey is the Redis key used to store the model registry cache.
-	DefaultRedisKey = "gomodel:models"
+	DefaultRedisKey = "aigateway:models"
 )
 
 // RedisModelCacheConfig is the configuration passed to NewRedisModelCache when
@@ -26,7 +26,7 @@ type RedisModelCacheConfig struct {
 	URL string
 
 	// Key is the Redis key under which the serialised ModelCache is stored.
-	// Defaults to DefaultRedisKey ("gomodel:models") when empty.
+	// Defaults to DefaultRedisKey ("aigateway:models") when empty.
 	Key string
 
 	// TTL is how long a cached entry lives in Redis before expiring.

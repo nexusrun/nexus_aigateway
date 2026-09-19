@@ -8,7 +8,7 @@ import {
 } from "../paraglide/runtime.js";
 import { readStored, writeStored } from "../utils/storage.js";
 
-const LOCALE_STORAGE_KEY = "gomodel_locale";
+const LOCALE_STORAGE_KEY = "aigateway_locale";
 
 defineCustomClientStrategy("custom-dashboard", {
   getLocale: () => readStored(LOCALE_STORAGE_KEY) || undefined,

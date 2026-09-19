@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -26,6 +27,10 @@ func NewSQLite(cfg SQLiteConfig) (SQLiteStorage, error) {
 	dir := filepath.Dir(cfg.Path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create directory %s: %w", dir, err)
+	}
+
+	if err := adoptLegacySQLiteFile(cfg.Path); err != nil {
+		return nil, err
 	}
 
 	// Open database with WAL mode and busy timeout
@@ -56,6 +61,40 @@ func NewSQLite(cfg SQLiteConfig) (SQLiteStorage, error) {
 	}
 
 	return &sqliteStorage{db: db}, nil
+}
+
+// adoptLegacySQLiteFile renames a database still stored under
+// LegacySQLiteFilename to path, so a gateway upgraded past the rename keeps its
+// data. It does nothing when path is not the current default filename, or when
+// a database already exists there.
+func adoptLegacySQLiteFile(path string) error {
+	if filepath.Base(path) != SQLiteFilename {
+		return nil
+	}
+	legacy := filepath.Join(filepath.Dir(path), LegacySQLiteFilename)
+	if !fileExists(legacy) || fileExists(path) {
+		return nil
+	}
+
+	// The side files move first: interrupted after the database alone is
+	// renamed, the next start sees the new name and skips adoption, orphaning a
+	// -wal that still holds committed transactions. Interrupted in this order,
+	// the database keeps its old name and adoption simply resumes.
+	for _, suffix := range []string{"-wal", "-shm", ""} {
+		if !fileExists(legacy + suffix) {
+			continue
+		}
+		if err := os.Rename(legacy+suffix, path+suffix); err != nil {
+			return fmt.Errorf("failed to rename legacy database %s: %w", legacy+suffix, err)
+		}
+	}
+	slog.Info("adopted legacy SQLite database", "from", legacy, "to", path)
+	return nil
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 func (s *sqliteStorage) DB() *sql.DB {

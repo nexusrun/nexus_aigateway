@@ -1,6 +1,6 @@
 ---
 title: "xAI (Grok)"
-description: "Configure xAI Grok models in GoModel and understand how reasoning effort and prompt-cache affinity are handled."
+description: "Configure xAI Grok models in AIGateway and understand how reasoning effort and prompt-cache affinity are handled."
 icon: "x"
 keywords: ["xAI", "Grok", "reasoning effort", "prompt cache", "provider setup"]
 ---
@@ -38,7 +38,7 @@ them per image; set a `per_image` price for the model if the catalog has none.
 ## Reasoning effort mapping
 
 Grok reasoning models (e.g. `grok-4.6`, defaulting to `high`) accept
-`reasoning_effort` as a top-level string on Chat Completions. GoModel rewrites
+`reasoning_effort` as a top-level string on Chat Completions. AIGateway rewrites
 the OpenAI-shaped `"reasoning": {"effort": "..."}` into that flat field — no
 client change required. On the Responses API the nested shape is xAI-native
 and passes through unchanged.
@@ -50,11 +50,11 @@ and passes through unchanged.
 | anything else | passed through for xAI to judge |
 
 Models that do not take a configurable effort answer `400 ... does not support
-parameter reasoningEffort`. GoModel drops the field for them instead of
+parameter reasoningEffort`. AIGateway drops the field for them instead of
 forwarding it, so the same request works across the catalog: the
 `-non-reasoning` Grok variants, the `grok-build` coding family, `grok-2`, and
 `grok-3` (only `grok-3-mini` takes an effort). Unknown model IDs keep the
-field, so a new reasoning model works before GoModel learns about it.
+field, so a new reasoning model works before AIGateway learns about it.
 
 ## Prompt-cache affinity
 
@@ -62,16 +62,16 @@ xAI routes a conversation's requests to the same server via the
 `x-grok-conv-id` header; without it, cache hits are unreliable and input
 tokens are often billed at the uncached price.
 
-- **Chat Completions:** GoModel forwards a client-supplied `X-Grok-Conv-Id`
+- **Chat Completions:** AIGateway forwards a client-supplied `X-Grok-Conv-Id`
   header, and otherwise derives a stable one from the conversation's opening
   messages — cache affinity works with no client change.
-- **Responses API:** pass `prompt_cache_key` in the request body; GoModel
+- **Responses API:** pass `prompt_cache_key` in the request body; AIGateway
   forwards it verbatim.
 
 ## `metadata` on the Responses API
 
 xAI's native `/responses` endpoint rejects the standard OpenAI `metadata`
-member with `400 "Argument not supported: metadata"`. GoModel drops it from
+member with `400 "Argument not supported: metadata"`. AIGateway drops it from
 the outbound request (logging that it did) instead of relaying the error, so
 clients that tag every request with metadata keep working. The member is only
 removed on the way to xAI; nothing else about the request changes.

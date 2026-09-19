@@ -369,19 +369,19 @@ test("defaultUserPathForModel returns the first allowed path or empty", () => {
 });
 
 test("effectiveUserPathHeaderName falls back to the default header name", () => {
-  assert.equal(effectiveUserPathHeaderName(undefined), "X-GoModel-User-Path");
-  assert.equal(effectiveUserPathHeaderName(""), "X-GoModel-User-Path");
-  assert.equal(effectiveUserPathHeaderName("   "), "X-GoModel-User-Path");
+  assert.equal(effectiveUserPathHeaderName(undefined), "X-AIGateway-User-Path");
+  assert.equal(effectiveUserPathHeaderName(""), "X-AIGateway-User-Path");
+  assert.equal(effectiveUserPathHeaderName("   "), "X-AIGateway-User-Path");
   // A customized USER_PATH_HEADER from /admin/runtime/config wins.
   assert.equal(effectiveUserPathHeaderName("X-Tenant-Path"), "X-Tenant-Path");
   assert.equal(effectiveUserPathHeaderName("  X-Tenant-Path  "), "X-Tenant-Path");
 });
 
 test("playgroundUserPathHeader sends the default header name only when non-empty", () => {
-  assert.deepEqual(playgroundUserPathHeader("/team/alpha"), { "X-GoModel-User-Path": "/team/alpha" });
-  assert.deepEqual(playgroundUserPathHeader("/team/alpha", ""), { "X-GoModel-User-Path": "/team/alpha" });
+  assert.deepEqual(playgroundUserPathHeader("/team/alpha"), { "X-AIGateway-User-Path": "/team/alpha" });
+  assert.deepEqual(playgroundUserPathHeader("/team/alpha", ""), { "X-AIGateway-User-Path": "/team/alpha" });
   // Surrounding whitespace is trimmed before the header is built.
-  assert.deepEqual(playgroundUserPathHeader("  /team/alpha  "), { "X-GoModel-User-Path": "/team/alpha" });
+  assert.deepEqual(playgroundUserPathHeader("  /team/alpha  "), { "X-AIGateway-User-Path": "/team/alpha" });
   // Unrestricted selection or blank input drops the header.
   assert.deepEqual(playgroundUserPathHeader(""), {});
   assert.deepEqual(playgroundUserPathHeader("   "), {});

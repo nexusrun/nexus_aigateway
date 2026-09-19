@@ -34,7 +34,7 @@ install-tools:
 # Compiles the gateway. The dashboard must be built first (see `frontend`);
 # the binary embeds internal/admin/dashboard/static/dist.
 build: frontend
-	go build -ldflags '$(LDFLAGS)' -o bin/gomodel ./cmd/gomodel
+	go build -ldflags '$(LDFLAGS)' -o bin/aigateway ./cmd/aigateway
 # Run the application.
 #
 # Built and exec'd rather than `go run`: `go run` exits 1 when it is
@@ -43,10 +43,10 @@ build: frontend
 # recipe shell, which also puts the gateway directly under make's signal
 # handling instead of behind a supervisor.
 run:
-	go build -tags=swagger -ldflags '$(LDFLAGS)' -o bin/gomodel ./cmd/gomodel
-	LOG_LEVEL="$(LOG_LEVEL)" SWAGGER_ENABLED="$(SWAGGER_ENABLED)" exec ./bin/gomodel
+	go build -tags=swagger -ldflags '$(LDFLAGS)' -o bin/aigateway ./cmd/aigateway
+	LOG_LEVEL="$(LOG_LEVEL)" SWAGGER_ENABLED="$(SWAGGER_ENABLED)" exec ./bin/aigateway
 
-# Seed the local SQLite database and start GoModel with a populated dashboard.
+# Seed the local SQLite database and start AIGateway with a populated dashboard.
 # Guardrails (which imply plugins) are on so the seeded guardrail instances and
 # the workflows referencing them are live rather than capped off at runtime.
 # Audit retention is raised to the seeded window: the 30-day default would
@@ -55,7 +55,7 @@ run:
 # maintainer changing this default must not leave them out of step.
 export DEMO_DAYS ?= 90
 demo: seed-demo-data
-	$(MAKE) run GOMODEL_DEMO_MODE=true GUARDRAILS_ENABLED=true \
+	$(MAKE) run AIGATEWAY_DEMO_MODE=true GUARDRAILS_ENABLED=true \
 		LOGGING_RETENTION_DAYS=$(DEMO_DAYS) USAGE_RETENTION_DAYS=$(DEMO_DAYS)
 
 # Clean build artifacts
@@ -76,21 +76,21 @@ mod-check:
 infra:
 	docker compose up -d
 
-# Docker Compose: full stack (GoModel + Prometheus; builds app image when needed)
+# Docker Compose: full stack (AIGateway + Prometheus; builds app image when needed)
 image: frontend
 	docker compose --profile app up -d
 
 # Shared-object plugin support (Go's plugin package) needs a cgo-enabled
 # binary; the default `build` and the release binaries are static. These
 # targets produce the cgo variants. Plugins must be built with the same Go
-# toolchain and flags as the binary that loads them: `gomodel plugin build`
-# copies the flags of the gomodel binary that runs it.
+# toolchain and flags as the binary that loads them: `aigateway plugin build`
+# copies the flags of the aigateway binary that runs it.
 build-plugins: frontend
-	CGO_ENABLED=1 go build -ldflags '$(LDFLAGS)' -o bin/gomodel-plugins ./cmd/gomodel
+	CGO_ENABLED=1 go build -ldflags '$(LDFLAGS)' -o bin/aigateway-plugins ./cmd/aigateway
 
-# Docker image with plugin support (Dockerfile.plugins). Tag: gomodel:<version>-plugins.
+# Docker image with plugin support (Dockerfile.plugins). Tag: aigateway:<version>-plugins.
 image-plugins: frontend
-	docker build -f Dockerfile.plugins -t gomodel:$(VERSION)-plugins -t gomodel:plugins \
+	docker build -f Dockerfile.plugins -t aigateway:$(VERSION)-plugins -t aigateway:plugins \
 		--build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg DATE=$(DATE) .
 
 # Build every example plugin under docs/example_plugins into ./plugins/<name>.so
@@ -100,11 +100,11 @@ example-plugins:
 	@for dir in docs/example_plugins/*/; do \
 		name=$$(basename $$dir); \
 		echo "building $$dir -> plugins/$$name.so"; \
-		go run ./cmd/gomodel plugin build -o plugins/$$name.so $$dir || exit 1; \
+		go run ./cmd/aigateway plugin build -o plugins/$$name.so $$dir || exit 1; \
 	done
 
 # Seed rolling demo telemetry and dashboard configuration into SQLite.
-# Usage: SQLITE_PATH=data/gomodel.db make seed-demo-data
+# Usage: SQLITE_PATH=data/aigateway.db make seed-demo-data
 seed-demo-data:
 	bash tools/seed-demo-data.sh
 
@@ -168,12 +168,12 @@ record-api:
 
 swagger:
 	go run github.com/swaggo/swag/v2/cmd/swag init --generalInfo main.go \
-		--dir cmd/gomodel,internal \
-		--output cmd/gomodel/docs \
+		--dir cmd/aigateway,internal \
+		--output cmd/aigateway/docs \
 		--outputTypes go \
 		--parseDependency
 	@command -v node >/dev/null 2>&1 || { echo "node is required to build docs; install from https://nodejs.org" >&2; exit 1; }
-	node tools/swagger-postprocess.mjs cmd/gomodel/docs/docs.go
+	node tools/swagger-postprocess.mjs cmd/aigateway/docs/docs.go
 	$(MAKE) docs-openapi
 
 docs-openapi:
@@ -182,7 +182,7 @@ docs-openapi:
 	@tmp_dir=$$(mktemp -d); \
 	trap 'rm -rf "$$tmp_dir"' EXIT; \
 	go run github.com/swaggo/swag/v2/cmd/swag init --quiet --generalInfo main.go \
-		--dir cmd/gomodel,internal \
+		--dir cmd/aigateway,internal \
 		--output "$$tmp_dir" \
 		--outputTypes json \
 		--parseDependency; \

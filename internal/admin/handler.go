@@ -1,4 +1,4 @@
-// Package admin provides the admin REST API and dashboard for GoModel.
+// Package admin provides the admin REST API and dashboard for AIGateway.
 package admin
 
 import (
@@ -467,7 +467,7 @@ var validIntervals = map[string]bool{
 }
 
 const (
-	dashboardTimeZoneHeader = "X-GoModel-Timezone"
+	dashboardTimeZoneHeader = "X-AIGateway-Timezone"
 	defaultDashboardTZ      = "UTC"
 	defaultDateRangeDays    = usage.DefaultDateRangeDays
 	maxDateRangeDays        = usage.MaxDateRangeDays

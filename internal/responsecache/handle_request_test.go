@@ -146,7 +146,7 @@ func TestInternalRequestHeaders_AllowlistsSafeSnapshotHeaders(t *testing.T) {
 			"Cache-Control": []string{"no-store"},
 			"Cookie":        []string{"session=secret"},
 			"Traceparent":   []string{"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00"},
-			"User-Agent":    []string{"gomodel-test"},
+			"User-Agent":    []string{"aigateway-test"},
 			"X-Api-Key":     []string{"secret-key"},
 		},
 		"application/json",
@@ -162,8 +162,8 @@ func TestInternalRequestHeaders_AllowlistsSafeSnapshotHeaders(t *testing.T) {
 	if got := headers.Get("Accept"); got != "application/json" {
 		t.Fatalf("Accept = %q, want application/json", got)
 	}
-	if got := headers.Get("User-Agent"); got != "gomodel-test" {
-		t.Fatalf("User-Agent = %q, want gomodel-test", got)
+	if got := headers.Get("User-Agent"); got != "aigateway-test" {
+		t.Fatalf("User-Agent = %q, want aigateway-test", got)
 	}
 	if got := headers.Get("Traceparent"); got == "" {
 		t.Fatal("Traceparent = empty, want preserved trace header")

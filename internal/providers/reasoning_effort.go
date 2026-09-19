@@ -6,7 +6,7 @@ import (
 	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
-// AdaptReasoningEffortRequest rewrites GoModel's common nested reasoning shape
+// AdaptReasoningEffortRequest rewrites AIGateway's common nested reasoning shape
 // into the flat "reasoning_effort" string extension used by several
 // OpenAI-compatible providers (Gemini, DeepSeek). It shallow-copies the typed
 // request and merges the effort into ExtraFields, so the body is marshaled

@@ -23,9 +23,9 @@ text below, the code and the ADR win:
 - `Headers.Upstream` is collected but not forwarded; `Host.History` is
   unavailable; `Meta.Cache.PlannedPrefixMessages` is not populated; the
   response phase does not run on response-cache hits.
-- `gomodel plugin build` mirrors the host's build flags instead of forcing
+- `aigateway plugin build` mirrors the host's build flags instead of forcing
   `-trimpath` (a mismatch either way is refused by `plugin.Open`), and stamps
-  build info through a `GoModelBuildInfo` symbol in the plugin's main package.
+  build info through a `AIGatewayBuildInfo` symbol in the plugin's main package.
 - Route strategies receive `RouteRequest.Prompt == nil` in this version and
   take instance-scoped settings from a guardrail definition named after the
   plugin.
@@ -37,7 +37,7 @@ text below, the code and the ADR win:
 
 ## 1. Problem
 
-GoModel has two interception mechanisms today and neither is a plugin system:
+AIGateway has two interception mechanisms today and neither is a plugin system:
 
 | Mechanism | Where | Sees | Can do | Cannot do |
 |---|---|---|---|---|
@@ -115,14 +115,14 @@ Takeaways applied below:
   call, gate the response on it) is cheap to implement and removes the
   check's latency from the critical path. Section 5 adds it.
 - Bifrost runs `PreLLM` per attempt, including fallbacks, and pays for it
-  with a reverse-order post-hook protocol. GoModel keeps prompt plugins
+  with a reverse-order post-hook protocol. AIGateway keeps prompt plugins
   once per request: the patched prompt is reused across failover attempts,
   and `Meta.Attempts` tells response plugins what happened.
 - Bifrost's `.so` experience is the cautionary tale: static default
   binaries cannot load plugins, and a one-patch-version dependency drift
   fails the load. Section 8.2's stdlib-only contract package and version
   handshake exist to make that failure legible.
-- Bifrost guards MCP tool calls with the same rule model. GoModel has an
+- Bifrost guards MCP tool calls with the same rule model. AIGateway has an
   MCP gateway; an `mcp` hook kind (tool arguments in, result out) fits the
   same `Decision` vocabulary and is listed under phase 6.
 
@@ -156,7 +156,7 @@ type Manifest struct {
     Name        string   // stable id, used in config and workflows
     Version     string   // plugin's own version, for logs and dashboard
     Description string
-    // BuiltWith is filled by the `gomodel plugin build` helper (GoModel
+    // BuiltWith is filled by the `aigateway plugin build` helper (AIGateway
     // module version, Go version) and used only for diagnostics: a .so
     // that fails to load gets an error naming both versions instead of
     // Go's "plugin was built with a different version of package".
@@ -270,7 +270,7 @@ const (
     ActionAllow   Action = "allow"   // continue, possibly with edits already applied to x
     ActionBlock   Action = "block"   // reject with Status/Code/Message in the endpoint's native error dialect
     ActionRespond Action = "respond" // short-circuit: send Response as the completion (HTTP 200)
-    ActionWarn    Action = "warn"    // continue; record Detail in audit and add X-GoModel-Guardrail headers
+    ActionWarn    Action = "warn"    // continue; record Detail in audit and add X-AIGateway-Guardrail headers
 )
 
 type Decision struct {
@@ -319,7 +319,7 @@ Two rules keep the contract liberal for plugin authors:
 
 - `pluginapi` is its own Go module, depending on the standard library
   only. A `.so` shares with the host exactly the stdlib plus this one
-  module. GoModel internals, providers, and dashboard changes never affect
+  module. AIGateway internals, providers, and dashboard changes never affect
   a plugin; only a `pluginapi` release or a Go toolchain change does.
 - Changes are additive only. New fields are appended, new hook interfaces
   are added beside the existing ones, new `Action`, `PartKind`, and
@@ -335,7 +335,7 @@ needs a new field or enum value on `Exchange` anyway, Go patch releases
 force a `.so` rebuild regardless, and the split cost authors extra imports
 and package names (`prompt`, `stream`, `response`) that shadow the most
 natural local variables in exactly this code. The rebuild is a CI step
-against a pinned GoModel version, so the design optimizes source
+against a pinned AIGateway version, so the design optimizes source
 compatibility and makes the rebuild cheap instead of rare.
 
 What a host change costs a plugin:
@@ -343,21 +343,21 @@ What a host change costs a plugin:
 | Host change | Plugin source edit | `.so` rebuild | Compiled-in rebuild |
 |---|---|---|---|
 | New hook kind, field, or enum value in `pluginapi` | no | yes | with the binary, as always |
-| Internal GoModel change, new provider, dashboard work | no | no | with the binary |
+| Internal AIGateway change, new provider, dashboard work | no | no | with the binary |
 | Go toolchain upgrade (including patch releases) | no | yes | with the binary |
 | Removal or rename (major version only) | yes | yes | with the binary |
 
 Making the rebuild cheap:
 
-- Each GoModel release names the `pluginapi` version and Go version it
-  was built with in `gomodel version` and `/admin/plugins`.
-- `gomodel plugin build` runs `go build -buildmode=plugin` with the host's
+- Each AIGateway release names the `pluginapi` version and Go version it
+  was built with in `aigateway version` and `/admin/plugins`.
+- `aigateway plugin build` runs `go build -buildmode=plugin` with the host's
   recorded flags and stamps `BuiltWith` (Go version, `pluginapi` version)
   so a refused load is reported as "built against pluginapi v0.3.0 with
   go1.27.1, host has v0.4.0 with go1.27.1" instead of Go's generic
   message.
-- A `gomodel-plugin-builder:<version>` image pins the matching toolchain,
-  so an operator's CI rebuilds every `.so` with one line per GoModel
+- A `aigateway-plugin-builder:<version>` image pins the matching toolchain,
+  so an operator's CI rebuilds every `.so` with one line per AIGateway
   upgrade.
 
 ### 3.6 Host
@@ -553,7 +553,7 @@ so far in `x.Stream`.
 
 Same edit methods as `Prompt`. Setting `FinishReason` to `content_filter`
 is the OpenAI-compatible way to say a response was cut; core maps it to
-`stop_reason: "end_turn"` plus an `X-GoModel-Guardrail` header in the
+`stop_reason: "end_turn"` plus an `X-AIGateway-Guardrail` header in the
 Anthropic dialect, which has no equivalent.
 
 ### 4.4 Prompt-cache and session state
@@ -731,7 +731,7 @@ Behaviour per mode:
   `[DONE]`, then closes the upstream body. The client keeps whatever it
   already received; that is the documented cost of this mode.
 - `buffer` drains the upstream into a bounded buffer, sends an SSE comment
-  line (`: gomodel-buffering`) every 15 s so proxies and clients do not
+  line (`: aigateway-buffering`) every 15 s so proxies and clients do not
   time out, assembles a `Completion` from the events (the same logic
   `usage.StreamUsageObserver` and the audit stream observer use to read
   deltas), runs the `response` chain, and then either replays the original
@@ -798,7 +798,7 @@ Two sub-cases, both zero-cost when unused:
 
 ```yaml
 plugins:
-  search_paths: ["/etc/gomodel/plugins"]     # PLUGINS_SEARCH_PATHS; empty disables .so loading
+  search_paths: ["/etc/aigateway/plugins"]     # PLUGINS_SEARCH_PATHS; empty disables .so loading
   instances:
     - name: acme-guard
       type: acme-guard                        # builtin name, or a .so manifest Name
@@ -810,7 +810,7 @@ plugins:
 ```
 
 The loader (`internal/pluginload`) calls `plugin.Open`, looks up the
-exported symbol `GoModelPlugin` (type `pluginapi.Plugin` or a
+exported symbol `AIGatewayPlugin` (type `pluginapi.Plugin` or a
 `func() pluginapi.Plugin` constructor so one `.so` can serve several
 instances) and verifies that every `Kind` in the manifest is backed by the
 matching interface. Any mismatch is a startup error naming the file, never a
@@ -821,13 +821,13 @@ plainly:
 
 - Linux, macOS, and FreeBSD only, and `CGO_ENABLED=1`. The published image
   builds with `CGO_ENABLED=0` (`Dockerfile:24`), so `.so` support needs a
-  second build variant (`gomodel:<ver>-plugins`) built with cgo on
+  second build variant (`aigateway:<ver>-plugins`) built with cgo on
   `debian-slim` rather than `scratch`. The default image stays static.
 - The plugin must be built with the exact same Go toolchain version, the
   same `GOFLAGS` (notably `-trimpath`), and the same version of every
   package it shares with the host. With a stdlib-only `pluginapi` module
   that reduces to: same Go version and same `pluginapi` module version.
-  The `gomodel plugin build` helper and the `gomodel-plugin-builder`
+  The `aigateway plugin build` helper and the `aigateway-plugin-builder`
   image (section 3.5) make that a one-line CI step. Expect to rebuild
   whenever `pluginapi` or the Go toolchain changes.
 - Plugins cannot be unloaded. Config edits that change a `.so` path take
@@ -935,8 +935,8 @@ Each phase is independently shippable and keeps existing behaviour.
    `header_edit` built-in.
 5. `.so` loader.
    `internal/pluginload`, config section, sha256 pin, version handshake,
-   `gomodel plugin build` helper, cgo image variant,
-   `gomodel-plugin-builder` image, `/admin/plugins`,
+   `aigateway plugin build` helper, cgo image variant,
+   `aigateway-plugin-builder` image, `/admin/plugins`,
    dashboard plugin list, `secret` and `model` inputs, strategy dropdown entries and `strategy_config` fields in the virtual model editor, `docs/advanced/plugins.mdx`, ADR-0003 amendment for the `steps` payload
    and an example plugin under `docs/example_plugins/`.
 6. Audio, realtime, and MCP tool-call hooks.

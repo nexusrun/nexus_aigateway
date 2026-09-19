@@ -21,17 +21,26 @@ const (
 	TypeMongoDB    = "mongodb"
 )
 
+// SQLiteFilename is the database file name. LegacySQLiteFilename is the name
+// used before the gateway was renamed; a database still under that name is
+// adopted on first start, so an upgrade keeps its data instead of silently
+// opening an empty database.
+const (
+	SQLiteFilename       = "aigateway.db"
+	LegacySQLiteFilename = "gomodel.db"
+)
+
 // LegacySQLitePath is the historical default database location, relative to
 // the working directory. It stays the default whenever a ./data directory
 // exists (existing deployments, the Docker image), so upgrades never move
 // anyone's database.
-const LegacySQLitePath = "data/gomodel.db"
+const LegacySQLitePath = "data/" + SQLiteFilename
 
 // DefaultSQLitePath returns the database path used when none is configured:
 // LegacySQLitePath when a ./data directory already exists, otherwise the
 // OS-conventional per-user data directory (see platformdir.DataFile).
 func DefaultSQLitePath() string {
-	return platformdir.DataFile("gomodel.db")
+	return platformdir.DataFile(SQLiteFilename)
 }
 
 // Config holds storage configuration
@@ -67,7 +76,7 @@ type PostgreSQLConfig struct {
 type MongoDBConfig struct {
 	// URL is the connection string (e.g., mongodb://localhost:27017)
 	URL string
-	// Database is the database name (default: gomodel)
+	// Database is the database name (default: aigateway)
 	Database string
 }
 

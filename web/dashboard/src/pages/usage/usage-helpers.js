@@ -123,7 +123,7 @@ export function usagePageCostTitle(summary) {
 }
 
 // --- Rewrite savings ("Pro Saved" card) ---
-// Request rewriters (e.g. GoModel Pro token compression) strip prompt tokens
+// Request rewriters (e.g. AIGateway Pro token compression) strip prompt tokens
 // before the request leaves the gateway. Savings ride on provider usage rows,
 // so the uncached summary holds the full totals, and the card only appears
 // once a rewriter reported savings. A single card follows the page's

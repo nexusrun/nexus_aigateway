@@ -16,7 +16,7 @@ plugin:
 
 | How | When to use it | Registered by |
 | --- | --- | --- |
-| **Built in** | Ships with GoModel: `system_prompt`, `llm_based_altering`, `string_replace`, `header_edit`, `llm_judge`, and the `cheapest_healthy` routing strategy | nothing to do |
+| **Built in** | Ships with AIGateway: `system_prompt`, `llm_based_altering`, `string_replace`, `header_edit`, `llm_judge`, and the `cheapest_healthy` routing strategy | nothing to do |
 | **Compiled in** | You build your own binary from the `run` package | `ext.RegisterPlugin(func() pluginapi.Plugin { ... })` before `run.Run` |
 | **Shared object** (`.so`) | You run the stock binary and want to add code at startup | `plugins.load` in `config.yaml` (needs the cgo build, see [Shared-object plugins](#shared-object-plugins)) |
 
@@ -25,11 +25,11 @@ the dashboard's Guardrails page, in `GET /admin/plugins`, and as a `type` in
 `guardrails.rules`.
 
 `pluginapi` depends on the standard library only. A plugin imports it and
-nothing else from GoModel.
+nothing else from AIGateway.
 
 ## Phases
 
-A plugin declares which hooks it implements in `Manifest.Kinds`. GoModel runs
+A plugin declares which hooks it implements in `Manifest.Kinds`. AIGateway runs
 the content phases from the matched [workflow](/advanced/workflows):
 
 | Phase | Hook | Runs | Sees |
@@ -44,7 +44,7 @@ phase.
 
 Two more hook kinds exist in the contract but are not run by this release:
 `request` (before model resolution) and `complete` (after the client response
-is written). A manifest may declare them; GoModel validates that the
+is written). A manifest may declare them; AIGateway validates that the
 interfaces are implemented and ignores them at runtime. The `route` kind is
 used by virtual models, see [Routing strategy plugins](#routing-strategy-plugins).
 
@@ -76,7 +76,7 @@ Every hook returns a `pluginapi.Decision`:
 | `allow` | continue with the edits already made to the exchange | zero value of `Decision` |
 | `block` | reject with `Status`, `Code`, and `Message` in the endpoint's native error format | `Status` 400 in the prompt phase, 502 in the response and stream phases; `Code` `guardrail_blocked` |
 | `respond` | answer the request with `Response` as an ordinary assistant turn, HTTP 200 (a synthesized one-turn stream for streaming requests); in the response and stream phases the provider's `usage` is kept on the reply, since the inference was already performed | `pluginapi.Respond(text)` builds a one-choice completion |
-| `warn` | continue; record `Code`, `Message`, and `Detail` in the audit trail and add `X-GoModel-Guardrail: warn; code=<code>` to the client response | `Code` `guardrail_warning` |
+| `warn` | continue; record `Code`, `Message`, and `Detail` in the audit trail and add `X-AIGateway-Guardrail: warn; code=<code>` to the client response | `Code` `guardrail_warning` |
 
 `respond` is the "block with a safe message" most guardrail products offer:
 agent loops keep running instead of surfacing a 4xx. Use `block` when the
@@ -144,7 +144,7 @@ record, never to the client. Panics inside a plugin are recovered and
 treated as errors.
 
 **Timeouts are enforced at the deadline.** A hook receives a context that
-ends at `timeout_ms` (and when the client disconnects); GoModel stops
+ends at `timeout_ms` (and when the client disconnects); AIGateway stops
 waiting at that moment whether or not the hook has returned. A hook that
 ignores its context keeps running in the background with no effect on the
 request, so honour `ctx.Done()` in anything that blocks. An abandoned hook
@@ -161,7 +161,7 @@ whose absence is acceptable (a header tagger, a warn-only classifier).
 
 ## Instance lifecycle
 
-GoModel builds one plugin value per guardrail definition and calls `Init`
+AIGateway builds one plugin value per guardrail definition and calls `Init`
 once. Definitions are reloaded from storage periodically
 (`workflows.refresh_interval`, default 1 minute) and on every admin change;
 an instance whose type, config, `user_path`, `fail_mode`, and `timeout_ms`
@@ -183,9 +183,9 @@ one of three modes in `StreamHook.StreamPolicy()`:
 | --- | --- | --- |
 | `observe` | read every event; decisions are ignored except `terminate` | none |
 | `transform` | `pass`, `drop`, `replace` (text, reasoning, and tool-call argument deltas), or `terminate` each event | `LookbehindChars` characters of delay per window, plus up to `MinChunkChars` while a run is collected |
-| `buffer` | nothing per event; GoModel collects the whole stream and runs the plugin's `OnResponse` on the assembled completion (a `buffer` plugin must implement `ResponseHook`; loading fails otherwise) | time-to-first-token becomes time-to-last-token |
+| `buffer` | nothing per event; AIGateway collects the whole stream and runs the plugin's `OnResponse` on the assembled completion (a `buffer` plugin must implement `ResponseHook`; loading fails otherwise) | time-to-first-token becomes time-to-last-token |
 
-**Lookbehind** (`transform` only): GoModel withholds the last `LookbehindChars`
+**Lookbehind** (`transform` only): AIGateway withholds the last `LookbehindChars`
 characters per window and presents each delta together with that tail, so a
 pattern spanning two chunks (a phone number, an API key) is visible in one
 event before any of it reaches the client. A choice's text is one window and
@@ -212,7 +212,7 @@ with empty text when the plugin removed that text.
 
 **Coalescing** (`transform` only): a hook whose per-call cost is high, such
 as a classifier or a named-entity detector calling a sidecar, cannot afford a
-call per token. `MinChunkChars` makes GoModel collect the text deltas of a
+call per token. `MinChunkChars` makes AIGateway collect the text deltas of a
 choice until at least that many new characters are pending and present them
 as one text event; a non-text event and the end of the stream flush a shorter
 run. It composes with lookbehind: the withheld tail leads the window and
@@ -241,8 +241,8 @@ keep-alive lines are never affected.
 (`MaxBufferBytes`, default 4 MiB; exceeding it fails closed with code
 `response_too_large`). The buffer is shared by every plugin buffering the
 stream and by the response chain, so the largest cap asked for applies, and
-the default whenever the response chain runs or a plugin sets no cap. While draining, GoModel sends the SSE comment
-`: gomodel-buffering` every 15 s so proxies and clients do not time out; SDKs
+the default whenever the response chain runs or a plugin sets no cap. While draining, AIGateway sends the SSE comment
+`: aigateway-buffering` every 15 s so proxies and clients do not time out; SDKs
 ignore comment lines. After the response chain runs, the original bytes are
 replayed unchanged (`allow`, `warn`), a stream is synthesized from the edited
 completion (`allow` with edits, `respond`), or a single error chunk is sent
@@ -252,10 +252,10 @@ completion (`allow` with edits, `respond`), or a single error chunk is sent
 any `response` step, the whole stream is buffered and `transform` instances run
 over the replay.
 
-**Warnings on streams**: when response or stream plugins run, GoModel commits
+**Warnings on streams**: when response or stream plugins run, AIGateway commits
 the HTTP headers with the first bytes of the body rather than up front, so a
 `warn` decided over a buffered response reaches the client as the
-`X-GoModel-Guardrail` header as long as buffering finished before the first
+`X-AIGateway-Guardrail` header as long as buffering finished before the first
 keep-alive comment (15 s). A warn decided later (in `OnStreamEnd` of a
 `transform` stream, or after a keep-alive went out) cannot change headers
 already sent; it is still recorded in the audit trail and the logs.
@@ -281,7 +281,7 @@ of a request:
 | `Headers` | `*Headers` | `Request` (inbound, credentials redacted; prompt-phase edits apply to the live request for later plugins and request logging, not to the provider call), `Response` (applied to the client response; a header set to the empty string is removed, including ones the gateway adds such as `X-Request-Id`), `Upstream` (recorded, not forwarded in this release) |
 | `Values` | `Values` | per-request bag shared by every hook of the request; prefix keys with the plugin name |
 
-Edits go through methods, not field assignment, so GoModel re-encodes only
+Edits go through methods, not field assignment, so AIGateway re-encodes only
 what changed and untouched messages keep every provider-specific field
 (`cache_control`, multi-part content, extra fields). Removing a message that
 carries a tool call whose result is still present (or the reverse) returns a
@@ -356,7 +356,7 @@ Rules from `config.yaml` are seeded into the managed default workflow at
 
 ```yaml
 plugins:
-  search_paths: ["/etc/gomodel/plugins"]   # PLUGINS_SEARCH_PATHS, comma-separated; default: empty
+  search_paths: ["/etc/aigateway/plugins"]   # PLUGINS_SEARCH_PATHS, comma-separated; default: empty
   load:
     - file: acme_guard.so                  # relative to a search path, or absolute
       sha256: "3b1f..."                    # optional pin; a mismatch fails startup
@@ -398,15 +398,15 @@ instances run on traffic.
 Go's `plugin` package sets the rules, and they are strict:
 
 - **Platform**: Linux, macOS, and FreeBSD, and only in a binary built with
-  `CGO_ENABLED=1`. The default GoModel binary and image are static and
+  `CGO_ENABLED=1`. The default AIGateway binary and image are static and
   refuse `.so` files with an error that says so. Use `make build-plugins`
-  (`bin/gomodel-plugins`) or the `gomodel:<version>-plugins` image
+  (`bin/aigateway-plugins`) or the `aigateway:<version>-plugins` image
   (`make image-plugins`, built from `Dockerfile.plugins`, glibc runtime).
 - **Exact toolchain**: the plugin must be built with the **same Go version**,
   the **same build flags** (`-trimpath`, `-race`, `-tags`), and **identical
   sources of every shared package**. Only the standard library and
-  `pluginapi` are shared, so internal GoModel changes never affect a plugin,
-  but every GoModel release and every Go toolchain update (patch releases
+  `pluginapi` are shared, so internal AIGateway changes never affect a plugin,
+  but every AIGateway release and every Go toolchain update (patch releases
   included) needs a rebuild. Make it a CI step.
 - **No unload**: a `.so` stays loaded until restart. Changing a loaded file
   takes effect on restart; editing an instance's config re-runs `Init` on a
@@ -417,14 +417,14 @@ Go's `plugin` package sets the rules, and they are strict:
 ### Build and inspect
 
 ```sh
-gomodel plugin build ./docs/example_plugins/keywordblock -o plugins/keyword_block.so
-gomodel plugin inspect plugins/keyword_block.so
+aigateway plugin build ./docs/example_plugins/keywordblock -o plugins/keyword_block.so
+aigateway plugin inspect plugins/keyword_block.so
 shasum -a 256 plugins/keyword_block.so     # value for plugins.load[].sha256
 ```
 
 `plugin build` runs `go build -buildmode=plugin` with the flags recorded in
-the `gomodel` binary that runs it, forces `CGO_ENABLED=1`, pins `GOTOOLCHAIN`
-to the host's Go version, stamps a `GoModelBuildInfo` variable into the
+the `aigateway` binary that runs it, forces `CGO_ENABLED=1`, pins `GOTOOLCHAIN`
+to the host's Go version, stamps a `AIGatewayBuildInfo` variable into the
 plugin, and refuses an output whose Go version differs from the host's.
 Always build with the binary that will load the plugin. `plugin inspect`
 opens the file and prints its manifest, config schema, and build info. A
@@ -432,26 +432,26 @@ refused load names both sides:
 
 ```
 plugin file /app/plugins/x.so was built with a different toolchain, flags, or
-pluginapi sources: it was built with go1.27.1, gomodel v0.1.90, flags -trimpath;
-this binary was built with go1.27.1, gomodel v0.1.91, flags (none). Rebuild it
-with `gomodel plugin build` from this GoModel version
+pluginapi sources: it was built with go1.27.1, aigateway v0.1.90, flags -trimpath;
+this binary was built with go1.27.1, aigateway v0.1.91, flags (none). Rebuild it
+with `aigateway plugin build` from this AIGateway version
 ```
 
 In Docker, build the `plugin-builder` target of `Dockerfile.plugins` and run
 it against your plugin directory:
 
 ```sh
-docker build -f Dockerfile.plugins --target plugin-builder -t gomodel-plugin-builder .
+docker build -f Dockerfile.plugins --target plugin-builder -t aigateway-plugin-builder .
 docker run --rm -v "$PWD/my-plugin:/src" -v "$PWD/plugins:/out" \
-  gomodel-plugin-builder -o /out/my-plugin.so /src
+  aigateway-plugin-builder -o /out/my-plugin.so /src
 ```
 
-`gomodel --version` prints the Go and `pluginapi` versions of the binary.
+`aigateway --version` prints the Go and `pluginapi` versions of the binary.
 `docs/example_plugins/README.md` covers building a plugin in its own Go module.
 
 ## Writing a plugin
 
-A `package main` that exports `func GoModelPlugin() pluginapi.Plugin` is a
+A `package main` that exports `func AIGatewayPlugin() pluginapi.Plugin` is a
 shared-object plugin; the same type registered with `ext.RegisterPlugin` is a
 compiled-in one. This one blocks a request when the last user message
 contains a configured word:
@@ -525,7 +525,7 @@ func (p *wordBlock) OnPrompt(_ context.Context, x *pluginapi.Exchange) (pluginap
 	return pluginapi.Allow(), nil
 }
 
-func GoModelPlugin() pluginapi.Plugin { return &wordBlock{} }
+func AIGatewayPlugin() pluginapi.Plugin { return &wordBlock{} }
 
 func main() {}
 ```
@@ -554,8 +554,8 @@ Notes for authors:
   the action is warn (for a finding that must not pass). `BlockStatusField()`
   is the conventional `block_status` field. The built-in guardrails share
   this, so their block, respond, and warn behave alike.
-- Export a **constructor** (`func GoModelPlugin() pluginapi.Plugin`) so one
-  file can back several instances. A `var GoModelPlugin pluginapi.Plugin`
+- Export a **constructor** (`func AIGatewayPlugin() pluginapi.Plugin`) so one
+  file can back several instances. A `var AIGatewayPlugin pluginapi.Plugin`
   works too but limits the file to a single instance.
 - Set `Mutates: true` when the plugin edits `Prompt`, `Response`, or the
   stream. Non-mutating plugins may share a step and run concurrently.
@@ -581,7 +581,7 @@ Notes for authors:
   canonicalize a config before it is stored. Both are optional.
 - Implement `pluginapi.HealthChecker` (`Health(ctx) error`) when an instance
   depends on something outside the process, such as a classifier sidecar.
-  GoModel probes it off the request path once the instance is built and on
+  AIGateway probes it off the request path once the instance is built and on
   every guardrail refresh (`workflows.refresh_interval`, one minute by
   default), with a 5 s deadline. A failing probe marks the instance
   `degraded` in `GET /admin/guardrails` and on the dashboard, with the error
@@ -590,7 +590,7 @@ Notes for authors:
   traffic still runs through the instance under its `fail_mode`.
 - Implement `pluginapi.ContentEditor` (`EditsContent() bool`) when a plugin
   that declares `Mutates` can be configured not to edit, such as a detector
-  set to flag instead of rewrite. GoModel asks a configured instance before
+  set to flag instead of rewrite. AIGateway asks a configured instance before
   work it does only for editing plugins — replaying the stored history of a
   chained Responses request rather than letting the provider resolve
   `previous_response_id` itself. It never changes how a hook runs, and a
@@ -609,7 +609,7 @@ Notes for authors:
 
 ### Testing a plugin
 
-`pluginapi/plugintest` tests a plugin without GoModel:
+`pluginapi/plugintest` tests a plugin without AIGateway:
 
 - `plugintest.NewHost(replies...)` is a fake `Host`: scripted inference
   replies (or a `Reply` function, or an `Err`), recorded `Requests()`,
@@ -659,7 +659,7 @@ million tokens when known), the session id and sticky `SessionTarget`,
 in this release). `Select` returns the chosen `Qualified` target and an
 optional `Reason` (debug logs only); `OnAttemptEnd` reports success, status,
 latency, and timeouts so the strategy can adapt. Failover chains, capacity
-probes, and session pinning stay GoModel's job.
+probes, and session pinning stay AIGateway's job.
 
 Select the strategy on the virtual model:
 
@@ -687,7 +687,7 @@ virtual_models:
   `secret` values currently reach a route plugin redacted. Saving that
   definition rebuilds the instance; the previous one is closed once its
   in-flight `Select` calls return.
-- GoModel falls back to weighted round robin, logging one warning per
+- AIGateway falls back to weighted round robin, logging one warning per
   virtual model, when the plugin is missing, is not a route plugin, failed to
   initialize, `strategy_config` is invalid, or `Select` errors, panics, takes
   longer than 250 ms, or returns a target outside the viable pool.
@@ -733,7 +733,7 @@ Every plugin type known to the gateway, including ones that failed to load:
 
 `source` is `builtin`, `registered` (compiled in through `ext`), or the
 absolute path of the `.so`. `fields` are the instance-scoped schema fields,
-`route_fields` the route-scoped ones. A `.so` built with `gomodel plugin
+`route_fields` the route-scoped ones. A `.so` built with `aigateway plugin
 build` also reports `built_with` (Go and `pluginapi` versions).
 
 ### GET /admin/guardrails/types

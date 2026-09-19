@@ -4,7 +4,7 @@
   import Icon from "$lib/components/atoms/Icon.svelte";
   import { auth } from "$lib/stores/auth.svelte.js";
   import { authenticationLoginURL } from "$lib/stores/external-auth.js";
-  import { gomodelPath } from "$lib/api/paths.js";
+  import { aigatewayPath } from "$lib/api/paths.js";
   import * as m from "$lib/paraglide/messages.js";
   import { Check, KeyRound, LockKeyhole } from "lucide";
 </script>
@@ -45,7 +45,7 @@
       {#if auth.externalLoginURL}
         <a
           class="btn btn-primary btn-with-icon external-login-btn"
-          href={authenticationLoginURL(gomodelPath(auth.externalLoginURL))}
+          href={authenticationLoginURL(aigatewayPath(auth.externalLoginURL))}
           onclick={() => auth.selectExternalAuthentication()}
         >
           <Icon icon={KeyRound} />

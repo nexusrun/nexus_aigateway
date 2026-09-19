@@ -1,17 +1,17 @@
 ---
 title: "Version Awareness"
-description: "How GoModel checks for a newer release, exactly what the check sends, and how to turn it off."
+description: "How AIGateway checks for a newer release, exactly what the check sends, and how to turn it off."
 icon: "refresh-cw"
 keywords: ["version", "update", "upgrade", "telemetry", "privacy", "air-gapped"]
 ---
 
-GoModel checks once a day whether a newer release exists, so you find out about
+AIGateway checks once a day whether a newer release exists, so you find out about
 an upgrade without watching the repository. The result appears at the top of the
 dashboard's **Settings** page and is available as JSON from `GET /version`.
 
 ## Why we ask for this
 
-We use it to see how many deployments are running which version of GoModel.
+We use it to see how many deployments are running which version of AIGateway.
 
 That matters most when a vulnerability is found. It tells us how many people are
 affected and how many are still on a release that needs patching, so we know how
@@ -22,16 +22,16 @@ and no usage data — see [What the check sends](#what-the-check-sends) for the
 exact list, and turn it off with one environment variable if you prefer.
 
 If you have any concerns about this data, please tell us: open an issue on
-[GitHub](https://github.com/saifelyzal/nexusruntime/issues) or find us on
+[GitHub](https://github.com/nexusrun/nexus_aigateway/issues) or find us on
 [Discord](https://discord.gg/gaEB9BQSPH). For anything security-sensitive, use
-the contact in [SECURITY.md](https://github.com/saifelyzal/nexusruntime/blob/main/SECURITY.md).
+the contact in [SECURITY.md](https://github.com/nexusrun/nexus_aigateway/blob/main/SECURITY.md).
 
 The check reads one plain-text file:
 
 | Distribution | URL                              | Contents    |
 | ------------ | -------------------------------- | ----------- |
-| GoModel      | `(thiswebsite)/version/core.txt` | `X.Y.Z`     |
-| GoModel Pro  | `(thiswebsite)/version/pro.txt`  | `X.Y.Z+pro` |
+| AIGateway      | `(thiswebsite)/version/core.txt` | `X.Y.Z`     |
+| AIGateway Pro  | `(thiswebsite)/version/pro.txt`  | `X.Y.Z+pro` |
 
 ## When it runs
 
@@ -42,7 +42,7 @@ Two triggers, both throttled:
   the interval carries ±10% jitter, so a fleet restarted together does not check
   in lockstep.
 - **The first dashboard visit of each day**, per browser. A cookie named
-  `gomodel_version_check` holds `YYYY-MM-DD-{id}` — the day this browser last
+  `aigateway_version_check` holds `YYYY-MM-DD-{id}` — the day this browser last
   checked plus a random id minted on its first visit. On every page load after
   the first one each day, the dashboard reads that date and makes no request at
   all.
@@ -61,14 +61,14 @@ Every check carries:
 
 | Header              | Example     | Meaning                             |
 | ------------------- | ----------- | ----------------------------------- |
-| `X-GoModel-Version` | `0.1.81`    | the release you are running         |
-| `X-GoModel-App`     | `GoModel`   | `GoModel` or `GoModel Pro`          |
-| `X-GoModel-Install` | a UUID      | anonymous per-deployment id, below  |
-| `X-GoModel-Source`  | `scheduled` | `scheduled` or `dashboard`          |
+| `X-AIGateway-Version` | `0.1.81`    | the release you are running         |
+| `X-AIGateway-App`     | `AIGateway`   | `AIGateway` or `AIGateway Pro`          |
+| `X-AIGateway-Install` | a UUID      | anonymous per-deployment id, below  |
+| `X-AIGateway-Source`  | `scheduled` | `scheduled` or `dashboard`          |
 
 A check triggered by a dashboard visit also forwards an **allowlisted** slice of
 that visit: the browser's `User-Agent`, `Accept-Language`, `Sec-CH-UA*` client
-hints, and the visit cookie value (`X-GoModel-Date`).
+hints, and the visit cookie value (`X-AIGateway-Date`).
 
 Because it is an allowlist, anything not on it is dropped — including `Cookie`,
 `Authorization`, `X-API-Key`, and `Referer`. A dashboard session credential or
@@ -98,7 +98,7 @@ it can, and switches to the database's id on a later check rather than keeping
 a provisional one for the life of the process.
 
 When neither copy exists — a container recreated without a volume, running
-SQLite — the identifier is derived from `GOMODEL_MASTER_KEY` with HMAC-SHA256,
+SQLite — the identifier is derived from `AIGATEWAY_MASTER_KEY` with HMAC-SHA256,
 so the same configuration keeps the same identity. The key itself is never
 sent and cannot be recovered from the identifier. Rotating the key in that
 situation reads as a new deployment; without a master key a fresh random id
@@ -107,7 +107,7 @@ is generated on every recreate.
 ## Turning it off if you don't want to get the updates
 
 ```bash
-GOMODEL_VERSION_CHECK_ENABLED=false
+AIGATEWAY_VERSION_CHECK_ENABLED=false
 ```
 
 This stops everything: no timer, no outbound request, no install id on disk.
@@ -116,14 +116,14 @@ dashboard simply shows no update notice.
 
 ## Air-gapped and mirrored deployments
 
-`GOMODEL_OFFLINE=true` turns the check off together with the remote model
+`AIGATEWAY_OFFLINE=true` turns the check off together with the remote model
 catalog download; see the
 [production guide](/guides/production#air-gapped-and-offline-deployments).
 
 To keep update notices inside an air gap instead, point the check at your own host and serve `core.txt` (or `pro.txt`) from it:
 
 ```bash
-GOMODEL_VERSION_CHECK_URL=https://releases.internal.example.com/version
+AIGATEWAY_VERSION_CHECK_URL=https://releases.internal.example.com/version
 ```
 
 The gateway appends `/core.txt` or `/pro.txt` based on its distribution, and
@@ -139,11 +139,11 @@ other than the release you published.
 
 | Setting                           | Environment variable                      | Default                                 |
 | --------------------------------- | ----------------------------------------- | --------------------------------------- |
-| `version_check.enabled`           | `GOMODEL_VERSION_CHECK_ENABLED`           | `true`                                  |
-| `version_check.url`               | `GOMODEL_VERSION_CHECK_URL`               | `https://aigateway.nexusai.run/version` |
-| `version_check.interval_hours`    | `GOMODEL_VERSION_CHECK_INTERVAL_HOURS`    | `24`                                    |
-| `version_check.timeout_seconds`   | `GOMODEL_VERSION_CHECK_TIMEOUT_SECONDS`   | `5`                                     |
-| `version_check.max_daily_checks`  | `GOMODEL_VERSION_CHECK_MAX_DAILY`         | `500`                                   |
+| `version_check.enabled`           | `AIGATEWAY_VERSION_CHECK_ENABLED`           | `true`                                  |
+| `version_check.url`               | `AIGATEWAY_VERSION_CHECK_URL`               | `https://aigateway.nexusai.run/version` |
+| `version_check.interval_hours`    | `AIGATEWAY_VERSION_CHECK_INTERVAL_HOURS`    | `24`                                    |
+| `version_check.timeout_seconds`   | `AIGATEWAY_VERSION_CHECK_TIMEOUT_SECONDS`   | `5`                                     |
+| `version_check.max_daily_checks`  | `AIGATEWAY_VERSION_CHECK_MAX_DAILY`         | `500`                                   |
 
 `max_daily_checks` caps the gateway's total outbound checks per day, so
 `/version` cannot be used as an outbound request amplifier.
@@ -166,7 +166,7 @@ curl -s http://localhost:8080/version
 
 ```json
 {
-  "app": "GoModel",
+  "app": "AIGateway",
   "version": "0.1.81",
   "latest": "0.1.82",
   "update_available": true,

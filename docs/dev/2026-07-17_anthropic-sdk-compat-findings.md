@@ -2,7 +2,7 @@
 
 Date: 2026-07-17 · Branch: `fix/anthropic-sdk` @ 23cdb251 · SDK: `anthropic` (Python) 0.117.0
 
-Goal: verify GoModel's `/v1/messages` surface works as a **drop-in replacement** for the
+Goal: verify AIGateway's `/v1/messages` surface works as a **drop-in replacement** for the
 Anthropic API when accessed through the official Anthropic SDK
 (`anthropic.Anthropic(base_url=<gateway>)`).
 
@@ -46,7 +46,7 @@ stand between "works" and "drop-in".**
 ### F1 — SDK default auth (`x-api-key`) is rejected · **blocker**
 
 `anthropic.Anthropic(api_key=...)` sends the key in the `x-api-key` header — that is the
-SDK default and what every Anthropic code sample does. GoModel's auth middleware only
+SDK default and what every Anthropic code sample does. AIGateway's auth middleware only
 reads `Authorization: Bearer` (`internal/server/auth.go`), so the request fails with
 401 `missing authorization header`. Same on `/p/anthropic/...` passthrough.
 
@@ -73,7 +73,7 @@ collapsing to `finish_reason: "stop"`.
 
 ### F3 — streaming `message_start` carries `usage.input_tokens: 0` · deviation
 
-Anthropic reports real `input_tokens` in the `message_start` event; GoModel emits zeros
+Anthropic reports real `input_tokens` in the `message_start` event; AIGateway emits zeros
 there and only reports usage in the final `message_delta`
 (`internal/anthropicapi/stream.go: ensureStarted`). The SDK's
 `get_final_message()` merges the `message_delta` usage, so SDK users see correct totals —
@@ -120,7 +120,7 @@ should be pointed at the passthrough.
 ### F8 — thinking blocks have no `signature` · minor
 
 Translated responses surface reasoning as `thinking` blocks with `signature: null`
-(real Anthropic thinking blocks are signed). The SDK tolerates it, and GoModel drops
+(real Anthropic thinking blocks are signed). The SDK tolerates it, and AIGateway drops
 incoming thinking blocks on replay (by design), so multi-turn works against the gateway.
 Only a client that captures gateway output and replays it against api.anthropic.com
 directly would break. Verified thinking+tool-use multi-turn roundtrip works.
@@ -166,7 +166,7 @@ directly would break. Verified thinking+tool-use multi-turn roundtrip works.
 
 ## Suggested priority
 
-1. **F1** x-api-key auth — the single change that makes "point your SDK at GoModel" true.
+1. **F1** x-api-key auth — the single change that makes "point your SDK at AIGateway" true.
 2. **F2** stop_sequence preservation (at minimum on the anthropic provider path).
 3. **F4** Anthropic-shaped model listing / **F3** message_start usage — nice-to-have parity.
 4. **F5b** canonical 404 envelope under `/v1/`.

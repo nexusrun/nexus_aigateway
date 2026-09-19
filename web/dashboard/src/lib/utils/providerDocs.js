@@ -17,7 +17,7 @@
 
 export const PROVIDER_DOCS_BASE_URL =
   "https://aigateway.nexusai.run/docs/providers/";
-export const PROVIDER_DOCS_UTM = "utm_source=gomodel_dashboard";
+export const PROVIDER_DOCS_UTM = "utm_source=aigateway_dashboard";
 
 // Provider docs slugs derived from docs/providers/*.mdx.
 const PROVIDER_DOC_SLUGS = new Set([

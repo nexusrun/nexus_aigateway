@@ -14,6 +14,7 @@
     providerCredentialTypeOptions,
     suggestProviderCredentialName,
   } from "./providersConfigLogic.js";
+  import { providerLabel } from "$lib/utils/providerLabel.js";
   import * as m from "$lib/paraglide/messages.js";
 
   const typeOptions = $derived(
@@ -85,7 +86,7 @@
     >
       <option value="" disabled>{m.providers_select_type()}</option>
       {#each typeOptions as type (type)}
-        <option value={type}>{type}</option>
+        <option value={type}>{providerLabel(type)}</option>
       {/each}
     </select>
     {#if typeError}

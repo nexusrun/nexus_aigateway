@@ -47,10 +47,10 @@ type Loaded struct {
 	// Manifest is the manifest reported by a probe instance, with BuiltWith
 	// filled from BuildInfo when the plugin left it empty.
 	Manifest pluginapi.Manifest
-	// BuildInfo is the GoModelBuildInfo symbol stamped by `gomodel plugin
+	// BuildInfo is the AIGatewayBuildInfo symbol stamped by `aigateway plugin
 	// build`, or the zero value when the plugin does not export one.
 	BuildInfo pluginapi.BuildInfo
-	// SingleInstance reports that GoModelPlugin is a variable rather than a
+	// SingleInstance reports that AIGatewayPlugin is a variable rather than a
 	// constructor, so the shared object can back only one configured
 	// instance.
 	SingleInstance bool

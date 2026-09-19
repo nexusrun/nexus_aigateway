@@ -20,18 +20,18 @@ import (
 var raceEnabled = false
 
 func TestParseCLI_PluginSubcommand(t *testing.T) {
-	opts, err := parseCLI("gomodel", []string{"plugin", "inspect", "x.so"}, io.Discard)
+	opts, err := parseCLI("aigateway", []string{"plugin", "inspect", "x.so"}, io.Discard)
 	if err != nil {
 		t.Fatalf("parseCLI(plugin ...) error = %v", err)
 	}
 	if got := strings.Join(opts.PluginArgs, " "); got != "inspect x.so" {
 		t.Fatalf("PluginArgs = %q, want %q", got, "inspect x.so")
 	}
-	opts, err = parseCLI("gomodel", []string{"plugin"}, io.Discard)
+	opts, err = parseCLI("aigateway", []string{"plugin"}, io.Discard)
 	if err != nil || opts.PluginArgs == nil || len(opts.PluginArgs) != 0 {
 		t.Fatalf("parseCLI(plugin) = %+v, %v; want empty non-nil PluginArgs", opts, err)
 	}
-	opts, err = parseCLI("gomodel", []string{"--version"}, io.Discard)
+	opts, err = parseCLI("aigateway", []string{"--version"}, io.Discard)
 	if err != nil || opts.PluginArgs != nil {
 		t.Fatalf("parseCLI(--version).PluginArgs = %v, want nil", opts.PluginArgs)
 	}
@@ -57,7 +57,7 @@ func TestRunPluginCommand_Usage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
-			err := runPluginCommand(context.Background(), "gomodel", tt.args, &stdout, &stderr)
+			err := runPluginCommand(context.Background(), "aigateway", tt.args, &stdout, &stderr)
 			if got := ExitCode(err); got != tt.wantCode {
 				t.Fatalf("ExitCode() = %d (err %v), want %d", got, err, tt.wantCode)
 			}
@@ -106,7 +106,7 @@ func TestParsePluginBuildArgs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			opts, err := parsePluginBuildArgs("gomodel", tt.args, io.Discard)
+			opts, err := parsePluginBuildArgs("aigateway", tt.args, io.Discard)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("error = nil, want error")
@@ -125,7 +125,7 @@ func TestParsePluginBuildArgs(t *testing.T) {
 
 func TestBuildInfoOverlay(t *testing.T) {
 	src := buildInfoSource(pluginapi.BuildInfo{GoVersion: "go1.99.0", PluginAPIVersion: "9.9.9"})
-	for _, want := range []string{"package main", `"github.com/nexusrun/nexus_aigateway/pluginapi"`, `var GoModelBuildInfo = pluginapi.BuildInfo{GoVersion: "go1.99.0", PluginAPIVersion: "9.9.9"}`, "DO NOT EDIT"} {
+	for _, want := range []string{"package main", `"github.com/nexusrun/nexus_aigateway/pluginapi"`, `var AIGatewayBuildInfo = pluginapi.BuildInfo{GoVersion: "go1.99.0", PluginAPIVersion: "9.9.9"}`, "DO NOT EDIT"} {
 		if !strings.Contains(src, want) {
 			t.Errorf("generated source lacks %q:\n%s", want, src)
 		}
@@ -164,10 +164,10 @@ func TestDeclaresBuildInfo(t *testing.T) {
 		want  bool
 	}{
 		{name: "absent", files: map[string]string{"main.go": "package main\n\nvar other = 1\n"}, want: false},
-		{name: "declared", files: map[string]string{"main.go": "package main\n", "info.go": "package main\n\nvar GoModelBuildInfo = struct{}{}\n"}, want: true},
-		{name: "grouped var", files: map[string]string{"main.go": "package main\n\nvar (\n\tx = 1\n\tGoModelBuildInfo = 2\n)\n"}, want: true},
-		{name: "only in test file", files: map[string]string{"main.go": "package main\n", "main_test.go": "package main\n\nvar GoModelBuildInfo = 1\n"}, want: false},
-		{name: "function not var", files: map[string]string{"main.go": "package main\n\nfunc GoModelBuildInfo() {}\n"}, want: false},
+		{name: "declared", files: map[string]string{"main.go": "package main\n", "info.go": "package main\n\nvar AIGatewayBuildInfo = struct{}{}\n"}, want: true},
+		{name: "grouped var", files: map[string]string{"main.go": "package main\n\nvar (\n\tx = 1\n\tAIGatewayBuildInfo = 2\n)\n"}, want: true},
+		{name: "only in test file", files: map[string]string{"main.go": "package main\n", "main_test.go": "package main\n\nvar AIGatewayBuildInfo = 1\n"}, want: false},
+		{name: "function not var", files: map[string]string{"main.go": "package main\n\nfunc AIGatewayBuildInfo() {}\n"}, want: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -205,14 +205,14 @@ func TestWriteManifest(t *testing.T) {
 		BuildInfo:      pluginapi.BuildInfo{GoVersion: "go1.27.1", PluginAPIVersion: "0.1.0"},
 		SingleInstance: true,
 	})
-	for _, want := range []string{"name  ", "x\n", "prompt, response", "go1.27.1, pluginapi 0.1.0", "one (GoModelPlugin is a variable)", "keywords", "textarea", "true", "action", "route", "block"} {
+	for _, want := range []string{"name  ", "x\n", "prompt, response", "go1.27.1, pluginapi 0.1.0", "one (AIGatewayPlugin is a variable)", "keywords", "textarea", "true", "action", "route", "block"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, out.String())
 		}
 	}
 	out.Reset()
 	writeManifest(&out, pluginload.Loaded{Manifest: pluginapi.Manifest{Name: "bare"}})
-	if !strings.Contains(out.String(), "no GoModelBuildInfo") || !strings.Contains(out.String(), "config       -") {
+	if !strings.Contains(out.String(), "no AIGatewayBuildInfo") || !strings.Contains(out.String(), "config       -") {
 		t.Errorf("bare output:\n%s", out.String())
 	}
 }
@@ -235,7 +235,7 @@ func TestPluginBuildAndInspect(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "fixture.so")
 
 	var stdout, stderr bytes.Buffer
-	err = runPluginCommand(context.Background(), "gomodel", []string{"build", "-o", out, fixture}, &stdout, &stderr)
+	err = runPluginCommand(context.Background(), "aigateway", []string{"build", "-o", out, fixture}, &stdout, &stderr)
 	if err != nil {
 		t.Fatalf("plugin build error = %v\nstderr: %s", err, stderr.String())
 	}
@@ -244,10 +244,10 @@ func TestPluginBuildAndInspect(t *testing.T) {
 	}
 
 	stdout.Reset()
-	if err := runPluginCommand(context.Background(), "gomodel", []string{"inspect", out}, &stdout, &stderr); err != nil {
+	if err := runPluginCommand(context.Background(), "aigateway", []string{"inspect", out}, &stdout, &stderr); err != nil {
 		t.Fatalf("plugin inspect error = %v", err)
 	}
-	// The fixture declares its own GoModelBuildInfo, so the overlay must not
+	// The fixture declares its own AIGatewayBuildInfo, so the overlay must not
 	// have replaced it.
 	for _, want := range []string{"fixture", "1.2.3", "prompt", "go-fixture, pluginapi " + pluginapi.Version, "greeting"} {
 		if !strings.Contains(stdout.String(), want) {
@@ -263,7 +263,7 @@ func TestPluginBuildAndInspect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stripped := strings.Replace(string(src), "var GoModelBuildInfo = pluginapi.BuildInfo{", "var unusedBuildInfo = pluginapi.BuildInfo{", 1)
+	stripped := strings.Replace(string(src), "var AIGatewayBuildInfo = pluginapi.BuildInfo{", "var unusedBuildInfo = pluginapi.BuildInfo{", 1)
 	inModule := filepath.Join(fixture, "..", "stamped-"+filepath.Base(t.TempDir()))
 	if err := os.MkdirAll(inModule, 0o755); err != nil {
 		t.Fatal(err)
@@ -275,7 +275,7 @@ func TestPluginBuildAndInspect(t *testing.T) {
 
 	out2 := filepath.Join(t.TempDir(), "stamped.so")
 	stdout.Reset()
-	if err := runPluginCommand(context.Background(), "gomodel", []string{"build", "-o", out2, inModule}, &stdout, &stderr); err != nil {
+	if err := runPluginCommand(context.Background(), "aigateway", []string{"build", "-o", out2, inModule}, &stdout, &stderr); err != nil {
 		t.Fatalf("plugin build (stamped) error = %v\nstderr: %s", err, stderr.String())
 	}
 	loaded, err := pluginload.Open(out2)

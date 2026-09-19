@@ -1,12 +1,12 @@
 # OpenAI Agents SDK examples
 
-These examples point the OpenAI Agents SDK at a local GoModel instance.
+These examples point the OpenAI Agents SDK at a local AIGateway instance.
 
-Start GoModel first:
+Start AIGateway first:
 
 ```bash
 docker run --rm -p 8080:8080 \
-  -e GOMODEL_MASTER_KEY="change-me" \
+  -e AIGATEWAY_MASTER_KEY="change-me" \
   -e OPENAI_API_KEY="sk-..." \
   nexusrun/nexus_aigateway
 ```
@@ -15,7 +15,7 @@ Then run one of the examples:
 
 ```bash
 export OPENAI_BASE_URL=http://localhost:8080/v1
-export GOMODEL_MASTER_KEY=change-me
+export AIGATEWAY_MASTER_KEY=change-me
 export OPENAI_MODEL=gpt-5-mini
 
 python3 python_basic.py
@@ -23,11 +23,11 @@ python3 python_streaming_tool.py
 node javascript_basic.mjs
 ```
 
-To probe an Anthropic model through GoModel's OpenAI-compatible Responses API:
+To probe an Anthropic model through AIGateway's OpenAI-compatible Responses API:
 
 ```bash
 export OPENAI_BASE_URL=http://localhost:8080/v1
-export GOMODEL_MASTER_KEY=change-me
+export AIGATEWAY_MASTER_KEY=change-me
 export OPENAI_MODEL=anthropic/claude-sonnet-4-20250514
 
 python3 anthropic_responses_probe.py
@@ -35,7 +35,7 @@ python3 anthropic_agents_probe.py
 ```
 
 `anthropic_agents_probe.py` configures the Python SDK's `MultiProvider` with
-model ID pass-through so namespaced GoModel IDs such as `anthropic/...` reach
+model ID pass-through so namespaced AIGateway IDs such as `anthropic/...` reach
 the gateway unchanged.
 
 Install the SDK dependencies in your own environment:

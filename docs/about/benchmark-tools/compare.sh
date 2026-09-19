@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="${ENV_FILE:-${ROOT_DIR}/../gomodel/.env}"
+ENV_FILE="${ENV_FILE:-${ROOT_DIR}/../aigateway/.env}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 RESULTS_DIR="${RESULTS_DIR:-${ROOT_DIR}/benchmark-results/${STAMP}}"
 LOG_DIR="${RESULTS_DIR}/logs"
@@ -18,18 +18,18 @@ SAMPLE_EVERY="${SAMPLE_EVERY:-500ms}"
 COOLDOWN_SECONDS="${COOLDOWN_SECONDS:-0}"
 RUN_DIRECT_BASELINE="${RUN_DIRECT_BASELINE:-1}"
 
-GOMODEL_PORT="${GOMODEL_PORT:-38080}"
+AIGATEWAY_PORT="${AIGATEWAY_PORT:-38080}"
 LITELLM_PORT="${LITELLM_PORT:-34000}"
 
 mkdir -p "${LOG_DIR}"
 
-GOMODEL_PID=""
+AIGATEWAY_PID=""
 LITELLM_PID=""
 
 cleanup() {
-  if [[ -n "${GOMODEL_PID}" ]] && kill -0 "${GOMODEL_PID}" >/dev/null 2>&1; then
-    kill "${GOMODEL_PID}" >/dev/null 2>&1 || true
-    wait "${GOMODEL_PID}" >/dev/null 2>&1 || true
+  if [[ -n "${AIGATEWAY_PID}" ]] && kill -0 "${AIGATEWAY_PID}" >/dev/null 2>&1; then
+    kill "${AIGATEWAY_PID}" >/dev/null 2>&1 || true
+    wait "${AIGATEWAY_PID}" >/dev/null 2>&1 || true
   fi
   if [[ -n "${LITELLM_PID}" ]] && kill -0 "${LITELLM_PID}" >/dev/null 2>&1; then
     kill "${LITELLM_PID}" >/dev/null 2>&1 || true
@@ -112,7 +112,7 @@ echo "Using model: ${MODEL}"
 echo "Results dir: ${RESULTS_DIR}"
 
 mkdir -p "${ROOT_DIR}/bin"
-(cd "${ROOT_DIR}" && go build -o bin/gomodel ./cmd/gomodel)
+(cd "${ROOT_DIR}" && go build -o bin/aigateway ./cmd/aigateway)
 (cd "${ROOT_DIR}" && go build -o bin/bench ./cmd/bench)
 
 LITELLM_CONFIG="${RESULTS_DIR}/litellm_config.yaml"
@@ -138,19 +138,19 @@ wait_for_models() {
   exit 1
 }
 
-start_gomodel() {
-  local log_file="${LOG_DIR}/gomodel.log"
+start_aigateway() {
+  local log_file="${LOG_DIR}/aigateway.log"
   (
     cd "${ROOT_DIR}"
     exec env \
-      PORT="${GOMODEL_PORT}" \
-      GOMODEL_MASTER_KEY="" \
+      PORT="${AIGATEWAY_PORT}" \
+      AIGATEWAY_MASTER_KEY="" \
       LOGGING_ENABLED=false \
       METRICS_ENABLED=false \
-      ./bin/gomodel >"${log_file}" 2>&1
+      ./bin/aigateway >"${log_file}" 2>&1
   ) &
-  GOMODEL_PID=$!
-  wait_for_models "http://127.0.0.1:${GOMODEL_PORT}" "GoModel"
+  AIGATEWAY_PID=$!
+  wait_for_models "http://127.0.0.1:${AIGATEWAY_PORT}" "AIGateway"
   sleep 2
 }
 
@@ -211,12 +211,12 @@ run_bench_matrix() {
   done
 }
 
-echo "Starting GoModel..."
-start_gomodel
-run_bench_matrix "gomodel" "http://127.0.0.1:${GOMODEL_PORT}" "${GOMODEL_PID}"
-kill "${GOMODEL_PID}" >/dev/null 2>&1 || true
-wait "${GOMODEL_PID}" >/dev/null 2>&1 || true
-GOMODEL_PID=""
+echo "Starting AIGateway..."
+start_aigateway
+run_bench_matrix "aigateway" "http://127.0.0.1:${AIGATEWAY_PORT}" "${AIGATEWAY_PID}"
+kill "${AIGATEWAY_PID}" >/dev/null 2>&1 || true
+wait "${AIGATEWAY_PID}" >/dev/null 2>&1 || true
+AIGATEWAY_PID=""
 
 echo "Starting LiteLLM..."
 start_litellm
@@ -247,7 +247,7 @@ if [[ "${RUN_DIRECT_BASELINE}" == "1" ]]; then
 fi
 
 {
-  echo "# GoModel vs LiteLLM Benchmark"
+  echo "# AIGateway vs LiteLLM Benchmark"
   echo
   echo "- Timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   echo "- Model: \`${MODEL}\`"

@@ -41,7 +41,7 @@ func seedGroupCacheStatsFixture(t *testing.T) (*sql.DB, context.Context) {
 			InputTokens: 40, OutputTokens: 10,
 		},
 		{
-			// Served from GoModel's local response cache: excluded from the
+			// Served from AIGateway's local response cache: excluded from the
 			// uncached aggregates but surfaced as LocalCachedTokens.
 			ID: "usage-local", RequestID: "req-3", ProviderID: "p-1", Timestamp: ts.Add(2 * time.Minute),
 			Model: "gpt-5", Provider: "openai", Endpoint: "/v1/chat/completions",

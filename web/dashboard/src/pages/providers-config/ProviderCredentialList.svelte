@@ -11,6 +11,7 @@
     providerCredentialModelsLabel,
     providerRowsHaveActions,
   } from "./providersConfigLogic.js";
+  import { providerLabel } from "$lib/utils/providerLabel.js";
   import { Pencil, X } from "lucide";
 
   const showActions = $derived(providerRowsHaveActions(providersConfig.filteredRows));
@@ -36,7 +37,7 @@
       {#each providersConfig.filteredRows as row (row.name)}
         <tr>
           <td>
-            <span class="font-size-md">{row.name}</span>
+            <span class="font-size-md">{providerLabel(row.name)}</span>
             {#if row.managed}
               <span
                 class="alias-kind-badge"

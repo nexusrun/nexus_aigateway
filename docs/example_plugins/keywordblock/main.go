@@ -1,11 +1,11 @@
-// keyword_block is an example GoModel plugin built as a shared object. It
+// keyword_block is an example AIGateway plugin built as a shared object. It
 // blocks, answers, or flags a request when the last user message contains a
 // configured keyword, and does the same for the assistant's reply.
 //
-// Build (from the GoModel checkout, with the gomodel binary that will load it):
+// Build (from the AIGateway checkout, with the aigateway binary that will load it):
 //
-//	go run ./cmd/gomodel plugin build ./docs/example_plugins/keywordblock -o plugins/keyword_block.so
-//	go run ./cmd/gomodel plugin inspect plugins/keyword_block.so
+//	go run ./cmd/aigateway plugin build ./docs/example_plugins/keywordblock -o plugins/keyword_block.so
+//	go run ./cmd/aigateway plugin inspect plugins/keyword_block.so
 //
 // Load (config.yaml, or PLUGINS_SEARCH_PATHS=./plugins):
 //
@@ -21,11 +21,11 @@
 // Exact-toolchain constraint: Go's plugin package refuses a shared object
 // unless it was built with the same Go version, the same build flags
 // (-trimpath, -race, -tags), and identical sources of every package shared
-// with the host (the standard library and pluginapi). `gomodel plugin build`
-// copies the flags of the gomodel binary that runs it, so build plugins with
-// the binary that loads them and rebuild after every GoModel or Go upgrade.
+// with the host (the standard library and pluginapi). `aigateway plugin build`
+// copies the flags of the aigateway binary that runs it, so build plugins with
+// the binary that loads them and rebuild after every AIGateway or Go upgrade.
 // Loading needs a cgo-enabled binary on Linux, macOS, or FreeBSD (`make
-// build-plugins`, or the gomodel:<version>-plugins image); the default static
+// build-plugins`, or the aigateway:<version>-plugins image); the default static
 // binary reports a clear error instead.
 package main
 
@@ -40,10 +40,10 @@ import (
 	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
-// GoModelPlugin is the constructor GoModel looks up. It returns a fresh
+// AIGatewayPlugin is the constructor AIGateway looks up. It returns a fresh
 // instance per call, so one shared object can back several configured
 // instances with different settings.
-func GoModelPlugin() pluginapi.Plugin {
+func AIGatewayPlugin() pluginapi.Plugin {
 	return &keywordBlock{}
 }
 

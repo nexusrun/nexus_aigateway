@@ -63,6 +63,7 @@
   // Shared inventory refetch on boot and whenever the API key changes.
   $effect(() => {
     void auth.refreshTick;
+    auth.checkSession();
     runtimeConfig.fetch();
     access.fetch();
     modelsStore.fetchModels();

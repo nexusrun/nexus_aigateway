@@ -78,7 +78,7 @@ func (k *Keyring) Next() string {
 	return k.keys[i%uint64(len(k.keys))]
 }
 
-// NextForContext returns the key pinned to the request's GoModel session. When
+// NextForContext returns the key pinned to the request's AIGateway session. When
 // no session is present, or session stickiness was disabled for this provider,
 // it advances the ordinary round-robin sequence.
 func (k *Keyring) NextForContext(ctx context.Context) string {

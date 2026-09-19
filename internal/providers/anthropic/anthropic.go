@@ -297,7 +297,7 @@ func isAdaptiveThinkingModel(model string) bool {
 // samplingRejectedPrefixes lists the model families that removed the
 // temperature and top_p sampling parameters. Anthropic rejects a request that
 // carries either of them with a 400 ("`temperature` is deprecated for this
-// model"), regardless of the value, so GoModel drops them instead of failing.
+// model"), regardless of the value, so AIGateway drops them instead of failing.
 var samplingRejectedPrefixes = []string{
 	"claude-fable-5",
 	"claude-mythos-5",

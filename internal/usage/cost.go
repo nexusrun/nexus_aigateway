@@ -577,7 +577,7 @@ func openRouterCreditCost(rawData map[string]any, providerType string) (CostResu
 	}
 
 	// OpenRouter reports cost in credits; their credit system is USD-based, so
-	// this is the right value for GoModel's existing USD cost fields.
+	// this is the right value for AIGateway's existing USD cost fields.
 	result := CostResult{
 		TotalCost: &total,
 		Source:    CostSourceOpenRouterCredits,

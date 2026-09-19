@@ -22,7 +22,7 @@ except ImportError as exc:
 
 
 BASE_URL = os.getenv("OPENAI_BASE_URL", "http://localhost:8080/v1")
-API_KEY = os.getenv("GOMODEL_MASTER_KEY") or os.getenv("OPENAI_API_KEY", "change-me")
+API_KEY = os.getenv("AIGATEWAY_MASTER_KEY") or os.getenv("OPENAI_API_KEY", "change-me")
 CLIENT = AsyncOpenAI(
     base_url=BASE_URL,
     api_key=API_KEY,

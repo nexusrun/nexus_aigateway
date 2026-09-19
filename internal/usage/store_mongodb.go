@@ -38,7 +38,7 @@ func (e *PartialWriteError) Unwrap() error {
 // Prometheus metric for usage partial write failures
 var usagePartialWriteFailures = promauto.NewCounter(
 	prometheus.CounterOpts{
-		Name: "gomodel_usage_partial_write_failures_total",
+		Name: "aigateway_usage_partial_write_failures_total",
 		Help: "Total number of partial write failures when inserting usage entries to MongoDB",
 	},
 )

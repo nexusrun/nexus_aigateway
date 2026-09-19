@@ -318,7 +318,7 @@ function normalizedInteractionPath(path) {
 
 // followUpEndpointKind intentionally gates the composer more narrowly than
 // canShowConversation: passthrough endpoints may have conversation-shaped
-// bodies, but GoModel cannot safely infer how to continue them.
+// bodies, but AIGateway cannot safely infer how to continue them.
 export function followUpEndpointKind(path) {
     switch (normalizedInteractionPath(path)) {
     case '/chat/completions':
@@ -499,7 +499,7 @@ const blockedFollowUpHeaders = new Set([
     'user-agent', 'date', 'expect', 'upgrade', 'via', 'te', 'trailer',
     'keep-alive', 'origin', 'referer', 'forwarded', 'x-real-ip', 'traceparent',
     'tracestate', 'x-request-id', 'idempotency-key', 'x-idempotency-key',
-    'x-gomodel-timezone', 'x-gomodel-interaction-parent'
+    'x-aigateway-timezone', 'x-aigateway-interaction-parent'
 ]);
 
 // Persisted headers are already credential-redacted server-side. This second
@@ -521,7 +521,7 @@ export function buildFollowUpHeaders(entry, anchorID, requestID = '') {
     }
     // The server inherits the resolved session from this parent. Replaying a
     // derived auto-/scoped session as a raw client header would scope it again.
-    headers['X-GoModel-Interaction-Parent'] = String(anchorID || entry && entry.id || '').trim();
+    headers['X-AIGateway-Interaction-Parent'] = String(anchorID || entry && entry.id || '').trim();
     if (String(requestID || '').trim()) headers['X-Request-ID'] = String(requestID).trim();
     return headers;
 }
@@ -558,7 +558,7 @@ export function matchLiveConversationEntry(entries, anchorID, sessionID, followU
 export function interactionParentID(entry) {
     const headers = entry && entry.data && entry.data.request_headers;
     if (!headers || typeof headers !== 'object') return '';
-    const key = Object.keys(headers).find((name) => name.toLowerCase() === 'x-gomodel-interaction-parent');
+    const key = Object.keys(headers).find((name) => name.toLowerCase() === 'x-aigateway-interaction-parent');
     return key ? String(headers[key] || '').trim() : '';
 }
 

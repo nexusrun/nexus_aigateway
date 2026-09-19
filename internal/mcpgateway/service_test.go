@@ -85,7 +85,7 @@ func testSpec(name, url string, mutate func(*ServerSpec)) ServerSpec {
 }
 
 // newTestService builds a Service over the given specs and returns it with a
-// gateway HTTP endpoint that mimics GoModel's ingress: bearer auth is assumed
+// gateway HTTP endpoint that mimics AIGateway's ingress: bearer auth is assumed
 // done; the user path is read from the standard header into the context, and
 // /mcp/{server} pins a single upstream.
 func newTestService(t *testing.T, usageLogger usage.LoggerInterface, specs ...ServerSpec) (*Service, string) {
@@ -793,7 +793,7 @@ func TestInstructionsComposeFromUpstreams(t *testing.T) {
 	if init == nil || !strings.Contains(init.Instructions, "instructions from alpha") {
 		t.Fatalf("aggregated instructions = %q, want upstream instructions merged", init.Instructions)
 	}
-	if !strings.Contains(init.Instructions, "GoModel MCP gateway") {
+	if !strings.Contains(init.Instructions, "AIGateway MCP gateway") {
 		t.Fatalf("aggregated instructions = %q, want gateway preamble", init.Instructions)
 	}
 }

@@ -105,7 +105,7 @@ type Config struct {
 	MCPGateway                      *mcpgateway.Service                    // MCP gateway service (nil if disabled or not wired)
 	EnabledPassthroughProviders     []string                               // Provider types enabled on /p/{provider}/... passthrough routes
 	AllowPassthroughV1Alias         *bool                                  // Allow /p/{provider}/v1/... aliases; nil defaults to true
-	UserPathHeader                  string                                 // Header carrying the request user path (default: X-GoModel-User-Path)
+	UserPathHeader                  string                                 // Header carrying the request user path (default: X-AIGateway-User-Path)
 	AdminEndpointsEnabled           bool                                   // Whether admin API endpoints are enabled
 	AdminUIEnabled                  bool                                   // Whether admin dashboard UI is enabled
 	AdminAuth                       *adminauth.Service                     // Optional database-backed browser authentication
@@ -257,9 +257,10 @@ func New(provider core.RoutableProvider, cfg *Config) *Server {
 		authSkipPaths = append(authSkipPaths, metricsPath)
 	}
 
-	// Admin dashboard pages and static assets skip auth (/* enables prefix matching)
+	// Admin dashboard pages and static assets skip auth (/* enables prefix matching).
+	// "/" is an exact match here, and only serves a redirect to the dashboard.
 	if cfg != nil && cfg.AdminUIEnabled && cfg.DashboardHandler != nil {
-		authSkipPaths = append(authSkipPaths, "/admin/dashboard", "/admin/dashboard/*", "/admin/static/*")
+		authSkipPaths = append(authSkipPaths, "/", "/admin/dashboard", "/admin/dashboard/*", "/admin/static/*")
 	}
 	// When no bootstrap master key is configured, keep admin APIs reachable so
 	// the dashboard can recover managed-key access instead of locking itself out.

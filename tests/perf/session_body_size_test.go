@@ -62,7 +62,7 @@ func chatBodyOfSize(target int) []byte {
 //
 // This matters for cost, not just correctness. Every request carrying a
 // session id engages per-session serialization in downstream consumers
-// (sticky virtual-model routing, and GoModel Pro's compression epoch locks),
+// (sticky virtual-model routing, and AIGateway Pro's compression epoch locks),
 // so there is no size above which a request quietly opts out.
 func TestSessionIDVisibilityByBodySize(t *testing.T) {
 	sizes := []int{

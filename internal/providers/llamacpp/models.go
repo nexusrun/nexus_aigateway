@@ -156,7 +156,7 @@ func (e modelEntry) contextWindow(props *serverProps) int {
 	return 0
 }
 
-// modalityCapabilities maps llama-server's multimodal flags onto GoModel
+// modalityCapabilities maps llama-server's multimodal flags onto AIGateway
 // capability keys. Only the modalities that have an established capability name
 // are published — an unrecognized key llama.cpp adds later would otherwise
 // become a public capability nobody can interpret. Unsupported modalities are

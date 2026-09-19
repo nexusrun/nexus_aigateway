@@ -2,7 +2,7 @@
 # App + Prometheus: `docker compose --profile app up -d`
 
 services:
-  gomodel:
+  aigateway:
     profiles:
       - app
     build:
@@ -18,9 +18,9 @@ services:
       # Metrics
       - METRICS_ENABLED=true
       # Storage configuration (PostgreSQL for audit logs)
-      - POSTGRES_URL=postgres://gomodel:gomodel@postgres:5432/gomodel
+      - POSTGRES_URL=postgres://aigateway:aigateway@postgres:5432/aigateway
       # MongoDB configuration (uncomment to use MongoDB instead)
-      - MONGODB_URL=mongodb://mongodb:27017/gomodel
+      - MONGODB_URL=mongodb://mongodb:27017/aigateway
       # Audit logging is enabled by default; pick its storage backend below
       # - STORAGE_TYPE=postgresql
       - STORAGE_TYPE=mongodb
@@ -28,7 +28,7 @@ services:
       # The gateway's own state: the SQLite database when STORAGE_TYPE is
       # sqlite, the pid file, and the install identity. Without this the
       # directory is part of the container and is lost when it is recreated.
-      - gomodel_data:/app/data
+      - aigateway_data:/app/data
     depends_on:
       redis:
         condition: service_healthy
@@ -57,14 +57,14 @@ services:
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_USER=gomodel
-      - POSTGRES_PASSWORD=gomodel
-      - POSTGRES_DB=gomodel
+      - POSTGRES_USER=aigateway
+      - POSTGRES_PASSWORD=aigateway
+      - POSTGRES_DB=aigateway
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U gomodel -d gomodel"]
+      test: ["CMD-SHELL", "pg_isready -U aigateway -d aigateway"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -107,11 +107,11 @@ services:
       - "--storage.tsdb.path=/prometheus"
       - "--web.enable-lifecycle"
     depends_on:
-      - gomodel
+      - aigateway
     restart: unless-stopped
 
 volumes:
-  gomodel_data:
+  aigateway_data:
   redis_data:
   postgres_data:
   mongodb_data:

@@ -250,7 +250,7 @@ func CompletionToResponsesResponse(c *pluginapi.Completion, model string) *core.
 		model = c.Model
 	}
 	resp := &core.ResponsesResponse{
-		ID:        randomID("gomodel-plugin-"),
+		ID:        randomID("aigateway-plugin-"),
 		Object:    "response",
 		CreatedAt: time.Now().Unix(),
 		Model:     model,

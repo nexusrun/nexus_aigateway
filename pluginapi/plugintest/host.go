@@ -1,4 +1,4 @@
-// Package plugintest helps test pluginapi plugins without GoModel: a fake
+// Package plugintest helps test pluginapi plugins without AIGateway: a fake
 // [pluginapi.Host] with scripted inference and recorded metrics, builders
 // for prompts, completions, and exchanges, and a stream driver that feeds
 // events to a [pluginapi.StreamHook] the way the host does, lookbehind,

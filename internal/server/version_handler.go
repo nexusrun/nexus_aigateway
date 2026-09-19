@@ -16,7 +16,7 @@ import (
 // It always answers from the gateway's cached result and never waits on the
 // network: a due check is dispatched in the background and lands in the cache
 // for the next caller. The first visit of each day — the
-// browser's gomodel_version_check cookie carries a date older than today —
+// browser's aigateway_version_check cookie carries a date older than today —
 // also refreshes that cache, forwarding an allowlisted slice of the visit
 // (user agent, language, client hints, visit marker) to the release host.
 // Credentials, client addresses, and the dashboard's own hostname are never

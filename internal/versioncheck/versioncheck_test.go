@@ -19,7 +19,7 @@ func newTestChecker(t *testing.T, cfg Config, handler http.HandlerFunc) (*Checke
 	cfg.Enabled = true
 	cfg.URL = srv.URL + "/version"
 	if cfg.App == "" {
-		cfg.App = "GoModel"
+		cfg.App = "AIGateway"
 	}
 	if cfg.Version == "" {
 		cfg.Version = "0.1.81"
@@ -35,16 +35,16 @@ func TestManifestURL(t *testing.T) {
 		app  string
 		want string
 	}{
-		{"core channel", "https://example.test/version/", "GoModel", "https://example.test/version/core.txt"},
-		{"pro channel", "https://example.test/version/", "GoModel Pro", "https://example.test/version/pro.txt"},
-		{"channel name is case insensitive", "https://example.test/version/", "gomodel pro", "https://example.test/version/pro.txt"},
+		{"core channel", "https://example.test/version/", "AIGateway", "https://example.test/version/core.txt"},
+		{"pro channel", "https://example.test/version/", "AIGateway Pro", "https://example.test/version/pro.txt"},
+		{"channel name is case insensitive", "https://example.test/version/", "aigateway pro", "https://example.test/version/pro.txt"},
 		{"custom distribution reads core", "https://example.test/version/", "Custom Gateway", "https://example.test/version/core.txt"},
-		{"no trailing slash", "https://example.test/version", "GoModel", "https://example.test/version/core.txt"},
+		{"no trailing slash", "https://example.test/version", "AIGateway", "https://example.test/version/core.txt"},
 		// A mirror that authenticates with a query parameter must still be
 		// asked for the manifest, not for the base path with the file glued
 		// onto the end of the query.
-		{"query-authenticated mirror", "https://mirror.test/version?token=abc", "GoModel", "https://mirror.test/version/core.txt?token=abc"},
-		{"port and subpath", "http://mirror.test:8080/a/b", "GoModel Pro", "http://mirror.test:8080/a/b/pro.txt"},
+		{"query-authenticated mirror", "https://mirror.test/version?token=abc", "AIGateway", "https://mirror.test/version/core.txt?token=abc"},
+		{"port and subpath", "http://mirror.test:8080/a/b", "AIGateway Pro", "http://mirror.test:8080/a/b/pro.txt"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -104,7 +104,7 @@ func TestRefreshReportsUpdate(t *testing.T) {
 func TestRefreshSendsIdentityHeaders(t *testing.T) {
 	var got http.Header
 	checker, _ := newTestChecker(t, Config{
-		App:       "GoModel Pro",
+		App:       "AIGateway Pro",
 		Version:   "1.0.0-pro",
 		InstallID: "install-123",
 	}, func(w http.ResponseWriter, r *http.Request) {
@@ -116,10 +116,10 @@ func TestRefreshSendsIdentityHeaders(t *testing.T) {
 		t.Fatalf("Refresh: %v", err)
 	}
 	for header, want := range map[string]string{
-		"X-Gomodel-Version": "1.0.0-pro",
-		"X-Gomodel-App":     "GoModel Pro",
-		"X-Gomodel-Install": "install-123",
-		"X-Gomodel-Source":  "scheduled",
+		"X-Aigateway-Version": "1.0.0-pro",
+		"X-Aigateway-App":     "AIGateway Pro",
+		"X-Aigateway-Install": "install-123",
+		"X-Aigateway-Source":  "scheduled",
 	} {
 		if got.Get(header) != want {
 			t.Errorf("%s = %q, want %q", header, got.Get(header), want)
@@ -136,7 +136,7 @@ func TestRefreshAsksInstallIDFuncPerRequest(t *testing.T) {
 		InstallIDFunc: func(context.Context) string { return current },
 		Now:           func() time.Time { return now },
 	}, func(w http.ResponseWriter, r *http.Request) {
-		sent = append(sent, r.Header.Get("X-GoModel-Install"))
+		sent = append(sent, r.Header.Get("X-AIGateway-Install"))
 		_, _ = w.Write([]byte("0.1.82"))
 	})
 
@@ -152,7 +152,7 @@ func TestRefreshAsksInstallIDFuncPerRequest(t *testing.T) {
 	}
 
 	if want := []string{"provisional-id", "database-id"}; !slices.Equal(sent, want) {
-		t.Fatalf("X-GoModel-Install per request = %q, want %q (InstallID must not override the func)", sent, want)
+		t.Fatalf("X-AIGateway-Install per request = %q, want %q (InstallID must not override the func)", sent, want)
 	}
 }
 
@@ -189,18 +189,18 @@ func TestRefreshForwardsOnlyAllowlistedBrowserHeaders(t *testing.T) {
 	}
 	// The dashboard's hostname identifies the operator's organization, so it
 	// is never forwarded.
-	if value := got.Get("X-GoModel-Host"); value != "" {
-		t.Errorf("X-GoModel-Host = %q, want the hostname kept local", value)
+	if value := got.Get("X-AIGateway-Host"); value != "" {
+		t.Errorf("X-AIGateway-Host = %q, want the hostname kept local", value)
 	}
-	if got.Get("X-GoModel-Date") != "2026-08-26-abc" {
-		t.Errorf("X-GoModel-Date = %q", got.Get("X-GoModel-Date"))
+	if got.Get("X-AIGateway-Date") != "2026-08-26-abc" {
+		t.Errorf("X-AIGateway-Date = %q", got.Get("X-AIGateway-Date"))
 	}
 	// Client addresses are personal data and are never forwarded.
 	if value := got.Get("X-Forwarded-For"); value != "" {
 		t.Errorf("X-Forwarded-For = %q, want the address kept local", value)
 	}
-	if got.Get("X-GoModel-Source") != "dashboard" {
-		t.Errorf("X-GoModel-Source = %q, want dashboard", got.Get("X-GoModel-Source"))
+	if got.Get("X-AIGateway-Source") != "dashboard" {
+		t.Errorf("X-AIGateway-Source = %q, want dashboard", got.Get("X-AIGateway-Source"))
 	}
 	for _, forbidden := range []string{"Cookie", "Authorization", "X-API-Key", "Referer"} {
 		if value := got.Get(forbidden); value != "" {
@@ -316,7 +316,7 @@ func TestDisabledCheckerNeverCallsOut(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	checker := New(Config{Enabled: false, URL: srv.URL, App: "GoModel", Version: "0.1.81", Client: srv.Client()})
+	checker := New(Config{Enabled: false, URL: srv.URL, App: "AIGateway", Version: "0.1.81", Client: srv.Client()})
 	if _, err := checker.Refresh(context.Background(), Beacon{}); err != nil {
 		t.Fatalf("Refresh: %v", err)
 	}

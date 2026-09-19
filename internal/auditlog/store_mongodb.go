@@ -38,7 +38,7 @@ func (e *PartialWriteError) Unwrap() error {
 // Prometheus metric for audit log partial write failures
 var auditLogPartialWriteFailures = promauto.NewCounter(
 	prometheus.CounterOpts{
-		Name: "gomodel_audit_log_partial_write_failures_total",
+		Name: "aigateway_audit_log_partial_write_failures_total",
 		Help: "Total number of partial write failures when inserting audit logs to MongoDB",
 	},
 )

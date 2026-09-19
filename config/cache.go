@@ -30,7 +30,7 @@ type ModelCacheConfig struct {
 
 // LocalCacheConfig holds local file cache configuration.
 type LocalCacheConfig struct {
-	CacheDir string `yaml:"cache_dir" env:"GOMODEL_CACHE_DIR"`
+	CacheDir string `yaml:"cache_dir" env:"AIGATEWAY_CACHE_DIR,GOMODEL_CACHE_DIR"`
 }
 
 // ModelListConfig holds configuration for fetching the external model metadata registry.

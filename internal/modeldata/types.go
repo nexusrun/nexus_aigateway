@@ -1,5 +1,5 @@
 // Package modeldata provides fetching, parsing, and merging of the external
-// AI model metadata registry (models.json) for enriching GoModel's model data.
+// AI model metadata registry (models.json) for enriching AIGateway's model data.
 package modeldata
 
 import (

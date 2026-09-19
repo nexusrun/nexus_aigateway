@@ -392,7 +392,7 @@ func (r *MongoDBReader) usageCacheStats(ctx context.Context, params UsageQueryPa
 
 // mongoCanonicalUserPathField is the synthetic field holding the canonical
 // (trimmed, root-normalized) user path the user-path aggregate groups by.
-const mongoCanonicalUserPathField = "_gomodel_user_path"
+const mongoCanonicalUserPathField = "_aigateway_user_path"
 
 // mongoCanonicalUserPathAddFieldsStage materializes the canonical user path
 // mongoCanonicalUserPathAddFieldsStage creates a MongoDB aggregation stage that adds the canonical user path to each document.

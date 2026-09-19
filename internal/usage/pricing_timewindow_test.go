@@ -254,7 +254,7 @@ func TestMongoDBStoreRecalculatePricingAppliesTimeWindowsFromStoredTimestamps(t 
 	if err != nil {
 		t.Fatalf("mongo.Connect: %v", err)
 	}
-	db := client.Database("gomodel_usage_test_" + time.Now().UTC().Format("20060102150405_000000000"))
+	db := client.Database("aigateway_usage_test_" + time.Now().UTC().Format("20060102150405_000000000"))
 	t.Cleanup(func() {
 		_ = db.Drop(ctx)
 		_ = client.Disconnect(ctx)

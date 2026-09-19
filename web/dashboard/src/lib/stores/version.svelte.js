@@ -5,7 +5,7 @@
 // that answers from the gateway's cache, and the result has to be in hand for
 // the update indicator to render at all. The once-a-day gate belongs to the
 // *outbound* call to the release host, and the backend owns it — it reads the
-// `gomodel_version_check` cookie and only goes out to the network when this
+// `aigateway_version_check` cookie and only goes out to the network when this
 // browser has not checked in today.
 //
 // The one thing the cookie decides here is timing: when this browser is due,
@@ -14,19 +14,19 @@
 // the release host in one burst. When it is not due, nothing outbound can
 // happen, so the request goes immediately and the indicator paints at once.
 
-import { gomodelPath } from "$lib/api/paths.js";
+import { aigatewayPath } from "$lib/api/paths.js";
 import { checkPlan, readVisitCookie } from "./versionVisit.js";
 
 // Upper bound on the random pause before the daily check, in milliseconds.
 const MAX_START_DELAY_MS = 20000;
 const REQUEST_TIMEOUT_MS = 10000;
 
-// Release notes are published only for the open-source gateway. GoModel Pro
+// Release notes are published only for the open-source gateway. AIGateway Pro
 // has no public release notes, and a custom distribution's releases are not
 // this page's to link to — so the link is offered for open core alone, never
 // by ruling distributions out one at a time.
-const CORE_APP = "GoModel";
-const CORE_RELEASES_URL = "https://github.com/saifelyzal/nexusruntime/releases";
+const CORE_APP = "AIGateway";
+const CORE_RELEASES_URL = "https://github.com/nexusrun/nexus_aigateway/releases";
 
 class VersionStore {
   /** The gateway's own version, e.g. "0.1.81". */
@@ -35,7 +35,7 @@ class VersionStore {
   latest = $state("");
   /** Whether `latest` is newer than `current`. */
   updateAvailable = $state(false);
-  /** The distribution name: "GoModel" or "GoModel Pro". */
+  /** The distribution name: "AIGateway" or "AIGateway Pro". */
   app = $state("");
 
   /**
@@ -95,7 +95,7 @@ class VersionStore {
       // admin client would attach the API key to a request that does not want
       // one. `credentials: same-origin` still sends and stores the visit
       // cookie the backend uses for its own gate.
-      const res = await fetch(gomodelPath("/version"), {
+      const res = await fetch(aigatewayPath("/version"), {
         credentials: "same-origin",
         signal: controller ? controller.signal : undefined,
       });

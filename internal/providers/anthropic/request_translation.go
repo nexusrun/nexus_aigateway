@@ -21,7 +21,7 @@ import (
 
 // defaultMaxTokensEnvVar overrides the fallback applied when callers omit
 // max_tokens. Anthropic requires the field on every /v1/messages request, so
-// GoModel injects this value to keep the OpenAI-compatible surface lenient.
+// AIGateway injects this value to keep the OpenAI-compatible surface lenient.
 const defaultMaxTokensEnvVar = "ANTHROPIC_DEFAULT_MAX_TOKENS"
 
 // fallbackMaxTokens is the safe default used when the env var is unset or

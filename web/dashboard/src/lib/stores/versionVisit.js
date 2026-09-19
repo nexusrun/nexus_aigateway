@@ -1,10 +1,10 @@
 // Pure helpers for the daily update-check gate. The gateway sets a
-// `gomodel_version_check` cookie whose value is `YYYY-MM-DD-{id}`: the day
+// `aigateway_version_check` cookie whose value is `YYYY-MM-DD-{id}`: the day
 // this browser last checked plus a random id minted on the first visit. It is
 // deliberately readable from JavaScript so the dashboard can skip the request
 // on every page load after the first one each day.
 
-export const VISIT_COOKIE = "gomodel_version_check";
+export const VISIT_COOKIE = "aigateway_version_check";
 
 const DATE_LENGTH = "2026-08-26".length;
 

@@ -20,7 +20,7 @@ import (
 )
 
 // TestPlugins_SharedObject_E2E builds the keyword_block example with
-// `gomodel plugin build`, loads it into a gateway, and checks that an
+// `aigateway plugin build`, loads it into a gateway, and checks that an
 // instance blocks a prompt. Go plugins need cgo on linux, darwin or freebsd
 // and a shared object built with the host's exact toolchain and flags; the
 // test skips when that cannot hold for this test binary.
@@ -42,10 +42,10 @@ func TestPlugins_SharedObject_E2E(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	build := exec.CommandContext(ctx, "go", "run", "./cmd/gomodel", "plugin", "build", "-o", so, "./docs/example_plugins/keywordblock")
+	build := exec.CommandContext(ctx, "go", "run", "./cmd/aigateway", "plugin", "build", "-o", so, "./docs/example_plugins/keywordblock")
 	build.Dir = root
 	out, err := build.CombinedOutput()
-	require.NoError(t, err, "gomodel plugin build failed:\n%s", string(out))
+	require.NoError(t, err, "aigateway plugin build failed:\n%s", string(out))
 
 	loaded, err := pluginload.Load(config.PluginsConfig{
 		SearchPaths: []string{dir},
@@ -54,7 +54,7 @@ func TestPlugins_SharedObject_E2E(t *testing.T) {
 	if err != nil {
 		msg := err.Error()
 		if strings.Contains(msg, "different toolchain") || strings.Contains(msg, "different version of package") || strings.Contains(msg, "not supported") {
-			t.Skipf("shared object refused by this test binary (built by go test, not gomodel): %v", err)
+			t.Skipf("shared object refused by this test binary (built by go test, not aigateway): %v", err)
 		}
 		require.NoError(t, err)
 	}
@@ -101,8 +101,8 @@ func TestPlugins_SharedObject_E2E(t *testing.T) {
 }
 
 // unsupportedHostBuild returns a skip reason when this test binary cannot
-// load a shared object built by `gomodel plugin build`: cgo off, or a -race
-// build (the plugin is built from the plain gomodel binary's flags).
+// load a shared object built by `aigateway plugin build`: cgo off, or a -race
+// build (the plugin is built from the plain aigateway binary's flags).
 func unsupportedHostBuild() string {
 	bi, ok := debug.ReadBuildInfo()
 	if !ok {

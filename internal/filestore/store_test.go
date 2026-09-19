@@ -71,7 +71,7 @@ func newMongoTestStore(t *testing.T) Store {
 // mongoTestDatabaseName builds a unique database name that stays inside
 // MongoDB's 64-byte limit.
 func mongoTestDatabaseName(testName string) string {
-	const prefix = "gomodel_filestore_test_"
+	const prefix = "aigateway_filestore_test_"
 	suffix := "_" + time.Now().Format("20060102150405_000000000")
 
 	sanitized := strings.ReplaceAll(testName, "/", "_")

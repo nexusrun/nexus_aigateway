@@ -2,7 +2,7 @@
 // timezone header, and stale-auth handling. Pages should use getJSON /
 // sendJSON; apiFetch is the low-level escape hatch (SSE, blobs, ...).
 
-import { gomodelPath } from "./paths.js";
+import { aigatewayPath } from "./paths.js";
 import { auth, normalizeApiKey } from "$lib/stores/auth.svelte.js";
 import { timezone } from "$lib/stores/timezone.svelte.js";
 
@@ -16,13 +16,13 @@ export function apiHeaders() {
   if (apiKey) {
     h.Authorization = "Bearer " + apiKey;
   }
-  h["X-GoModel-Timezone"] = timezone.effectiveTimezone();
+  h["X-AIGateway-Timezone"] = timezone.effectiveTimezone();
   return h;
 }
 
 // apiFetch performs a raw fetch with auth headers against an app path.
 export function apiFetch(path, options = {}) {
-  return fetch(gomodelPath(path), {
+  return fetch(aigatewayPath(path), {
     ...options,
     headers: { ...apiHeaders(), ...(options.headers || {}) },
   });

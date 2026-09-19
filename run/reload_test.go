@@ -18,16 +18,16 @@ import (
 // which is godotenv.Load's rule and therefore the rule a reload has to keep.
 func TestDotenvLeavesExportedVariablesAlone(t *testing.T) {
 	t.Chdir(t.TempDir())
-	t.Setenv("GOMODEL_TEST_EXPORTED", "from-environment")
-	writeEnvFile(t, "GOMODEL_TEST_EXPORTED=from-file\nGOMODEL_TEST_FILE_ONLY=from-file\n")
-	t.Cleanup(func() { os.Unsetenv("GOMODEL_TEST_FILE_ONLY") })
+	t.Setenv("AIGATEWAY_TEST_EXPORTED", "from-environment")
+	writeEnvFile(t, "AIGATEWAY_TEST_EXPORTED=from-file\nAIGATEWAY_TEST_FILE_ONLY=from-file\n")
+	t.Cleanup(func() { os.Unsetenv("AIGATEWAY_TEST_FILE_ONLY") })
 
 	newDotenv().apply()
 
-	if got := os.Getenv("GOMODEL_TEST_EXPORTED"); got != "from-environment" {
+	if got := os.Getenv("AIGATEWAY_TEST_EXPORTED"); got != "from-environment" {
 		t.Errorf("exported variable = %q, want it untouched by the env file", got)
 	}
-	if got := os.Getenv("GOMODEL_TEST_FILE_ONLY"); got != "from-file" {
+	if got := os.Getenv("AIGATEWAY_TEST_FILE_ONLY"); got != "from-file" {
 		t.Errorf("file-only variable = %q, want %q", got, "from-file")
 	}
 }
@@ -37,25 +37,25 @@ func TestDotenvLeavesExportedVariablesAlone(t *testing.T) {
 // ever taking over a variable the process was started with.
 func TestDotenvReappliesEditedFile(t *testing.T) {
 	t.Chdir(t.TempDir())
-	t.Setenv("GOMODEL_TEST_EXPORTED", "from-environment")
-	writeEnvFile(t, "GOMODEL_TEST_EXPORTED=from-file\nGOMODEL_TEST_EDITED=before\nGOMODEL_TEST_REMOVED=present\n")
+	t.Setenv("AIGATEWAY_TEST_EXPORTED", "from-environment")
+	writeEnvFile(t, "AIGATEWAY_TEST_EXPORTED=from-file\nAIGATEWAY_TEST_EDITED=before\nAIGATEWAY_TEST_REMOVED=present\n")
 	t.Cleanup(func() {
-		os.Unsetenv("GOMODEL_TEST_EDITED")
-		os.Unsetenv("GOMODEL_TEST_REMOVED")
+		os.Unsetenv("AIGATEWAY_TEST_EDITED")
+		os.Unsetenv("AIGATEWAY_TEST_REMOVED")
 	})
 
 	env := newDotenv()
 	env.apply()
-	writeEnvFile(t, "GOMODEL_TEST_EXPORTED=from-file\nGOMODEL_TEST_EDITED=after\n")
+	writeEnvFile(t, "AIGATEWAY_TEST_EXPORTED=from-file\nAIGATEWAY_TEST_EDITED=after\n")
 	env.apply()
 
-	if got := os.Getenv("GOMODEL_TEST_EDITED"); got != "after" {
+	if got := os.Getenv("AIGATEWAY_TEST_EDITED"); got != "after" {
 		t.Errorf("edited variable = %q, want %q", got, "after")
 	}
-	if _, present := os.LookupEnv("GOMODEL_TEST_REMOVED"); present {
+	if _, present := os.LookupEnv("AIGATEWAY_TEST_REMOVED"); present {
 		t.Error("variable dropped from the env file is still set")
 	}
-	if got := os.Getenv("GOMODEL_TEST_EXPORTED"); got != "from-environment" {
+	if got := os.Getenv("AIGATEWAY_TEST_EXPORTED"); got != "from-environment" {
 		t.Errorf("exported variable = %q, want it untouched by the env file", got)
 	}
 }
@@ -65,8 +65,8 @@ func TestDotenvReappliesEditedFile(t *testing.T) {
 func TestDotenvClearsWhenTheFileDisappears(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeEnvFile(t, "GOMODEL_TEST_VANISHING=present\n")
-	t.Cleanup(func() { os.Unsetenv("GOMODEL_TEST_VANISHING") })
+	writeEnvFile(t, "AIGATEWAY_TEST_VANISHING=present\n")
+	t.Cleanup(func() { os.Unsetenv("AIGATEWAY_TEST_VANISHING") })
 
 	env := newDotenv()
 	env.apply()
@@ -75,13 +75,13 @@ func TestDotenvClearsWhenTheFileDisappears(t *testing.T) {
 	}
 	env.apply()
 
-	if _, present := os.LookupEnv("GOMODEL_TEST_VANISHING"); present {
+	if _, present := os.LookupEnv("AIGATEWAY_TEST_VANISHING"); present {
 		t.Error("variable survived the removal of the env file")
 	}
 }
 
 func TestPIDFileRoundTrip(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "nested", "gomodel.pid")
+	path := filepath.Join(t.TempDir(), "nested", "aigateway.pid")
 
 	remove, err := writePIDFile(path)
 	if err != nil {
@@ -110,7 +110,7 @@ func TestPIDFileEmptyPathIsANoop(t *testing.T) {
 }
 
 func TestReadPIDFileRejectsGarbage(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "gomodel.pid")
+	path := filepath.Join(t.TempDir(), "aigateway.pid")
 	if err := os.WriteFile(path, []byte("not-a-pid"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -265,7 +265,7 @@ func (g *fakeGeneration) Shutdown(context.Context) error {
 // A second instance configured with the same pid file path owns it; the first
 // one must not remove it on its way out, or --reload loses the survivor.
 func TestPIDFileRemovalLeavesAnotherInstanceAlone(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "gomodel.pid")
+	path := filepath.Join(t.TempDir(), "aigateway.pid")
 	remove, err := writePIDFile(path)
 	if err != nil {
 		t.Fatalf("writePIDFile() error = %v", err)
@@ -291,47 +291,47 @@ func TestPIDFileRemovalLeavesAnotherInstanceAlone(t *testing.T) {
 // told the new configuration was rejected.
 func TestDotenvApplyUndoRestoresTheEnvironment(t *testing.T) {
 	t.Chdir(t.TempDir())
-	t.Setenv("GOMODEL_TEST_EXPORTED", "from-environment")
-	writeEnvFile(t, "GOMODEL_TEST_KEPT=before\nGOMODEL_TEST_DROPPED=present\n")
+	t.Setenv("AIGATEWAY_TEST_EXPORTED", "from-environment")
+	writeEnvFile(t, "AIGATEWAY_TEST_KEPT=before\nAIGATEWAY_TEST_DROPPED=present\n")
 	t.Cleanup(func() {
-		os.Unsetenv("GOMODEL_TEST_KEPT")
-		os.Unsetenv("GOMODEL_TEST_DROPPED")
-		os.Unsetenv("GOMODEL_TEST_ADDED")
+		os.Unsetenv("AIGATEWAY_TEST_KEPT")
+		os.Unsetenv("AIGATEWAY_TEST_DROPPED")
+		os.Unsetenv("AIGATEWAY_TEST_ADDED")
 	})
 
 	env := newDotenv()
 	env.apply()
 
 	// The edit a failed reload would have read.
-	writeEnvFile(t, "GOMODEL_TEST_KEPT=after\nGOMODEL_TEST_ADDED=new\nGOMODEL_TEST_EXPORTED=from-file\n")
+	writeEnvFile(t, "AIGATEWAY_TEST_KEPT=after\nAIGATEWAY_TEST_ADDED=new\nAIGATEWAY_TEST_EXPORTED=from-file\n")
 	undo := env.apply()
-	if got := os.Getenv("GOMODEL_TEST_KEPT"); got != "after" {
+	if got := os.Getenv("AIGATEWAY_TEST_KEPT"); got != "after" {
 		t.Fatalf("edited variable before undo = %q, want %q", got, "after")
 	}
 
 	undo()
 
-	if got := os.Getenv("GOMODEL_TEST_KEPT"); got != "before" {
+	if got := os.Getenv("AIGATEWAY_TEST_KEPT"); got != "before" {
 		t.Errorf("edited variable after undo = %q, want %q", got, "before")
 	}
-	if got := os.Getenv("GOMODEL_TEST_DROPPED"); got != "present" {
+	if got := os.Getenv("AIGATEWAY_TEST_DROPPED"); got != "present" {
 		t.Errorf("removed variable after undo = %q, want %q", got, "present")
 	}
-	if _, present := os.LookupEnv("GOMODEL_TEST_ADDED"); present {
+	if _, present := os.LookupEnv("AIGATEWAY_TEST_ADDED"); present {
 		t.Error("variable added by the rejected file is still set")
 	}
-	if got := os.Getenv("GOMODEL_TEST_EXPORTED"); got != "from-environment" {
+	if got := os.Getenv("AIGATEWAY_TEST_EXPORTED"); got != "from-environment" {
 		t.Errorf("exported variable = %q, want it untouched throughout", got)
 	}
 
 	// The bookkeeping has to be restored too, or the next reload treats the
 	// rolled-back variables as none of its business.
-	writeEnvFile(t, "GOMODEL_TEST_KEPT=third\n")
+	writeEnvFile(t, "AIGATEWAY_TEST_KEPT=third\n")
 	env.apply()
-	if got := os.Getenv("GOMODEL_TEST_KEPT"); got != "third" {
+	if got := os.Getenv("AIGATEWAY_TEST_KEPT"); got != "third" {
 		t.Errorf("variable after a later reload = %q, want %q", got, "third")
 	}
-	if _, present := os.LookupEnv("GOMODEL_TEST_DROPPED"); present {
+	if _, present := os.LookupEnv("AIGATEWAY_TEST_DROPPED"); present {
 		t.Error("variable dropped from the env file survived the later reload")
 	}
 }
@@ -345,7 +345,7 @@ func TestSendReloadSignal(t *testing.T) {
 		{
 			name: "signals the process named by the pid file",
 			pidFile: func(t *testing.T, dir string) string {
-				path := filepath.Join(dir, "gomodel.pid")
+				path := filepath.Join(dir, "aigateway.pid")
 				remove, err := writePIDFile(path)
 				if err != nil {
 					t.Fatalf("writePIDFile() error = %v", err)

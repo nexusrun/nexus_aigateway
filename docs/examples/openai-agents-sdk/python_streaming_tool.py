@@ -14,7 +14,7 @@ from openai import AsyncOpenAI
 set_default_openai_client(
     AsyncOpenAI(
         base_url=os.getenv("OPENAI_BASE_URL", "http://localhost:8080/v1"),
-        api_key=os.getenv("GOMODEL_MASTER_KEY", "change-me"),
+        api_key=os.getenv("AIGATEWAY_MASTER_KEY", "change-me"),
     ),
     use_for_tracing=False,
 )
@@ -24,7 +24,7 @@ set_tracing_disabled(True)
 @function_tool
 def gateway_status() -> str:
     """Return the status of the local gateway smoke test."""
-    return "GoModel is reachable through the OpenAI-compatible Responses API."
+    return "AIGateway is reachable through the OpenAI-compatible Responses API."
 
 
 agent = Agent(

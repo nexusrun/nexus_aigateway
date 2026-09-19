@@ -1,5 +1,5 @@
 <script>
-  // The shared "no data" artwork: the GoModel hexagon mark over a ghosted bar
+  // The shared "no data" artwork: the AIGateway hexagon mark over a ghosted bar
   // chart. `label` is baked into the drawing, so hide it when the surrounding
   // empty state already spells the message out in text.
   let { label = "No data" } = $props();
@@ -14,7 +14,7 @@
   aria-hidden={label ? undefined : "true"}
   xmlns="http://www.w3.org/2000/svg"
 >
-  <!-- GoModel hexagon mark: sharp mitered edges like the logotype -->
+  <!-- AIGateway hexagon mark: sharp mitered edges like the logotype -->
   <path
     d="M110 20 L187.9 65 L187.9 155 L110 200 L32.1 155 L32.1 65 Z"
     stroke="var(--accent)"

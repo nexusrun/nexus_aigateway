@@ -89,7 +89,7 @@ func FailureError(err error) *core.GatewayError {
 	return core.NewProviderError("", http.StatusInternalServerError, "a request plugin failed", err).WithCode(CodePluginFailure)
 }
 
-// WarnHeaderValue renders the X-GoModel-Guardrail header for a warn decision.
+// WarnHeaderValue renders the X-AIGateway-Guardrail header for a warn decision.
 func WarnHeaderValue(d pluginapi.Decision) string {
 	code := strings.TrimSpace(d.Code)
 	if code == "" {
@@ -99,4 +99,4 @@ func WarnHeaderValue(d pluginapi.Decision) string {
 }
 
 // GuardrailHeader is the response header carrying warn decisions.
-const GuardrailHeader = "X-GoModel-Guardrail"
+const GuardrailHeader = "X-AIGateway-Guardrail"

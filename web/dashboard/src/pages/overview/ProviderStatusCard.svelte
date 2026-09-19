@@ -9,6 +9,7 @@
   import Icon from "$lib/components/atoms/Icon.svelte";
   import { timezone } from "$lib/stores/timezone.svelte.js";
   import { formatNumber } from "$lib/utils/format.js";
+  import { providerLabel } from "$lib/utils/providerLabel.js";
   import { providerStatusState } from "./overviewState.svelte.js";
   import ProviderStatusCardDetails from "./ProviderStatusCardDetails.svelte";
   import {
@@ -32,9 +33,9 @@
   <div class="provider-status-card-head">
     <div>
       <h4 class="provider-status-name">
-        <span>{provider.name}</span>
+        <span>{providerLabel(provider.name)}</span>
         {#if providerTypeLabel(provider)}
-          <span class="provider-status-name-type">({providerTypeLabel(provider)})</span>
+          <span class="provider-status-name-type">({providerLabel(providerTypeLabel(provider))})</span>
         {/if}
         {#if providerDocUrl(provider)}
           <a
@@ -85,8 +86,8 @@
     class:is-expanded={expanded}
     aria-expanded={expanded}
     aria-label={expanded
-      ? m.overview_collapse_provider_details({ provider: provider.name })
-      : m.overview_expand_provider_details({ provider: provider.name })}
+      ? m.overview_collapse_provider_details({ provider: providerLabel(provider.name) })
+      : m.overview_expand_provider_details({ provider: providerLabel(provider.name) })}
     title={expanded
       ? m.overview_collapse_details()
       : m.overview_expand_details()}

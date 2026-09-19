@@ -28,7 +28,7 @@ answer it with a safe message, or let it through with a warning.
 </Warning>
 
 On `/v1/responses`, a stream-phase guardrail may drop, merge, or split events,
-so GoModel renumbers what it delivers: `sequence_number` still runs from `0`
+so AIGateway renumbers what it delivers: `sequence_number` still runs from `0`
 without gaps, up to the terminal `response.completed` (or `response.incomplete`
 / `response.failed` on a cut stream).
 
@@ -69,7 +69,7 @@ redeploy, or for operators who don't manage this repo's config directly.
 
 <img
   src="/advanced/guardrails.png"
-  alt="GoModel dashboard Plugins &amp; Guardrails page with an empty Guardrails list, a Create Guardrail button, and the loaded plugin list"
+  alt="AIGateway dashboard Plugins &amp; Guardrails page with an empty Guardrails list, a Create Guardrail button, and the loaded plugin list"
   style={{ width: "100%", maxWidth: "1280px", height: "auto" }}
   className="rounded-lg"
 />
@@ -199,7 +199,7 @@ the guardrail endpoints and the dashboard page are unavailable.
 
 ## Guardrail Types
 
-Six types ship with GoModel. Each is a built-in plugin; the tables list its
+Six types ship with AIGateway. Each is a built-in plugin; the tables list its
 config keys as they appear under `config:` and on the dashboard form.
 
 ### `system_prompt`
@@ -381,7 +381,7 @@ remove lines are a bare `Name`. Blank lines and `#` comments are ignored.
 | `request_remove` | Drop a header from the live request after the prompt phase. |
 | `response_set` | Replace a header on the response sent to the client. |
 | `response_add` | Append a value to a client response header, keeping existing values. Applied once per request even when the instance runs in both phases. |
-| `response_remove` | Drop a header from the client response, including headers GoModel adds itself (for example `X-Request-Id`). |
+| `response_remove` | Drop a header from the client response, including headers AIGateway adds itself (for example `X-Request-Id`). |
 | `upstream_set` | Static headers for the provider call. Recorded but not forwarded in this release. |
 
 Credential headers (`Authorization`, `X-Api-Key`, `Cookie`, ...) can never be
@@ -395,7 +395,7 @@ edited, and names containing `secret` or `token` cannot be set.
   order: 0
   config:
     response_add: |
-      X-Served-By: gomodel
+      X-Served-By: aigateway
     response_remove: |
       X-Request-Id
 ```
@@ -472,7 +472,7 @@ guardrail failure.
 
 Detects personal data with a [Presidio](https://presidio.dataprivacystack.org/)
 analyzer and anonymizes, flags, or blocks it. Only the analyzer service is
-needed; GoModel rewrites the text itself, so it can put the original values
+needed; AIGateway rewrites the text itself, so it can put the original values
 back into the response.
 
 ```bash
@@ -752,7 +752,7 @@ records the prompt-phase outcomes only, plus the cache type.
 | --- | --- |
 | **block** | An error in the endpoint's native format: HTTP 400 (prompt phase) or 502 (response and stream phases) unless the guardrail sets `block_status`; code `guardrail_blocked` unless the plugin sets its own. |
 | **respond** | An ordinary assistant reply with HTTP 200 (a one-turn stream for streaming requests). |
-| **warn** | The unchanged response plus an `X-GoModel-Guardrail: warn; code=<code>` header; the detail is stored in the audit trail. On a stream the header is sent only when the warn was decided before the first bytes went out (a buffered response); later warns are audit-only. |
+| **warn** | The unchanged response plus an `X-AIGateway-Guardrail: warn; code=<code>` header; the detail is stored in the audit trail. On a stream the header is sent only when the warn was decided before the first bytes went out (a buffered response); later warns are audit-only. |
 | **guardrail failure** (`fail_mode: closed`) | HTTP 500 with code `plugin_failure`. The guardrail's name is in the logs and audit record, not in the client message. |
 
 A blocked request never reaches the provider; a blocked response never

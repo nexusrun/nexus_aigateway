@@ -8,8 +8,8 @@ It contains the repository configuration, build files, and dependency definition
 - **`.golangci.yml`**: Configuration for the golangci-lint static analysis tool.
 - **`.goreleaser.yaml`**: Configuration for GoReleaser to automate application builds, packaging, and releases.
 - **`.pre-commit-config.yaml`**: Defines pre-commit hooks for code formatting, linting, and performance checks.
-- **`docker-compose.yaml`**: Orchestration file to run GoModel alongside Redis, PostgreSQL, and MongoDB locally.
-- **`Dockerfile`**: Multi-stage build instructions to compile and package the GoModel binary into a distroless container.
+- **`docker-compose.yaml`**: Orchestration file to run AIGateway alongside Redis, PostgreSQL, and MongoDB locally.
+- **`Dockerfile`**: Multi-stage build instructions to compile and package the AIGateway binary into a distroless container.
 - **`go.mod` / `go.sum`**: Go module dependencies and checksums.
 - **`LICENSE`**: MIT License file.
 - **`Makefile`**: Provides CLI commands for building, testing, linting, and running the application.
@@ -21,16 +21,16 @@ It contains the repository configuration, build files, and dependency definition
 
 It's responsible for the main entry points of the applications and CLI tools.
 
-### `./cmd/gomodel/main.go`
+### `./cmd/aigateway/main.go`
 
-It's the primary entry point for the GoModel API gateway.
+It's the primary entry point for the AIGateway API gateway.
 
 - `lifecycleApp`: Interface defining `Start` and `Shutdown` methods.
 - `shutdownApplication()`: Triggers and coordinates the graceful shutdown of the application.
 - `startApplication()`: Starts the application and handles immediate startup failures.
 - `main()`: Loads configurations, initializes logging, sets up providers (OpenAI, Anthropic, Gemini, etc.), starts the HTTP server, and listens for OS signals.
 
-### `./cmd/gomodel/logging.go`
+### `./cmd/aigateway/logging.go`
 
 It configures the global `slog` instance for the application.
 

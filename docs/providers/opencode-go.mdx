@@ -1,12 +1,12 @@
 ---
 title: "OpenCode Go"
-description: "Configure OpenCode Zen (Go subscription) in GoModel using an OpenAI-compatible endpoint."
+description: "Configure OpenCode Zen (Go subscription) in AIGateway using an OpenAI-compatible endpoint."
 icon: "terminal"
 keywords: ["OpenCode Zen", "OpenCode Go", "provider setup"]
 ---
 
 [OpenCode Zen](https://opencode.ai/docs/zen/) exposes its "Go" subscription
-models behind an OpenAI-compatible API. GoModel ships a native `opencode_go`
+models behind an OpenAI-compatible API. AIGateway ships a native `opencode_go`
 provider that defaults the base URL, so you only need an API key.
 
 ## Configure
@@ -44,13 +44,13 @@ OPENCODE_GO_MODELS=glm-5.1,kimi-k2.7-code,deepseek-v4-pro
 
 OpenCode Zen serves most models on OpenAI-style `/chat/completions` (Bearer
 auth) and a few models only on the Anthropic-native `/messages` endpoint
-(`x-api-key` auth). GoModel routes per model:
+(`x-api-key` auth). AIGateway routes per model:
 
 - **OpenAI-style models** (GLM, Kimi, DeepSeek, MiMo, MiniMax, most Qwen) go to
   `/chat/completions`. `/models` and `/v1/responses` (translated to chat
   completions) use the same path.
 - **Anthropic-only models** are translated to the Anthropic Messages dialect and
-  sent to `/messages`, mirroring how GoModel already serves native Anthropic.
+  sent to `/messages`, mirroring how AIGateway already serves native Anthropic.
   Both paths normalize to the same OpenAI-compatible response, so clients see
   one consistent surface regardless of which model they pick — whether they call
   `/v1/chat/completions` or `/v1/messages`.
@@ -73,19 +73,19 @@ OPENCODE_GO_MESSAGES_MODELS=qwen3.7-max
 OpenCode Zen asks every client to send an `x-opencode-session` header so it
 can route one conversation to the same upstream and keep its prompt cache
 warm. Upstream has announced that requests without it may start failing.
-GoModel adds the header to every OpenCode Go request by default, on both the
+AIGateway adds the header to every OpenCode Go request by default, on both the
 `/chat/completions` and `/messages` paths, using the first available value:
 
 1. An `x-opencode-session` header sent by the client (OpenCode itself, pi, and
    other tools that speak OpenCode Zen's dialect) is forwarded verbatim.
-2. Otherwise the session GoModel detected through
+2. Otherwise the session AIGateway detected through
    [session keeping](/features/session-keeping): OpenCode's `X-Session-Id`,
    Claude Code's session id, a session body field, or the content-derived
    `auto-…` id for agents that send no signal at all.
 
-A request with no detectable session is sent without the header. GoModel also
+A request with no detectable session is sent without the header. AIGateway also
 identifies itself with `x-opencode-client` (forwarding the client's own value
-when present, `gomodel` otherwise) and a `gomodel/<version>` User-Agent, as
+when present, `aigateway` otherwise) and a `aigateway/<version>` User-Agent, as
 the upstream [usage guidelines](https://opencode.ai/docs/go/#where-can-i-use-it)
 require.
 
@@ -104,7 +104,7 @@ reasoning parameter out:
 [1210] This model always engages in thinking and cannot be disabled; please use low, high, or max
 ```
 
-GoModel therefore sends `reasoning_effort: "low"` on `/chat/completions` when a
+AIGateway therefore sends `reasoning_effort: "low"` on `/chat/completions` when a
 request carries no reasoning parameter at all. Models that ignore the parameter
 are unaffected. Raise the default per deployment:
 
@@ -115,7 +115,7 @@ OPENCODE_GO_DEFAULT_REASONING_EFFORT=high
 Set it to `none` (or `off`) to inject nothing and forward requests untouched.
 
 Clients keep control when they ask for reasoning themselves: nothing is injected
-over an explicit `reasoning.effort` or a top-level `reasoning_effort`. GoModel's
+over an explicit `reasoning.effort` or a top-level `reasoning_effort`. AIGateway's
 recognized effort levels are mapped to their nearest equivalent in the low /
 high / max set OpenCode Zen accepts:
 
@@ -127,9 +127,9 @@ high / max set OpenCode Zen accepts:
 | `xhigh`, `max`           | `max`         |
 
 Any other value (`turbo`, say) is forwarded unchanged for the upstream to judge.
-`reasoning.effort` is GoModel's canonical field, so a request that sets both it
+`reasoning.effort` is AIGateway's canonical field, so a request that sets both it
 and a top-level `reasoning_effort` is sent with the mapped `reasoning.effort` —
-the same precedence every other GoModel provider applies.
+the same precedence every other AIGateway provider applies.
 
 Models routed to `/messages` use the Anthropic thinking dialect instead and are
 not affected by this mapping.

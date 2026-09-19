@@ -53,7 +53,7 @@ type Config struct {
 	// anything else the operator declared (OTLP, MCP upstreams, vector
 	// stores) are untouched. A catalog served from a local file keeps working.
 	// Default: false
-	Offline bool `yaml:"offline" env:"GOMODEL_OFFLINE"`
+	Offline bool `yaml:"offline" env:"AIGATEWAY_OFFLINE,GOMODEL_OFFLINE"`
 
 	// Extensions holds configuration owned by custom distributions. Core keeps
 	// the values opaque; an extension decodes its named section with
@@ -107,7 +107,7 @@ func buildDefaultConfig() *Config {
 		Server: ServerConfig{
 			Port:                    "8080",
 			BasePath:                "/",
-			UserPathHeader:          "X-GoModel-User-Path",
+			UserPathHeader:          "X-AIGateway-User-Path",
 			SwaggerEnabled:          false,
 			PprofEnabled:            false,
 			PIDFile:                 DefaultPIDFilePath(),
@@ -140,7 +140,7 @@ func buildDefaultConfig() *Config {
 				RefreshInterval: 3600,
 				RecheckInterval: 60,
 				ModelList: ModelListConfig{
-					URL: "https://raw.githubusercontent.com/ENTERPILOT/ai-model-list/refs/heads/main/models.min.json",
+					URL: "https://raw.githubusercontent.com/nexusrun/ai-model-list/refs/heads/main/models.min.json",
 				},
 				Local: nil,
 				Redis: nil,
@@ -298,7 +298,7 @@ func Load() (*LoadResult, error) {
 		return nil, err
 	}
 	cfg.Server.BasePath = NormalizeBasePath(cfg.Server.BasePath)
-	cfg.Server.UserPathHeader, err = NormalizeHeaderName(cfg.Server.UserPathHeader, "X-GoModel-User-Path")
+	cfg.Server.UserPathHeader, err = NormalizeHeaderName(cfg.Server.UserPathHeader, "X-AIGateway-User-Path")
 	if err != nil {
 		return nil, fmt.Errorf("invalid server.user_path_header: %w", err)
 	}

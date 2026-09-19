@@ -120,7 +120,7 @@ func TestCompletionToResponsesResponse(t *testing.T) {
 	c := pluginapi.Respond("nope").Response
 	c.Choices[0].Message.Parts = append(c.Choices[0].Message.Parts, pluginapi.Part{Kind: pluginapi.PartToolCall, ToolCall: &pluginapi.ToolCall{ID: "c1", Name: "f", Arguments: json.RawMessage(`{"a":1}`)}})
 	resp := CompletionToResponsesResponse(c, "m")
-	if !strings.HasPrefix(resp.ID, "gomodel-plugin-") || resp.Object != "response" || resp.Status != "completed" || resp.Model != "m" || resp.CreatedAt == 0 {
+	if !strings.HasPrefix(resp.ID, "aigateway-plugin-") || resp.Object != "response" || resp.Status != "completed" || resp.Model != "m" || resp.CreatedAt == 0 {
 		t.Errorf("envelope = %+v", resp)
 	}
 	if len(resp.Output) != 2 || resp.Output[0].Type != "message" || resp.Output[0].Content[0].Text != "nope" || resp.Output[1].Type != "function_call" || resp.Output[1].Arguments != `{"a":1}` {

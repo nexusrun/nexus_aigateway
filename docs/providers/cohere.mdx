@@ -1,11 +1,11 @@
 ---
 title: "Cohere"
-description: "Configure Cohere in GoModel and use Command chat, tool calling, reasoning, image input, audio transcription, and Embed models through OpenAI-compatible APIs."
+description: "Configure Cohere in AIGateway and use Command chat, tool calling, reasoning, image input, audio transcription, and Embed models through OpenAI-compatible APIs."
 icon: "message-circle"
 keywords: ["Cohere", "Command models", "Embed", "tool calling", "provider setup"]
 ---
 
-GoModel translates OpenAI-compatible Chat Completions, Responses, Embeddings,
+AIGateway translates OpenAI-compatible Chat Completions, Responses, Embeddings,
 and Audio Transcription requests to Cohere's native v2 API. Model
 discovery uses Cohere's model catalog and exposes chat, embedding, and
 transcription models through `/v1/models`.
@@ -38,7 +38,7 @@ Use a Cohere Command model with either OpenAI-compatible endpoint:
 
 ```bash curl
 curl http://localhost:8080/v1/chat/completions \
-  -H "Authorization: Bearer $GOMODEL_API_KEY" \
+  -H "Authorization: Bearer $AIGATEWAY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "command-a-plus-05-2026",
@@ -53,7 +53,7 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="http://localhost:8080/v1",
-    api_key=os.environ["GOMODEL_API_KEY"],
+    api_key=os.environ["AIGATEWAY_API_KEY"],
 )
 
 completion = client.chat.completions.create(
@@ -69,7 +69,7 @@ import OpenAI from "openai";
 
 const client = new OpenAI({
   baseURL: "http://localhost:8080/v1",
-  apiKey: process.env.GOMODEL_API_KEY,
+  apiKey: process.env.AIGATEWAY_API_KEY,
 });
 
 const completion = await client.chat.completions.create({
@@ -110,7 +110,7 @@ Transcribe audio through the OpenAI-compatible endpoint:
 
 ```bash curl
 curl http://localhost:8080/v1/audio/transcriptions \
-  -H "Authorization: Bearer $GOMODEL_API_KEY" \
+  -H "Authorization: Bearer $AIGATEWAY_API_KEY" \
   -F "model=cohere/cohere-transcribe-03-2026" \
   -F "language=en" \
   -F "response_format=json" \
@@ -124,7 +124,7 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="http://localhost:8080/v1",
-    api_key=os.environ["GOMODEL_API_KEY"],
+    api_key=os.environ["AIGATEWAY_API_KEY"],
 )
 
 with open("recording.wav", "rb") as audio_file:
@@ -144,7 +144,7 @@ import OpenAI from "openai";
 
 const client = new OpenAI({
   baseURL: "http://localhost:8080/v1",
-  apiKey: process.env.GOMODEL_API_KEY,
+  apiKey: process.env.AIGATEWAY_API_KEY,
 });
 
 const transcription = await client.audio.transcriptions.create({
@@ -159,7 +159,7 @@ console.log(transcription.text);
 
 </CodeGroup>
 
-The Cohere transcription API requires `language` and returns JSON. GoModel
+The Cohere transcription API requires `language` and returns JSON. AIGateway
 accepts the OpenAI-compatible `response_format=json` field but omits it from the
 native request because JSON is Cohere's fixed response format. Cohere does not
 support text-to-speech, prompt hints, timestamp granularities, or streaming
@@ -167,14 +167,14 @@ transcription.
 
 ## Embeddings
 
-GoModel supplies Cohere's required embedding fields while retaining the
+AIGateway supplies Cohere's required embedding fields while retaining the
 OpenAI request shape:
 
 <CodeGroup>
 
 ```bash curl
 curl http://localhost:8080/v1/embeddings \
-  -H "Authorization: Bearer $GOMODEL_API_KEY" \
+  -H "Authorization: Bearer $AIGATEWAY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "embed-v4.0",
@@ -191,7 +191,7 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="http://localhost:8080/v1",
-    api_key=os.environ["GOMODEL_API_KEY"],
+    api_key=os.environ["AIGATEWAY_API_KEY"],
 )
 
 embeddings = client.embeddings.create(
@@ -209,7 +209,7 @@ import OpenAI from "openai";
 
 const client = new OpenAI({
   baseURL: "http://localhost:8080/v1",
-  apiKey: process.env.GOMODEL_API_KEY,
+  apiKey: process.env.AIGATEWAY_API_KEY,
 });
 
 const embeddings = await client.embeddings.create({
@@ -233,7 +233,7 @@ console.log(embeddings.data[0].embedding);
 
 Add `cohere` to `server.enabled_passthrough_providers`, then use paths such as
 `/p/cohere/v2/chat` or `/p/cohere/v2/rerank` to call Cohere-native APIs that do
-not have an OpenAI-compatible GoModel surface.
+not have an OpenAI-compatible AIGateway surface.
 
 See Cohere's [Chat API](https://docs.cohere.com/reference/chat),
 [Embed API](https://docs.cohere.com/reference/embed),

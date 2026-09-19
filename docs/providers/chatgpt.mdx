@@ -10,7 +10,7 @@ subscription (Plus, Pro, Business, or Enterprise). Usage is billed against the
 subscription's quota, not an OpenAI Platform API key.
 
 Pair it with the [Codex guide](/guides/codex) to run
-`Codex -> GoModel -> ChatGPT subscription`.
+`Codex -> AIGateway -> ChatGPT subscription`.
 
 ## Configure
 
@@ -29,7 +29,7 @@ providers:
     api_key: "${CHATGPT_API_KEY}"
 ```
 
-Run `codex login` first if `~/.codex/auth.json` does not exist yet. GoModel
+Run `codex login` first if `~/.codex/auth.json` does not exist yet. AIGateway
 derives the ChatGPT account ID from the token itself, so nothing else is
 needed.
 
@@ -41,7 +41,7 @@ needed.
 
 ## Models
 
-The Codex backend has no model-listing endpoint, so GoModel ships the
+The Codex backend has no model-listing endpoint, so AIGateway ships the
 inventory a ChatGPT subscription can call:
 
 ```text
@@ -68,7 +68,7 @@ The Codex backend serves `/responses` and nothing else, so
 `/v1/chat/completions` and `/v1/embeddings` answer `501` for `chatgpt` models.
 Use `/v1/responses`, which is what Codex sends anyway.
 
-The backend also validates against a strict parameter allowlist. GoModel
+The backend also validates against a strict parameter allowlist. AIGateway
 adapts requests rather than failing them, so callers keep using the standard
 Responses API:
 
@@ -119,5 +119,5 @@ gateway relays a `429`:
 
 <Warning>
   OpenAI authorizes these tokens for Codex traffic. Use this provider to route
-  your own Codex usage through GoModel, not as a general-purpose inference API.
+  your own Codex usage through AIGateway, not as a general-purpose inference API.
 </Warning>

@@ -8,15 +8,15 @@ import (
 	"github.com/nexusrun/nexus_aigateway/pluginapi"
 )
 
-// Symbol names a shared object exports for GoModel.
+// Symbol names a shared object exports for AIGateway.
 const (
-	// PluginSymbol is required: `func GoModelPlugin() pluginapi.Plugin`
+	// PluginSymbol is required: `func AIGatewayPlugin() pluginapi.Plugin`
 	// (preferred, one file can back several instances) or
-	// `var GoModelPlugin pluginapi.Plugin` (single instance).
-	PluginSymbol = "GoModelPlugin"
-	// BuildInfoSymbol is optional: `var GoModelBuildInfo pluginapi.BuildInfo`,
-	// stamped by `gomodel plugin build`.
-	BuildInfoSymbol = "GoModelBuildInfo"
+	// `var AIGatewayPlugin pluginapi.Plugin` (single instance).
+	PluginSymbol = "AIGatewayPlugin"
+	// BuildInfoSymbol is optional: `var AIGatewayBuildInfo pluginapi.BuildInfo`,
+	// stamped by `aigateway plugin build`.
+	BuildInfoSymbol = "AIGatewayBuildInfo"
 )
 
 // Open opens one shared object, resolves its symbols, and reads its manifest
@@ -161,7 +161,7 @@ func hookInterface(kind pluginapi.Kind) string {
 }
 
 func errUnsupported() error {
-	return fmt.Errorf("shared object plugins are not supported by this binary (%s): Go plugins need CGO_ENABLED=1 on linux, darwin, or freebsd; use the gomodel:<version>-plugins image or `make build-plugins`", hostDescription())
+	return fmt.Errorf("shared object plugins are not supported by this binary (%s): Go plugins need CGO_ENABLED=1 on linux, darwin, or freebsd; use the aigateway:<version>-plugins image or `make build-plugins`", hostDescription())
 }
 
 func hostDescription() string {

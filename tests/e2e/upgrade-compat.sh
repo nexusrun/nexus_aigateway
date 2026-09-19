@@ -30,13 +30,13 @@ BASELINE_REF="${UPGRADE_BASELINE_REF:-origin/main}"
 GW_PORT="${UPGRADE_PORT:-18190}"
 BASE="http://localhost:$GW_PORT"
 
-ROOT_WORK="${UPGRADE_WORK_DIR:-/tmp/gomodel-upgrade-compat}"
+ROOT_WORK="${UPGRADE_WORK_DIR:-/tmp/aigateway-upgrade-compat}"
 BASELINE_TREE="$ROOT_WORK/baseline-tree"
-OLD_BIN="$ROOT_WORK/gomodel-baseline"
-NEW_BIN="$REPO_ROOT/bin/gomodel"
-PG_DB="${UPGRADE_PG_DATABASE:-gomodel_upgrade_compat}"
-MONGO_DB="${UPGRADE_MONGO_DATABASE:-gomodel_upgrade_compat}"
-MONGO_CONTAINER="${UPGRADE_MONGO_CONTAINER:-gomodel-mongodb-1}"
+OLD_BIN="$ROOT_WORK/aigateway-baseline"
+NEW_BIN="$REPO_ROOT/bin/aigateway"
+PG_DB="${UPGRADE_PG_DATABASE:-aigateway_upgrade_compat}"
+MONGO_DB="${UPGRADE_MONGO_DATABASE:-aigateway_upgrade_compat}"
+MONGO_CONTAINER="${UPGRADE_MONGO_CONTAINER:-aigateway-mongodb-1}"
 
 die() { echo "error: $*" >&2; exit 1; }
 
@@ -60,7 +60,7 @@ WORK="$ROOT_WORK/$BACKEND"
 build_binaries() {
   mkdir -p "$ROOT_WORK"
 
-  # Always rebuild: an existing bin/gomodel from an earlier session would make
+  # Always rebuild: an existing bin/aigateway from an earlier session would make
   # this harness validate a binary that predates the change under test, and
   # report a pass for it.
   (cd "$REPO_ROOT" && make build)
@@ -72,7 +72,7 @@ build_binaries() {
     git -C "$BASELINE_TREE" checkout --detach "$BASELINE_REF" >/dev/null 2>&1 \
       || die "cannot move the baseline worktree to $BASELINE_REF"
   fi
-  (cd "$BASELINE_TREE" && go build -o "$OLD_BIN" ./cmd/gomodel)
+  (cd "$BASELINE_TREE" && go build -o "$OLD_BIN" ./cmd/aigateway)
 }
 
 # ------------------------------------------------------------------ gateway --
@@ -80,10 +80,10 @@ build_binaries() {
 storage_env() {
   case "$BACKEND" in
     sqlite)
-      printf 'STORAGE_TYPE=sqlite\nSQLITE_PATH=%s/data/gomodel.db\n' "$WORK"
+      printf 'STORAGE_TYPE=sqlite\nSQLITE_PATH=%s/data/aigateway.db\n' "$WORK"
       ;;
     postgresql)
-      printf 'STORAGE_TYPE=postgresql\nPOSTGRES_URL=postgres://gomodel:gomodel@localhost:5432/%s?sslmode=disable\n' "$PG_DB"
+      printf 'STORAGE_TYPE=postgresql\nPOSTGRES_URL=postgres://aigateway:aigateway@localhost:5432/%s?sslmode=disable\n' "$PG_DB"
       ;;
     mongodb)
       printf 'STORAGE_TYPE=mongodb\nMONGODB_URL=mongodb://localhost:27017/?replicaSet=rs0\nMONGODB_DATABASE=%s\n' "$MONGO_DB"
@@ -94,7 +94,7 @@ storage_env() {
 reset_backend() {
   case "$BACKEND" in
     postgresql)
-      psql "postgres://gomodel:gomodel@localhost:5432/postgres?sslmode=disable" -v ON_ERROR_STOP=1 \
+      psql "postgres://aigateway:aigateway@localhost:5432/postgres?sslmode=disable" -v ON_ERROR_STOP=1 \
         -c "DROP DATABASE IF EXISTS $PG_DB" -c "CREATE DATABASE $PG_DB" >/dev/null
       ;;
     mongodb)
@@ -313,7 +313,7 @@ set -a
 # shellcheck disable=SC1091
 source "$REPO_ROOT/.env"
 set +a
-unset GOMODEL_MASTER_KEY PORT
+unset AIGATEWAY_MASTER_KEY PORT
 
 reset_backend
 

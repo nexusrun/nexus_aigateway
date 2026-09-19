@@ -101,7 +101,7 @@ func TestApplyToChatResponse(t *testing.T) {
 
 func TestCompletionToChatResponse(t *testing.T) {
 	resp := CompletionToChatResponse(pluginapi.Respond("nope").Response, "m")
-	if !strings.HasPrefix(resp.ID, "gomodel-plugin-") || resp.Object != "chat.completion" || resp.Model != "m" || resp.Created == 0 {
+	if !strings.HasPrefix(resp.ID, "aigateway-plugin-") || resp.Object != "chat.completion" || resp.Model != "m" || resp.Created == 0 {
 		t.Errorf("envelope = %+v", resp)
 	}
 	if len(resp.Choices) != 1 || resp.Choices[0].Message.Content != "nope" || resp.Choices[0].FinishReason != "stop" || resp.Choices[0].Message.Role != "assistant" {

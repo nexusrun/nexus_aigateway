@@ -1,4 +1,4 @@
-# GoModel dashboard — Svelte conventions
+# AIGateway dashboard — Svelte conventions
 
 The admin dashboard is a Svelte 5 SPA in `web/dashboard/`. Every page MUST
 follow these rules so the pages compose into one coherent app.
@@ -85,7 +85,7 @@ confirmations).
 
 - **atoms** — `Icon` (kebab-case lucide names), `Spinner`, `Modal`,
   `EmptyState`, `NoDataIllustration`, `CopyButton`, `TableActionButton`,
-  `DialogCloseButton`, `SegmentedControl`, `EnabledToggle`, `GoModelLogo`.
+  `DialogCloseButton`, `SegmentedControl`, `EnabledToggle`, `AIGatewayLogo`.
 - **molecules** — `LoadingState`, `Pagination`, `DatePicker`, `FilterInput`,
   `SearchSelect` (searchable single-value dropdown; use it instead of a
   `<datalist>` or a long `<select>`), `InlineHelpSection`, `ChartCanvas`,
@@ -108,7 +108,7 @@ provider/model display) · `dateKeys.js` (UTC "YYYY-MM-DD" day-key math shared
 by the timezone store, the reporting window and the contribution calendar) ·
 `chartTheme.js` (theme colors + the shared Chart.js style fragments) ·
 `clipboard.svelte.js` · `debounce.js` · `storage.js` (localStorage can be
-absent or blocked — never touch it directly) · `api/paths.js` (`gomodelPath`) ·
+absent or blocked — never touch it directly) · `api/paths.js` (`aigatewayPath`) ·
 `attachments.js` (`{@attach ...}` behaviours: `dismissOnOutside`,
 `autofocusWithin`).
 
@@ -141,7 +141,7 @@ Cross-page conventions:
 - Abortable fetches: cancel the in-flight request when a newer one starts
   (AbortController); ignore abort errors.
 - `history.pushState` deep links (e.g. audit filters in the query string):
-  keep the established URL shapes; use `gomodelPath()`.
+  keep the established URL shapes; use `aigatewayPath()`.
 - Timestamps shown to users: `timezone.formatTimestamp(ts)`;
   `title` tooltips use `formatTimestampUTC(ts)`.
 - Confirmation prompts: simple ones use `confirm()`; typed confirmations use

@@ -10,7 +10,7 @@ import (
 	"github.com/nexusrun/nexus_aigateway/internal/core"
 )
 
-// Groq returns the chain of thought under "reasoning", while GoModel's own
+// Groq returns the chain of thought under "reasoning", while AIGateway's own
 // canonical spelling on /v1/chat/completions is "reasoning_content": that is
 // what the Anthropic, DeepSeek, Cohere and vLLM adapters emit, what the
 // Responses and Messages translation layers read, and what the dashboard

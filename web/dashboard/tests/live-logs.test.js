@@ -919,7 +919,7 @@ test("parent headers do not assign sessions before the server resolves them", ()
     id: "live-3",
     request_id: "req-3",
     path: "/v1/chat/completions",
-    data: { request_headers: { "X-GoModel-Interaction-Parent": "head-a" } },
+    data: { request_headers: { "X-AIGateway-Interaction-Parent": "head-a" } },
   }, "audit.started");
 
   assert.equal(app.auditLog.entries.length, 2);

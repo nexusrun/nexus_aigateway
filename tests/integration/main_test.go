@@ -101,7 +101,7 @@ func setupPostgreSQL(ctx context.Context) error {
 		ctx,
 		[]string{
 			"-P",
-			"-e", "POSTGRES_DB=gomodel_test",
+			"-e", "POSTGRES_DB=aigateway_test",
 			"-e", "POSTGRES_USER=test",
 			"-e", "POSTGRES_PASSWORD=test",
 		},
@@ -115,7 +115,7 @@ func setupPostgreSQL(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to get PostgreSQL port: %w", err)
 	}
-	pgURL = fmt.Sprintf("postgres://test:test@%s:%s/gomodel_test?sslmode=disable", dockerPublishedHost(), port)
+	pgURL = fmt.Sprintf("postgres://test:test@%s:%s/aigateway_test?sslmode=disable", dockerPublishedHost(), port)
 
 	log.Printf("PostgreSQL URL: %s", pgURL)
 
@@ -225,7 +225,7 @@ func setupMongoDB(ctx context.Context) error {
 	}
 
 	// Get database reference
-	mongoDatabase = mongoClient.Database("gomodel_test")
+	mongoDatabase = mongoClient.Database("aigateway_test")
 
 	log.Println("MongoDB container ready")
 	return nil

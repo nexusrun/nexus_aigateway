@@ -174,7 +174,7 @@ func TestRateLimitConcurrencyEnforcement_E2E(t *testing.T) {
 		}
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-Request-ID", "rl-cc-first")
-		req.Header.Set("X-GoModel-User-Path", "/team/cc/app")
+		req.Header.Set("X-AIGateway-User-Path", "/team/cc/app")
 		resp, err := http.DefaultClient.Do(req)
 		firstDone <- asyncResult{resp: resp, err: err}
 	}()

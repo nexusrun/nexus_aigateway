@@ -11,7 +11,7 @@ const containerMountinfo = `
 1077 1076 0:245 / / rw,relatime master:301 - overlay overlay rw,lowerdir=/x,upperdir=/y,workdir=/z
 1078 1077 0:249 / /proc rw,nosuid,nodev,noexec,relatime - proc proc rw
 1079 1077 0:250 / /dev rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755
-1083 1077 0:32 /var/lib/docker/volumes/gomodel_data/_data /app/data rw,relatime master:1 - ext4 /dev/vda1 rw
+1083 1077 0:32 /var/lib/docker/volumes/aigateway_data/_data /app/data rw,relatime master:1 - ext4 /dev/vda1 rw
 1084 1077 0:32 /home/me/my\040configs /app/config rw,relatime - ext4 /dev/vda1 rw
 1085 1077 0:251 / /tmp rw,nosuid,nodev - tmpfs tmpfs rw
 `

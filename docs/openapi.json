@@ -11132,11 +11132,11 @@
   "servers": [
     {
       "url": "{base_url}",
-      "description": "Edit the base URL to point at your GoModel deployment.",
+      "description": "Edit the base URL to point at your AIGateway deployment.",
       "variables": {
         "base_url": {
           "default": "http://localhost:8080",
-          "description": "Your GoModel deployment URL"
+          "description": "Your AIGateway deployment URL"
         }
       }
     }

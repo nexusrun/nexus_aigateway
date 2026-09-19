@@ -12,6 +12,7 @@
     providerDisplayValue,
     qualifiedModelDisplay,
   } from "$lib/utils/format.js";
+  import { providerLabel } from "$lib/utils/providerLabel.js";
   import { usagePage } from "./usage.svelte.js";
   import SessionIDChip from "./SessionIDChip.svelte";
   import {
@@ -228,7 +229,7 @@
               <tr>
                 {#if kind === "model"}
                   <td class="mono font-size-md">{row.model || "-"}</td>
-                  <td><span class="provider-badge">{providerDisplayValue(row) || "-"}</span></td>
+                  <td><span class="provider-badge">{providerLabel(providerDisplayValue(row)) || "-"}</span></td>
                 {:else if kind === "userPath"}
                   <td class="mono font-size-md">{row.user_path || "/"}</td>
                 {:else if kind === "label"}

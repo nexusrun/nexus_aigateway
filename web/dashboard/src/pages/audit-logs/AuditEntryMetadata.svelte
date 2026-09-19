@@ -1,6 +1,7 @@
 <script>
   // Metadata badge strip under an expanded audit entry.
   import { providerDisplayValue, qualifiedResolvedModelDisplay } from "$lib/utils/format.js";
+  import { providerLabel } from "$lib/utils/providerLabel.js";
   import { auditGuardrailVerdict, workflowFailoverTarget } from "./audit-logic.js";
   import { usagePage } from "../usage/usage.svelte.js";
   import * as m from "$lib/paraglide/messages.js";
@@ -14,7 +15,7 @@
   // text are dropped, so optional fields simply disappear.
   const badges = $derived(
     [
-      { key: "provider", text: providerDisplayValue(entry) || "-" },
+      { key: "provider", text: providerLabel(providerDisplayValue(entry)) || "-" },
       { key: "model", text: entry.requested_model || entry.model || "-", mono: true },
       { key: "user_path", text: entry.user_path, mono: true },
       { key: "session_id", text: entry.session_id && "session: " + entry.session_id, mono: true },

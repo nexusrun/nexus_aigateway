@@ -30,7 +30,7 @@ tests/e2e/manage-release-e2e-stack.sh stop
 
 The runner treats this markdown file as the source of truth, replays the setup
 blocks automatically for each scenario, writes a raw log plus a TSV summary
-under `QA_RUN_DIR` (default: `/tmp/gomodel-release-e2e-$QA_SUFFIX`), and
+under `QA_RUN_DIR` (default: `/tmp/aigateway-release-e2e-$QA_SUFFIX`), and
 supports partial reruns.
 
 Stateful note:
@@ -177,7 +177,7 @@ Stateful note:
 
 ```bash
 export QA_SUFFIX="${QA_SUFFIX:-$(date +%s)-$$}"
-export QA_RUN_DIR="${QA_RUN_DIR:-/tmp/gomodel-release-e2e-$QA_SUFFIX}"
+export QA_RUN_DIR="${QA_RUN_DIR:-/tmp/aigateway-release-e2e-$QA_SUFFIX}"
 export QA_OPENAI_ALIAS="${QA_OPENAI_ALIAS:-qa-gpt-latest-$QA_SUFFIX}"
 export QA_ANTHROPIC_ALIAS="${QA_ANTHROPIC_ALIAS:-qa-sonnet-thinking-$QA_SUFFIX}"
 export QA_BUDGET_SUFFIX="${QA_SUFFIX//[^[:alnum:]]/_}"
@@ -192,7 +192,7 @@ export BASE_URL=http://localhost:18080
 export PG_BASE_URL=http://localhost:18081
 export MONGO_BASE_URL=http://localhost:18082
 export GR_BASE_URL=http://localhost:18083
-export RELEASE_STACK_DIR="${RELEASE_STACK_DIR:-/tmp/gomodel-release-stack}"
+export RELEASE_STACK_DIR="${RELEASE_STACK_DIR:-/tmp/aigateway-release-stack}"
 
 reload_release_gateway() {
   local gateway="$1"
@@ -504,7 +504,7 @@ run_release_budget_enforcement() {
   curl -fsS -D "$headers_file" -o "$body_file" -X POST "$base_url/v1/chat/completions" \
     -H 'Content-Type: application/json' \
     -H "X-Request-ID: $req1" \
-    -H "X-GoModel-User-Path: $leaf_path" \
+    -H "X-AIGateway-User-Path: $leaf_path" \
     -d "{\"model\":\"gpt-4.1-nano\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply exactly $expected_reply\"}],\"max_tokens\":32,\"temperature\":0}"
   assert_chat_response_contains "$body_file" "" "$expected_reply"
 
@@ -518,7 +518,7 @@ run_release_budget_enforcement() {
   curl -sS -D "$headers_file" -o "$body_file" -w '%{http_code}' -X POST "$base_url/v1/chat/completions" \
     -H 'Content-Type: application/json' \
     -H "X-Request-ID: $req2" \
-    -H "X-GoModel-User-Path: $leaf_path" \
+    -H "X-AIGateway-User-Path: $leaf_path" \
     -d "{\"model\":\"gpt-4.1-nano\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply exactly QA_BUDGET_SHOULD_BLOCK_$QA_BUDGET_SUFFIX\"}],\"max_tokens\":20,\"temperature\":0}" \
     | jq -R -e '. == "429"' >/dev/null
   grep -Eiq '^Retry-After: *[0-9]+' "$headers_file"
@@ -599,12 +599,12 @@ source .env
 set +a
 
 export QA_SUFFIX="${QA_SUFFIX:-$(date +%s)-$$}"
-export QA_RUN_DIR="${QA_RUN_DIR:-/tmp/gomodel-release-e2e-$QA_SUFFIX}"
+export QA_RUN_DIR="${QA_RUN_DIR:-/tmp/aigateway-release-e2e-$QA_SUFFIX}"
 
 mkdir -p "$QA_RUN_DIR"
 
 export AUTH_BASE_URL="${AUTH_BASE_URL:-http://localhost:18084}"
-export ADMIN_AUTH_HEADER="Authorization: Bearer $GOMODEL_MASTER_KEY"
+export ADMIN_AUTH_HEADER="Authorization: Bearer $AIGATEWAY_MASTER_KEY"
 
 export QA_AUTH_KEY_NAME="qa-release-auth-key-$QA_SUFFIX"
 export QA_WORKFLOW_NAME="qa-release-workflow-$QA_SUFFIX"
@@ -663,7 +663,7 @@ Checks that Prometheus metrics are exposed.
 METRICS_FILE="$QA_RUN_DIR/s02.metrics.txt"
 curl -fsS "$BASE_URL/metrics" > "$METRICS_FILE"
 sed -n '1,20p' "$METRICS_FILE"
-grep -Eq '^# HELP gomodel_requests_total|^gomodel_requests_total' "$METRICS_FILE"
+grep -Eq '^# HELP aigateway_requests_total|^aigateway_requests_total' "$METRICS_FILE"
 ```
 
 ### S03 Public models list
@@ -1663,7 +1663,7 @@ jq -e --arg workflow_id "$WORKFLOW_ID" --arg user_path "$QA_USER_PATH" '
 
 ### S68 Managed-key request through scoped workflow
 
-Sends a request with the managed API key while also sending a conflicting `X-GoModel-User-Path` header.
+Sends a request with the managed API key while also sending a conflicting `X-AIGateway-User-Path` header.
 
 ```bash
 require_release_artifact "$QA_AUTH_KEY_VALUE_FILE"
@@ -1674,7 +1674,7 @@ curl -fsS -D "$HEADERS_FILE" -o "$BODY_FILE" "$AUTH_BASE_URL/v1/chat/completions
   -H "Authorization: Bearer $API_KEY" \
   -H 'Content-Type: application/json' \
   -H "X-Request-ID: $QA_AUTH_REQ1" \
-  -H 'X-GoModel-User-Path: /team/should-be-overridden' \
+  -H 'X-AIGateway-User-Path: /team/should-be-overridden' \
   -d '{"model":"openai/gpt-4.1-nano","messages":[{"role":"user","content":"Reply with exactly QA_AUTH_CACHE_OFF_OK"}],"max_tokens":16}'
 sed -n '1,20p' "$HEADERS_FILE"
 sed -n '1,20p' "$BODY_FILE"
@@ -1698,7 +1698,7 @@ curl -fsS -D "$HEADERS_FILE" -o "$BODY_FILE" "$AUTH_BASE_URL/v1/chat/completions
   -H "Authorization: Bearer $API_KEY" \
   -H 'Content-Type: application/json' \
   -H "X-Request-ID: $QA_AUTH_REQ2" \
-  -H 'X-GoModel-User-Path: /team/should-be-overridden' \
+  -H 'X-AIGateway-User-Path: /team/should-be-overridden' \
   -d '{"model":"openai/gpt-4.1-nano","messages":[{"role":"user","content":"Reply with exactly QA_AUTH_CACHE_OFF_OK"}],"max_tokens":16}'
 sed -n '1,20p' "$HEADERS_FILE"
 sed -n '1,20p' "$BODY_FILE"
@@ -1762,7 +1762,7 @@ curl -fsS -D "$HEADERS_FILE" -o "$BODY_FILE" "$AUTH_BASE_URL/v1/chat/completions
   -H "$ADMIN_AUTH_HEADER" \
   -H 'Content-Type: application/json' \
   -H "X-Request-ID: $QA_CACHE_REQ1" \
-  -H "X-GoModel-User-Path: $QA_CACHE_USER_PATH" \
+  -H "X-AIGateway-User-Path: $QA_CACHE_USER_PATH" \
   -d "{\"model\":\"openai/gpt-4.1-nano\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply with exactly $QA_CACHE_REPLY\"}],\"max_tokens\":32}"
 sed -n '1,20p' "$HEADERS_FILE"
 sed -n '1,20p' "$BODY_FILE"
@@ -1784,7 +1784,7 @@ curl -fsS -D "$HEADERS_FILE" -o "$BODY_FILE" "$AUTH_BASE_URL/v1/chat/completions
   -H "$ADMIN_AUTH_HEADER" \
   -H 'Content-Type: application/json' \
   -H "X-Request-ID: $QA_CACHE_REQ2" \
-  -H "X-GoModel-User-Path: $QA_CACHE_USER_PATH" \
+  -H "X-AIGateway-User-Path: $QA_CACHE_USER_PATH" \
   -d "{\"model\":\"openai/gpt-4.1-nano\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply with exactly $QA_CACHE_REPLY\"}],\"max_tokens\":32}"
 sed -n '1,20p' "$HEADERS_FILE"
 sed -n '1,20p' "$BODY_FILE"
@@ -2004,7 +2004,7 @@ curl -fsS -D "$HEADERS_FILE" -o "$BODY_FILE" "$AUTH_BASE_URL/v1/responses" \
   -H "$ADMIN_AUTH_HEADER" \
   -H 'Content-Type: application/json' \
   -H "X-Request-ID: $QA_RESP_CACHE_REQ1" \
-  -H "X-GoModel-User-Path: $QA_CACHE_USER_PATH" \
+  -H "X-AIGateway-User-Path: $QA_CACHE_USER_PATH" \
   -d "{\"model\":\"openai/gpt-4.1-nano\",\"input\":\"Reply with exactly $QA_RESP_CACHE_REPLY\",\"max_output_tokens\":32}"
 sed -n '1,20p' "$HEADERS_FILE"
 jq '{id,model,provider,status,output}' "$BODY_FILE"
@@ -2028,7 +2028,7 @@ curl -fsS -D "$HEADERS_FILE" -o "$BODY_FILE" "$AUTH_BASE_URL/v1/responses" \
   -H "$ADMIN_AUTH_HEADER" \
   -H 'Content-Type: application/json' \
   -H "X-Request-ID: $QA_RESP_CACHE_REQ2" \
-  -H "X-GoModel-User-Path: $QA_CACHE_USER_PATH" \
+  -H "X-AIGateway-User-Path: $QA_CACHE_USER_PATH" \
   -d "{\"model\":\"openai/gpt-4.1-nano\",\"input\":\"Reply with exactly $QA_RESP_CACHE_REPLY\",\"max_output_tokens\":32}"
 sed -n '1,20p' "$HEADERS_FILE"
 jq '{id,model,provider,status,output}' "$BODY_FILE"
@@ -2128,7 +2128,7 @@ run_release_budget_enforcement \
 
 ### S90 Usage pricing recalculation without master key
 
-Runs the pricing recalculation action on the main SQLite-backed gateway. The release stack starts this gateway with `GOMODEL_MASTER_KEY` unset, so the request intentionally sends no `Authorization` header.
+Runs the pricing recalculation action on the main SQLite-backed gateway. The release stack starts this gateway with `AIGATEWAY_MASTER_KEY` unset, so the request intentionally sends no `Authorization` header.
 
 ```bash
 curl -fsS -X POST "$BASE_URL/admin/usage/recalculate-pricing" \
@@ -2538,7 +2538,7 @@ HEADERS_FILE=$(mktemp "$QA_RUN_DIR/s110.headers.XXXXXX")
 AUDIO_FILE="$QA_RUN_DIR/s110.speech.wav"
 curl -sS -D "$HEADERS_FILE" -o "$AUDIO_FILE" "$BASE_URL/v1/audio/speech" \
   -H 'Content-Type: application/json' \
-  -d '{"model":"gpt-4o-mini-tts","input":"Hello from the GoModel release matrix.","voice":"alloy","response_format":"wav"}'
+  -d '{"model":"gpt-4o-mini-tts","input":"Hello from the AIGateway release matrix.","voice":"alloy","response_format":"wav"}'
 sed -n '1,20p' "$HEADERS_FILE"
 grep -Eiq '^HTTP/.* 200 ' "$HEADERS_FILE"
 grep -Eiq '^content-type: *audio/wav' "$HEADERS_FILE"
@@ -3012,14 +3012,14 @@ HEADERS_FILE=$(mktemp "$QA_RUN_DIR/s132.headers.XXXXXX")
 BODY_FILE=$(mktemp "$QA_RUN_DIR/s132.body.XXXXXX")
 curl -fsS -D "$HEADERS_FILE" -o "$BODY_FILE" "$AUTH_BASE_URL/v1/chat/completions" \
   -H "$ADMIN_AUTH_HEADER" -H 'Content-Type: application/json' \
-  -H "X-Request-ID: qa-localcache-$QA_SUFFIX-1" -H "X-GoModel-User-Path: $UP" -d "$BODY"
+  -H "X-Request-ID: qa-localcache-$QA_SUFFIX-1" -H "X-AIGateway-User-Path: $UP" -d "$BODY"
 if grep -Eiq '^X-Cache:' "$HEADERS_FILE"; then
   echo "error: cache warm request unexpectedly returned an X-Cache header" >&2
   exit 1
 fi
 curl -fsS -D "$HEADERS_FILE" -o "$BODY_FILE" "$AUTH_BASE_URL/v1/chat/completions" \
   -H "$ADMIN_AUTH_HEADER" -H 'Content-Type: application/json' \
-  -H "X-Request-ID: qa-localcache-$QA_SUFFIX-2" -H "X-GoModel-User-Path: $UP" -d "$BODY"
+  -H "X-Request-ID: qa-localcache-$QA_SUFFIX-2" -H "X-AIGateway-User-Path: $UP" -d "$BODY"
 grep -Eiq '^X-Cache: HIT \(exact\)' "$HEADERS_FILE"
 for _ in $(seq 1 15); do
   if curl -fsS "$AUTH_BASE_URL/admin/usage/log?cache_mode=cached&search=qa-localcache-$QA_SUFFIX-2&limit=3" -H "$ADMIN_AUTH_HEADER" \
@@ -3656,7 +3656,7 @@ curl -fsS -X PUT "$BASE_URL/admin/rate-limits" \
 
 curl -fsS -D "$HEADERS_FILE" -o "$BODY_FILE" "$BASE_URL/v1/chat/completions" \
   -H 'Content-Type: application/json' \
-  -H "X-GoModel-User-Path: $RL_PATH/leaf" \
+  -H "X-AIGateway-User-Path: $RL_PATH/leaf" \
   -d '{"model":"gpt-4.1-nano","messages":[{"role":"user","content":"Reply with exactly QA_RL_FIRST_OK"}],"max_tokens":20}'
 assert_chat_response_contains "$BODY_FILE" "openai" "QA_RL_FIRST_OK"
 grep -Eiq '^x-ratelimit-limit-requests: *1' "$HEADERS_FILE"
@@ -3665,7 +3665,7 @@ grep -Eiq '^x-ratelimit-reset-requests: *[0-9]+' "$HEADERS_FILE"
 
 curl -sS -D "$HEADERS_FILE" -o "$BODY_FILE" -w '%{http_code}' "$BASE_URL/v1/chat/completions" \
   -H 'Content-Type: application/json' \
-  -H "X-GoModel-User-Path: $RL_PATH/leaf" \
+  -H "X-AIGateway-User-Path: $RL_PATH/leaf" \
   -d '{"model":"gpt-4.1-nano","messages":[{"role":"user","content":"Reply with exactly QA_RL_BLOCKED"}],"max_tokens":20}' \
   | jq -R -e '. == "429"' >/dev/null
 grep -Eiq '^Retry-After: *[0-9]+' "$HEADERS_FILE"
@@ -3676,7 +3676,7 @@ curl -fsS -X POST "$BASE_URL/admin/rate-limits/reset-one" \
   -d "{\"user_path\":\"$RL_PATH\",\"period\":\"minute\"}" >/dev/null
 curl -fsS -o "$BODY_FILE" "$BASE_URL/v1/chat/completions" \
   -H 'Content-Type: application/json' \
-  -H "X-GoModel-User-Path: $RL_PATH/leaf" \
+  -H "X-AIGateway-User-Path: $RL_PATH/leaf" \
   -d '{"model":"gpt-4.1-nano","messages":[{"role":"user","content":"Reply with exactly QA_RL_RESET_OK"}],"max_tokens":20}'
 assert_chat_response_contains "$BODY_FILE" "openai" "QA_RL_RESET_OK"
 
@@ -3706,7 +3706,7 @@ curl -fsS -X PUT "$BASE_URL/admin/rate-limits" \
 
 curl -fsS -D "$HEADERS_FILE" -o "$BODY_FILE" "$BASE_URL/v1/chat/completions" \
   -H 'Content-Type: application/json' \
-  -H "X-GoModel-User-Path: $RL_PATH/leaf" \
+  -H "X-AIGateway-User-Path: $RL_PATH/leaf" \
   -d '{"model":"gpt-4.1-nano","messages":[{"role":"user","content":"Reply with exactly QA_RL_TOKENS_OK"}],"max_tokens":20}'
 assert_chat_response_contains "$BODY_FILE" "openai" "QA_RL_TOKENS_OK"
 grep -Eiq '^x-ratelimit-limit-tokens: *1' "$HEADERS_FILE"
@@ -3722,7 +3722,7 @@ jq -e --arg p "$RL_PATH" 'any(.rate_limits[]?; .user_path == $p and .tokens_used
 
 curl -sS -D "$HEADERS_FILE" -o "$BODY_FILE" -w '%{http_code}' "$BASE_URL/v1/chat/completions" \
   -H 'Content-Type: application/json' \
-  -H "X-GoModel-User-Path: $RL_PATH/leaf" \
+  -H "X-AIGateway-User-Path: $RL_PATH/leaf" \
   -d '{"model":"gpt-4.1-nano","messages":[{"role":"user","content":"Reply with exactly QA_RL_TOKENS_BLOCKED"}],"max_tokens":20}' \
   | jq -R -e '. == "429"' >/dev/null
 grep -Eiq '^Retry-After: *[0-9]+' "$HEADERS_FILE"
@@ -3980,15 +3980,15 @@ trap 'mcp_cleanup_release_servers "$BASE_URL"' EXIT
 MCP_QA_PATH="/team/mcp/e2e/$QA_SUFFIX"
 HEADERS_FILE="$QA_RUN_DIR/s165.init.headers"
 INIT_FILE="$QA_RUN_DIR/s165.init.raw"
-SID=$(mcp_initialize "$BASE_URL/mcp" "$HEADERS_FILE" "$INIT_FILE" -H "X-GoModel-User-Path: $MCP_QA_PATH")
-mcp_initialized "$BASE_URL/mcp" "$SID" -H "X-GoModel-User-Path: $MCP_QA_PATH"
+SID=$(mcp_initialize "$BASE_URL/mcp" "$HEADERS_FILE" "$INIT_FILE" -H "X-AIGateway-User-Path: $MCP_QA_PATH")
+mcp_initialized "$BASE_URL/mcp" "$SID" -H "X-AIGateway-User-Path: $MCP_QA_PATH"
 
 REQ_ID="qa-mcp-call-$QA_SUFFIX"
 CALL_FILE="$QA_RUN_DIR/s165.call.json"
 mcp_post "$BASE_URL/mcp" "$SID" \
   "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"${QA_MCP_ALPHA_SLUG}_echo\",\"arguments\":{\"marker\":\"QA_MCP_NAMESPACED_OK\"}}}" \
   -H "X-Request-ID: $REQ_ID" \
-  -H "X-GoModel-User-Path: $MCP_QA_PATH" \
+  -H "X-AIGateway-User-Path: $MCP_QA_PATH" \
   > "$CALL_FILE"
 jq '.' "$CALL_FILE"
 jq -e '
@@ -4002,7 +4002,7 @@ jq -e '
 BARE_FILE="$QA_RUN_DIR/s165.bare.json"
 mcp_post "$BASE_URL/mcp" "$SID" \
   '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"search","arguments":{"q":"qa-bare"}}}' \
-  -H "X-GoModel-User-Path: $MCP_QA_PATH" \
+  -H "X-AIGateway-User-Path: $MCP_QA_PATH" \
   > "$BARE_FILE"
 jq -e '
   (.result.isError // false) == false
@@ -4014,7 +4014,7 @@ jq -e '
 # mock servers expose disjoint tool sets.
 mcp_post "$BASE_URL/mcp" "$SID" \
   '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"qa-no-such-bare-tool","arguments":{}}}' \
-  -H "X-GoModel-User-Path: $MCP_QA_PATH" \
+  -H "X-AIGateway-User-Path: $MCP_QA_PATH" \
   | jq -e '(.error != null) or (.result.isError == true)' >/dev/null
 
 USAGE_FILE="$QA_RUN_DIR/s165.usage.json"
@@ -4156,12 +4156,12 @@ curl -sS -o /dev/null -w '%{http_code}' "$BASE_URL/mcp/qa-no-such-server-$QA_BUD
 
 HEADERS_FILE="$QA_RUN_DIR/s168.init.headers"
 INIT_FILE="$QA_RUN_DIR/s168.init.raw"
-SID=$(mcp_initialize "$BASE_URL/mcp" "$HEADERS_FILE" "$INIT_FILE" -H "X-GoModel-User-Path: /team/mcp/owner/$QA_SUFFIX")
-mcp_initialized "$BASE_URL/mcp" "$SID" -H "X-GoModel-User-Path: /team/mcp/owner/$QA_SUFFIX"
+SID=$(mcp_initialize "$BASE_URL/mcp" "$HEADERS_FILE" "$INIT_FILE" -H "X-AIGateway-User-Path: /team/mcp/owner/$QA_SUFFIX")
+mcp_initialized "$BASE_URL/mcp" "$SID" -H "X-AIGateway-User-Path: /team/mcp/owner/$QA_SUFFIX"
 
 mcp_post "$BASE_URL/mcp" "$SID" \
   '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"qa_totally_unknown_tool","arguments":{}}}' \
-  -H "X-GoModel-User-Path: /team/mcp/owner/$QA_SUFFIX" \
+  -H "X-AIGateway-User-Path: /team/mcp/owner/$QA_SUFFIX" \
   | jq -e '(.error != null) or (.result.isError == true)' >/dev/null
 
 # Session-to-principal binding sees header-based user paths (was a KNOWN BUG
@@ -4173,7 +4173,7 @@ curl -sS -o "$QA_RUN_DIR/s168.stolen.body" -w '%{http_code}' "$BASE_URL/mcp" \
   -H 'Accept: application/json, text/event-stream' \
   -H 'MCP-Protocol-Version: 2025-06-18' \
   -H "Mcp-Session-Id: $SID" \
-  -H "X-GoModel-User-Path: /team/mcp/intruder/$QA_SUFFIX" \
+  -H "X-AIGateway-User-Path: /team/mcp/intruder/$QA_SUFFIX" \
   -d '{"jsonrpc":"2.0","id":4,"method":"tools/list"}' \
   | grep -q '^404$'
 curl -sS -o /dev/null -w '%{http_code}' "$BASE_URL/mcp" \
@@ -4185,7 +4185,7 @@ curl -sS -o /dev/null -w '%{http_code}' "$BASE_URL/mcp" \
   | grep -q '^404$'
 # The owner keeps working under the original header.
 mcp_post "$BASE_URL/mcp" "$SID" '{"jsonrpc":"2.0","id":5,"method":"tools/list"}' \
-  -H "X-GoModel-User-Path: /team/mcp/owner/$QA_SUFFIX" \
+  -H "X-AIGateway-User-Path: /team/mcp/owner/$QA_SUFFIX" \
   | jq -e '.result.tools | length > 0' >/dev/null
 
 # Cross-endpoint session reuse IS rejected: a session initialized on one
@@ -4218,7 +4218,7 @@ curl -fsS -X PUT "$BASE_URL/admin/rate-limits" \
 curl -sS -o /dev/null -w '%{http_code}' "$BASE_URL/mcp" \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json, text/event-stream' \
-  -H "X-GoModel-User-Path: $RL_PATH/leaf" \
+  -H "X-AIGateway-User-Path: $RL_PATH/leaf" \
   -d '{"jsonrpc":"2.0","id":10,"method":"tools/list"}' \
   | grep -q '^200$'
 RL_BODY="$QA_RUN_DIR/s168.rl.body"
@@ -4226,7 +4226,7 @@ RL_HEADERS="$QA_RUN_DIR/s168.rl.headers"
 curl -sS -D "$RL_HEADERS" -o "$RL_BODY" -w '%{http_code}' "$BASE_URL/mcp" \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json, text/event-stream' \
-  -H "X-GoModel-User-Path: $RL_PATH/leaf" \
+  -H "X-AIGateway-User-Path: $RL_PATH/leaf" \
   -d '{"jsonrpc":"2.0","id":11,"method":"tools/list"}' \
   | grep -q '^429$'
 grep -Eiq '^Retry-After: *[0-9]+' "$RL_HEADERS"
@@ -4243,18 +4243,18 @@ mcp_wait_status "$BASE_URL" "$QA_MCP_ALPHA" connected
 
 MEMBER_HEADERS="$QA_RUN_DIR/s168.member.headers"
 MEMBER_INIT="$QA_RUN_DIR/s168.member.raw"
-MSID=$(mcp_initialize "$BASE_URL/mcp" "$MEMBER_HEADERS" "$MEMBER_INIT" -H "X-GoModel-User-Path: $SECRET_PATH/dev")
-mcp_initialized "$BASE_URL/mcp" "$MSID" -H "X-GoModel-User-Path: $SECRET_PATH/dev"
+MSID=$(mcp_initialize "$BASE_URL/mcp" "$MEMBER_HEADERS" "$MEMBER_INIT" -H "X-AIGateway-User-Path: $SECRET_PATH/dev")
+mcp_initialized "$BASE_URL/mcp" "$MSID" -H "X-AIGateway-User-Path: $SECRET_PATH/dev"
 mcp_post "$BASE_URL/mcp" "$MSID" '{"jsonrpc":"2.0","id":12,"method":"tools/list"}' \
-  -H "X-GoModel-User-Path: $SECRET_PATH/dev" \
+  -H "X-AIGateway-User-Path: $SECRET_PATH/dev" \
   | jq -e --arg a "$QA_MCP_ALPHA_SLUG" 'any(.result.tools[]?; .name == $a + "_echo")' >/dev/null
 
 OUTSIDER_HEADERS="$QA_RUN_DIR/s168.outsider.headers"
 OUTSIDER_INIT="$QA_RUN_DIR/s168.outsider.raw"
-OSID=$(mcp_initialize "$BASE_URL/mcp" "$OUTSIDER_HEADERS" "$OUTSIDER_INIT" -H "X-GoModel-User-Path: /team/mcp/outsider/$QA_SUFFIX")
-mcp_initialized "$BASE_URL/mcp" "$OSID" -H "X-GoModel-User-Path: /team/mcp/outsider/$QA_SUFFIX"
+OSID=$(mcp_initialize "$BASE_URL/mcp" "$OUTSIDER_HEADERS" "$OUTSIDER_INIT" -H "X-AIGateway-User-Path: /team/mcp/outsider/$QA_SUFFIX")
+mcp_initialized "$BASE_URL/mcp" "$OSID" -H "X-AIGateway-User-Path: /team/mcp/outsider/$QA_SUFFIX"
 mcp_post "$BASE_URL/mcp" "$OSID" '{"jsonrpc":"2.0","id":13,"method":"tools/list"}' \
-  -H "X-GoModel-User-Path: /team/mcp/outsider/$QA_SUFFIX" \
+  -H "X-AIGateway-User-Path: /team/mcp/outsider/$QA_SUFFIX" \
   | jq -e --arg a "$QA_MCP_ALPHA_SLUG" '
       all(.result.tools[]?; (.name | startswith($a + "_")) | not)
       and (.result.tools | length > 0)
@@ -4264,7 +4264,7 @@ mcp_post "$BASE_URL/mcp" "$OSID" '{"jsonrpc":"2.0","id":13,"method":"tools/list"
 curl -sS -o /dev/null -w '%{http_code}' "$BASE_URL/mcp/$QA_MCP_ALPHA_SLUG" \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json, text/event-stream' \
-  -H "X-GoModel-User-Path: /team/mcp/outsider/$QA_SUFFIX" \
+  -H "X-AIGateway-User-Path: /team/mcp/outsider/$QA_SUFFIX" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"qa","version":"1"}}}' \
   | grep -q '^404$'
 ```
@@ -4446,7 +4446,7 @@ Checks the Anthropic-native credential header works unchanged, matching
 RESP_FILE="$QA_RUN_DIR/s173.chat.json"
 curl -fsS "$AUTH_BASE_URL/v1/chat/completions" \
   -H 'Content-Type: application/json' \
-  -H "x-api-key: $GOMODEL_MASTER_KEY" \
+  -H "x-api-key: $AIGATEWAY_MASTER_KEY" \
   -d '{"model":"gpt-4.1-nano","messages":[{"role":"user","content":"Reply with exactly QA_XAPIKEY_OK"}],"max_tokens":20}' \
   > "$RESP_FILE"
 assert_chat_response_contains "$RESP_FILE" "openai" "QA_XAPIKEY_OK"
@@ -4477,7 +4477,7 @@ BODY_FILE="$QA_RUN_DIR/s175.body"
 curl -sS -D "$HEADERS_FILE" -o "$BODY_FILE" "$AUTH_BASE_URL/v1/chat/completions" \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer totally-wrong-key' \
-  -H "x-api-key: $GOMODEL_MASTER_KEY" \
+  -H "x-api-key: $AIGATEWAY_MASTER_KEY" \
   -d '{"model":"gpt-4.1-nano","messages":[{"role":"user","content":"hi"}]}'
 grep -Eiq '^HTTP/.* 401 ' "$HEADERS_FILE"
 ```
@@ -5152,7 +5152,7 @@ Labels attached to the managed key that authenticated the request are merged
 into the request's labels the same way header-extracted labels are, so a
 label budget matches even when no tagging rule is configured. This runs on the
 auth-enabled gateway (which already requires a master key for every request)
-rather than the main SQLite gateway: on a gateway with no `GOMODEL_MASTER_KEY`,
+rather than the main SQLite gateway: on a gateway with no `AIGATEWAY_MASTER_KEY`,
 creating a managed key switches every endpoint, including `/v1/*`, to require
 bearer auth from then on, and managed keys have no delete endpoint (only
 `deactivate`, which does not undo the switch since it counts stored keys, not
@@ -5228,7 +5228,7 @@ reset_release_budget "$BASE_URL" label "$MIX_LABEL"
 REQ1="qa-budget-mix-$QA_SUFFIX-1"
 BODY_FILE=$(mktemp "$QA_RUN_DIR/s201.body.XXXXXX")
 curl -fsS -o "$BODY_FILE" -X POST "$BASE_URL/v1/chat/completions" -H 'Content-Type: application/json' \
-  -H "X-Request-ID: $REQ1" -H "X-GoModel-User-Path: $MIX_PATH" -H "$MIX_HDR: $MIX_LABEL" \
+  -H "X-Request-ID: $REQ1" -H "X-AIGateway-User-Path: $MIX_PATH" -H "$MIX_HDR: $MIX_LABEL" \
   -d '{"model":"gpt-4.1-nano","messages":[{"role":"user","content":"Reply exactly QA_BUDGET_MIX_OK"}],"max_tokens":20,"temperature":0}'
 assert_chat_response_contains "$BODY_FILE" "" "QA_BUDGET_MIX_OK"
 
@@ -5242,7 +5242,7 @@ done
 
 REQ2="qa-budget-mix-$QA_SUFFIX-2"
 STATUS=$(curl -sS -o "$BODY_FILE" -w '%{http_code}' -X POST "$BASE_URL/v1/chat/completions" -H 'Content-Type: application/json' \
-  -H "X-Request-ID: $REQ2" -H "X-GoModel-User-Path: $MIX_PATH" -H "$MIX_HDR: $MIX_LABEL" \
+  -H "X-Request-ID: $REQ2" -H "X-AIGateway-User-Path: $MIX_PATH" -H "$MIX_HDR: $MIX_LABEL" \
   -d '{"model":"gpt-4.1-nano","messages":[{"role":"user","content":"Reply exactly QA_BUDGET_MIX_BLOCK"}],"max_tokens":20,"temperature":0}')
 [ "$STATUS" = "429" ]
 jq -e --arg l "$MIX_LABEL" --arg p "$MIX_PATH" '
@@ -5374,7 +5374,7 @@ curl -fsS -H "$ADMIN_AUTH_HEADER" -X DELETE "$AUTH_BASE_URL/admin/budgets" \
 
 ## 25. Rate limit counters across reload
 
-These scenarios cover request-window persistence across `gomodel --reload`
+These scenarios cover request-window persistence across `aigateway --reload`
 (SIGHUP). Hour windows so the cap outlives the reload wait. Shared
 user-path rules only — the OSS release stack has no `quota_templates`
 entitlement.
@@ -5395,7 +5395,7 @@ curl -fsS -X PUT "$BASE_URL/admin/rate-limits" \
 
 curl -fsS -o "$BODY_FILE" "$BASE_URL/v1/chat/completions" \
   -H 'Content-Type: application/json' \
-  -H "X-GoModel-User-Path: $RL_PATH/leaf" \
+  -H "X-AIGateway-User-Path: $RL_PATH/leaf" \
   -d '{"model":"gpt-4.1-nano","messages":[{"role":"user","content":"Reply with exactly QA_RL_PERSIST_OK"}],"max_tokens":20}'
 assert_chat_response_contains "$BODY_FILE" "openai" "QA_RL_PERSIST_OK"
 
@@ -5403,7 +5403,7 @@ reload_release_gateway sqlite-main "$BASE_URL"
 
 curl -sS -o "$BODY_FILE" -w '%{http_code}' "$BASE_URL/v1/chat/completions" \
   -H 'Content-Type: application/json' \
-  -H "X-GoModel-User-Path: $RL_PATH/leaf" \
+  -H "X-AIGateway-User-Path: $RL_PATH/leaf" \
   -d '{"model":"gpt-4.1-nano","messages":[{"role":"user","content":"Reply with exactly QA_RL_PERSIST_BLOCKED"}],"max_tokens":20}' \
   | jq -R -e '. == "429"' >/dev/null
 jq -e '.error.type == "rate_limit_error" and .error.code == "rate_limit_exceeded"' "$BODY_FILE" >/dev/null
@@ -5430,7 +5430,7 @@ curl -fsS -X PUT "$BASE_URL/admin/rate-limits" \
 
 curl -fsS -o "$BODY_FILE" "$BASE_URL/v1/chat/completions" \
   -H 'Content-Type: application/json' \
-  -H "X-GoModel-User-Path: $RL_PATH/leaf" \
+  -H "X-AIGateway-User-Path: $RL_PATH/leaf" \
   -d '{"model":"gpt-4.1-nano","messages":[{"role":"user","content":"Reply with exactly QA_RL_RESET_PERSIST_OK"}],"max_tokens":20}'
 assert_chat_response_contains "$BODY_FILE" "openai" "QA_RL_RESET_PERSIST_OK"
 
@@ -5442,7 +5442,7 @@ reload_release_gateway sqlite-main "$BASE_URL"
 
 curl -fsS -o "$BODY_FILE" "$BASE_URL/v1/chat/completions" \
   -H 'Content-Type: application/json' \
-  -H "X-GoModel-User-Path: $RL_PATH/leaf" \
+  -H "X-AIGateway-User-Path: $RL_PATH/leaf" \
   -d '{"model":"gpt-4.1-nano","messages":[{"role":"user","content":"Reply with exactly QA_RL_RESET_PERSIST_AGAIN"}],"max_tokens":20}'
 assert_chat_response_contains "$BODY_FILE" "openai" "QA_RL_RESET_PERSIST_AGAIN"
 
@@ -5471,7 +5471,7 @@ for item in "pg-smoke $PG_BASE_URL" "mongo-smoke $MONGO_BASE_URL"; do
 
   curl -fsS -o "$BODY_FILE" "$URL/v1/chat/completions" \
     -H 'Content-Type: application/json' \
-    -H "X-GoModel-User-Path: $RL_PATH/leaf" \
+    -H "X-AIGateway-User-Path: $RL_PATH/leaf" \
     -d '{"model":"gpt-4.1-nano","messages":[{"role":"user","content":"Reply with exactly QA_RL_PERSIST_BACKEND_OK"}],"max_tokens":20}'
   assert_chat_response_contains "$BODY_FILE" "openai" "QA_RL_PERSIST_BACKEND_OK"
 
@@ -5479,7 +5479,7 @@ for item in "pg-smoke $PG_BASE_URL" "mongo-smoke $MONGO_BASE_URL"; do
 
   curl -sS -o "$BODY_FILE" -w '%{http_code}' "$URL/v1/chat/completions" \
     -H 'Content-Type: application/json' \
-    -H "X-GoModel-User-Path: $RL_PATH/leaf" \
+    -H "X-AIGateway-User-Path: $RL_PATH/leaf" \
     -d '{"model":"gpt-4.1-nano","messages":[{"role":"user","content":"Reply with exactly QA_RL_PERSIST_BACKEND_BLOCKED"}],"max_tokens":20}' \
     | jq -R -e '. == "429"' >/dev/null
 
@@ -5502,7 +5502,7 @@ another's output.
 ### S208 Generate an image on OpenAI
 
 Checks `POST /v1/images/generations`: a JSON request returns the OpenAI images
-envelope with inline base64 pixels, the `provider` field GoModel adds, and the
+envelope with inline base64 pixels, the `provider` field AIGateway adds, and the
 token usage `gpt-image-1`-family models report.
 
 ```bash
@@ -5724,7 +5724,7 @@ RESP_FILE="$QA_RUN_DIR/s215.images.json"
 curl -fsS -o "$RESP_FILE" "$BASE_URL/v1/images/generations" \
   -H 'Content-Type: application/json' \
   -H "X-Request-ID: $REQUEST_ID" \
-  -H "X-GoModel-User-Path: $USER_PATH" \
+  -H "X-AIGateway-User-Path: $USER_PATH" \
   -d '{"model":"gpt-image-1-mini","prompt":"a small yellow star","n":1,"size":"1024x1024","quality":"low"}'
 jq -e '(.data[0].b64_json | length) > 0' "$RESP_FILE" >/dev/null
 
@@ -5826,7 +5826,7 @@ RESP_FILE="$QA_RUN_DIR/s218.embeddings.json"
 curl -fsS -o "$RESP_FILE" "$BASE_URL/v1/embeddings" \
   -H 'Content-Type: application/json' \
   -H "X-Request-ID: $REQUEST_ID" \
-  -H "X-GoModel-User-Path: $USER_PATH" \
+  -H "X-AIGateway-User-Path: $USER_PATH" \
   -d '{"model":"gemini/gemini-embedding-001","input":["qa gemini batch alpha","qa gemini batch beta"]}'
 jq '{object,model,usage,indexes:[.data[].index],dims:[.data[].embedding|length]}' "$RESP_FILE"
 assert_embeddings_response "$RESP_FILE" 2 0
@@ -6100,7 +6100,7 @@ JSON-encodable and available.
 
 ```bash
 NAME="qa_corrupt_ts_$QA_BUDGET_SUFFIX"
-DB="$RELEASE_STACK_DIR/sqlite-main/data/gomodel.db"
+DB="$RELEASE_STACK_DIR/sqlite-main/data/aigateway.db"
 cleanup_s227() {
   curl -sS -X DELETE "$BASE_URL/admin/virtual-models" -H 'Content-Type: application/json' \
     -d "{\"source\":\"$NAME\"}" >/dev/null || true

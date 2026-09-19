@@ -1,9 +1,9 @@
 <script>
-  import GoModelLogo from "$lib/components/atoms/GoModelLogo.svelte";
+  import AIGatewayLogo from "$lib/components/atoms/AIGatewayLogo.svelte";
   import Icon from "$lib/components/atoms/Icon.svelte";
   import { auth } from "$lib/stores/auth.svelte.js";
   import { authenticationLoginURL } from "$lib/stores/external-auth.js";
-  import { gomodelPath } from "$lib/api/paths.js";
+  import { aigatewayPath } from "$lib/api/paths.js";
   import * as m from "$lib/paraglide/messages.js";
   import { ArrowRight, Check, KeyRound, LockKeyhole } from "lucide";
 </script>
@@ -11,13 +11,12 @@
 <main class="login-screen">
   <div class="login-glow login-glow-one"></div>
   <div class="login-glow login-glow-two"></div>
-  <section class="login-card" aria-labelledby="login-title">
+  <section class="login-card" aria-label={m.auth_action_unlock_dashboard()}>
     <div class="login-brand">
-      <div class="login-logo"><GoModelLogo variant="full" /></div>
+      <div class="login-logo"><AIGatewayLogo variant="full" /></div>
     </div>
     <div class="login-heading">
       <p class="login-kicker">SECURE CONTROL PLANE</p>
-      <h1 id="login-title">{m.auth_dialog_locked_title()}</h1>
       <p>{m.auth_banner_required()}</p>
     </div>
 
@@ -31,7 +30,7 @@
       {#if auth.externalLoginURL}
         <a
           class="btn btn-primary btn-with-icon login-sso"
-          href={authenticationLoginURL(gomodelPath(auth.externalLoginURL))}
+          href={authenticationLoginURL(aigatewayPath(auth.externalLoginURL))}
           onclick={() => auth.selectExternalAuthentication()}
         >
           <Icon icon={KeyRound} />
@@ -59,17 +58,16 @@
           bind:value={auth.password}
         />
       </div>
-      {#if auth.authError}
-        <p class="login-error" role="alert">
-          {auth.authErrorMessage || m.auth_api_key_invalid()}
-        </p>
+      <!-- Only show specific errors (e.g. a failed login): the generic 401 on
+           first load just means nobody is signed in yet. -->
+      {#if auth.authError && auth.authErrorMessage}
+        <p class="login-error" role="alert">{auth.authErrorMessage}</p>
       {/if}
       <button type="submit" class="btn btn-primary btn-with-icon login-submit">
         <Icon icon={Check} />
         <span>{m.auth_action_unlock_dashboard()}</span>
       </button>
     </form>
-    <p class="login-hint">{m.auth_api_key_storage_hint()}</p>
   </section>
 </main>
 
@@ -159,13 +157,7 @@
     letter-spacing: 2px;
   }
 
-  .login-heading h1 {
-    font-size: 30px;
-    letter-spacing: -0.8px;
-  }
-
-  .login-heading p:last-child,
-  .login-hint {
+  .login-heading p:last-child {
     margin-top: 8px;
     color: var(--text-muted);
     font-size: 13px;
@@ -260,10 +252,6 @@
   .login-error {
     color: var(--danger);
     font-size: 12px;
-  }
-
-  .login-hint {
-    text-align: center;
   }
 
   @media (max-width: 520px) {

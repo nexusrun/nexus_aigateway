@@ -35,7 +35,7 @@ func applyUserPathHeaderToContext(c *echo.Context) (bool, error) {
 		return true, nil
 	}
 	headerName := core.UserPathHeaderNameFromContext(ctx)
-	userPath, err := core.NormalizeUserPath(req.Header.Get(headerName))
+	userPath, err := core.NormalizeUserPath(core.ReadUserPathHeader(req.Header, headerName))
 	if err != nil {
 		return false, handleError(c, core.NewInvalidRequestError("invalid "+headerName+" header", err))
 	}

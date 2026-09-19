@@ -18,7 +18,7 @@ import (
 	"github.com/nexusrun/nexus_aigateway/internal/usage"
 )
 
-const responseCachePrefix = "gomodel:response:"
+const responseCachePrefix = "aigateway:response:"
 
 var internalRequestHeaderAllowlist = map[string]struct{}{
 	http.CanonicalHeaderKey("Accept"):                     {},

@@ -94,7 +94,7 @@ The llmclient hooks fire at the **logical request** level via `beginRequest` /
 `finishRequest`, not per HTTP attempt. This means a request that retries 3
 times produces one counter increment, not three. `OnEmptyResponse` is the
 exception: the provider router fires it, not the llmclient (see
-`gomodel_empty_responses_total`).
+`aigateway_empty_responses_total`).
 
 Three call sites in `client.go` use them:
 
@@ -107,7 +107,7 @@ Three call sites in `client.go` use them:
 
 All metrics are served at the configured endpoint (default `/metrics`).
 
-### `gomodel_requests_total`
+### `aigateway_requests_total`
 
 Counter. Total LLM requests.
 
@@ -118,7 +118,7 @@ Labels: `provider`, `model`, `endpoint`, `status_code`, `status_type`,
 code as a string, or `"network_error"` when the upstream call failed before
 returning a response.
 
-### `gomodel_request_duration_seconds`
+### `aigateway_request_duration_seconds`
 
 Histogram. Request latency.
 
@@ -129,20 +129,20 @@ Buckets: `0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60` seconds.
 For streaming requests, this measures time-to-stream-establishment, not the
 total stream duration.
 
-### `gomodel_requests_in_flight`
+### `aigateway_requests_in_flight`
 
 Gauge. Concurrent in-flight requests.
 
 Labels: `provider`, `endpoint`, `stream`.
 
-### `gomodel_response_snapshot_store_failures_total`
+### `aigateway_response_snapshot_store_failures_total`
 
 Counter. Failures while persisting response snapshots (used by the response
 cache / audit pipeline, not the LLM request path itself).
 
 Labels: `provider`, `provider_name`, `operation`.
 
-### `gomodel_circuit_breaker_state`
+### `aigateway_circuit_breaker_state`
 
 Gauge. Circuit breaker state per provider: `0` closed, `1` half-open, `2`
 open. Updated on every request completion (including requests the open
@@ -152,10 +152,10 @@ series is absent for providers whose breaker is disabled
 
 Labels: `provider`.
 
-Alerting example: `gomodel_circuit_breaker_state == 2` for more than a
+Alerting example: `aigateway_circuit_breaker_state == 2` for more than a
 minute means a provider is being actively short-circuited.
 
-### `gomodel_empty_responses_total`
+### `aigateway_empty_responses_total`
 
 Counter. Buffered chat and Responses API calls that returned 200 without
 choices (`no_choices`), without output (`no_output`, completed Responses API
@@ -164,7 +164,7 @@ these after decoding and fires `Hooks.OnEmptyResponse`; the llmclient never
 calls it. It fires once per provider call: llmclient retries within one call
 count once, but a failover target is another call, so a request whose primary
 and failover both return empty increments the counter twice.
-`gomodel_requests_total` still records these calls as successes.
+`aigateway_requests_total` still records these calls as successes.
 
 Labels: `provider`, `model`, `reason`.
 
@@ -190,13 +190,13 @@ For end-to-end verification:
 
 ```bash
 export METRICS_ENABLED=true
-./bin/gomodel
+./bin/aigateway
 # in another shell:
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $GOMODEL_MASTER_KEY" \
+  -H "Authorization: Bearer $AIGATEWAY_MASTER_KEY" \
   -d '{"model":"gpt-4","messages":[{"role":"user","content":"Hi"}]}'
-curl -s http://localhost:8080/metrics | grep gomodel_requests_total
+curl -s http://localhost:8080/metrics | grep aigateway_requests_total
 ```
 
 ## Extending to Other Backends

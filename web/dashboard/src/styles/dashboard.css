@@ -197,8 +197,7 @@ body::after {
   transform: translateY(-1px);
 }
 
-.app .btn-primary,
-.app .btn-danger {
+.app .btn-primary {
   box-shadow:
     0 12px 30px color-mix(in srgb, var(--accent) 24%, transparent),
     inset 0 1px 0 color-mix(in srgb, #fff 32%, transparent),
@@ -210,8 +209,35 @@ body::after {
   border-color: color-mix(in srgb, var(--accent) 72%, #fff 16%);
 }
 
+.app .btn-danger {
+  color: #fff;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--danger) 88%, #fff 12%),
+    color-mix(in srgb, var(--danger) 88%, #000 12%)
+  );
+  border-color: color-mix(in srgb, var(--danger) 78%, #000 12%);
+  box-shadow:
+    0 12px 30px color-mix(in srgb, var(--danger) 28%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #fff 30%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, #000 16%, transparent);
+}
+
 .app .btn-primary:hover:not(:disabled) {
   background: var(--brand-gradient-hover);
+}
+
+.app .btn-danger:hover:not(:disabled) {
+  color: #fff;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--danger) 94%, #fff 6%),
+    color-mix(in srgb, var(--danger) 82%, #000 18%)
+  );
+  border-color: color-mix(in srgb, var(--danger) 88%, #000 12%);
+  box-shadow:
+    0 14px 34px color-mix(in srgb, var(--danger) 36%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #fff 34%, transparent);
 }
 
 /* Editors and confirmations float as denser glass over a refracted backdrop. */

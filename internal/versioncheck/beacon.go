@@ -63,7 +63,7 @@ func (b Beacon) apply(req *http.Request) {
 	if b.dashboard() {
 		source = "dashboard"
 	}
-	req.Header.Set("X-GoModel-Source", source)
+	req.Header.Set("X-AIGateway-Source", source)
 	if b.UserAgent != "" {
 		req.Header.Set("User-Agent", b.UserAgent)
 	}
@@ -74,6 +74,6 @@ func (b Beacon) apply(req *http.Request) {
 		req.Header.Set(name, value)
 	}
 	if b.Visit != "" {
-		req.Header.Set("X-GoModel-Date", b.Visit)
+		req.Header.Set("X-AIGateway-Date", b.Visit)
 	}
 }

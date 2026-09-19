@@ -191,7 +191,7 @@ func TestModuleVersion(t *testing.T) {
 	}
 	dep := &debug.BuildInfo{
 		Main: debug.Module{Path: "example.com/custom"},
-		Deps: []*debug.Module{{Path: hostModule, Version: "v1.0.0", Replace: &debug.Module{Path: "../gomodel", Version: "v1.0.1"}}},
+		Deps: []*debug.Module{{Path: hostModule, Version: "v1.0.0", Replace: &debug.Module{Path: "../aigateway", Version: "v1.0.1"}}},
 	}
 	if got := moduleVersion(dep); got != "v1.0.1" {
 		t.Fatalf("replaced dep version = %q", got)
@@ -213,12 +213,12 @@ func TestDescribeOpenError(t *testing.T) {
 		{
 			name: "different package version",
 			err:  errors.New(`plugin.Open("p"): plugin was built with a different version of package internal/goarch`),
-			want: []string{path, "different toolchain, flags, or pluginapi sources", "build info is unreadable", "this binary was built with " + HostBuildInfo.GoVersion, "gomodel plugin build"},
+			want: []string{path, "different toolchain, flags, or pluginapi sources", "build info is unreadable", "this binary was built with " + HostBuildInfo.GoVersion, "aigateway plugin build"},
 		},
 		{
 			name: "not implemented",
 			err:  errors.New("plugin: not implemented"),
-			want: []string{path, "CGO_ENABLED=1", "gomodel:<version>-plugins"},
+			want: []string{path, "CGO_ENABLED=1", "aigateway:<version>-plugins"},
 		},
 		{
 			name: "other",

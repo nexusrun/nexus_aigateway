@@ -131,7 +131,7 @@ func isNonReasoningChatModel(model string) bool {
 	return strings.HasPrefix(m, "gpt-3.5") || strings.HasPrefix(m, "gpt-4") || strings.HasPrefix(m, "chatgpt-")
 }
 
-// adaptChatRequest maps GoModel's nested reasoning shape (set by the Messages
+// adaptChatRequest maps AIGateway's nested reasoning shape (set by the Messages
 // API's thinking and by clients sending reasoning.effort) onto the flat
 // reasoning_effort field: OpenAI Chat Completions rejects "reasoning".
 // Models that cannot reason reject reasoning_effort too, so it is dropped.

@@ -4,9 +4,9 @@
 // under an older key so they cannot clobber fresh data ("stale auth").
 
 import { authenticationResponseMetadata } from "./external-auth.js";
-import { gomodelPath } from "$lib/api/paths.js";
+import { aigatewayPath } from "$lib/api/paths.js";
 
-const API_KEY_STORAGE_KEY = "gomodel_api_key";
+const API_KEY_STORAGE_KEY = "aigateway_api_key";
 
 export function normalizeApiKey(value) {
   const key = String(value || "").trim();
@@ -30,6 +30,8 @@ class AuthStore {
   externalLoginURL = $state("");
   externalLogoutURL = $state("");
   externalUser = $state("");
+  // True while the browser holds an admin username/password session cookie.
+  passwordSession = $state(false);
   generation = $state(0);
   // Incremented whenever the whole dashboard should re-fetch (key change,
   // timezone change, runtime refresh). Pages watch this in an $effect.
@@ -105,7 +107,7 @@ class AuthStore {
     this.authError = false;
     this.authErrorMessage = "";
     try {
-      const response = await fetch(gomodelPath("/admin/auth/login"), {
+      const response = await fetch(aigatewayPath("/admin/auth/login"), {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
@@ -124,6 +126,7 @@ class AuthStore {
         // Storage may be unavailable in restricted browser contexts.
       }
       this.password = "";
+      this.passwordSession = true;
       this.generation++;
       this.needsAuth = false;
       this.refresh();
@@ -133,6 +136,44 @@ class AuthStore {
       this.authErrorMessage = "Unable to reach the authentication service.";
       return false;
     }
+  }
+
+  // checkSession asks the gateway whether the session cookie is still valid.
+  // Gateways without password login answer 404, which leaves it false.
+  async checkSession() {
+    try {
+      const response = await fetch(aigatewayPath("/admin/auth/session"), {
+        credentials: "same-origin",
+      });
+      if (!response.ok) return;
+      const body = await response.json();
+      this.passwordSession = Boolean(body && body.authenticated === true);
+    } catch {
+      // Keep the current state when the gateway is unreachable.
+    }
+  }
+
+  // logout clears the session cookie and returns to the login screen. On
+  // failure the dashboard stays signed in, since a reload would restore the
+  // cookie anyway.
+  async logout() {
+    try {
+      const response = await fetch(aigatewayPath("/admin/auth/logout"), {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      if (!response.ok) return false;
+    } catch {
+      return false;
+    }
+    this.passwordSession = false;
+    this.username = "";
+    this.password = "";
+    this.generation++;
+    this.authError = false;
+    this.authErrorMessage = "";
+    this.needsAuth = true;
+    return true;
   }
 
   refresh() {

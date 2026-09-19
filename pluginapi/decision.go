@@ -1,6 +1,6 @@
 package pluginapi
 
-// Action is what a hook asks GoModel to do with the request or response.
+// Action is what a hook asks AIGateway to do with the request or response.
 type Action string
 
 const (
@@ -13,7 +13,7 @@ const (
 	// the completion with HTTP 200 (as a single-chunk stream when streaming).
 	ActionRespond Action = "respond"
 	// ActionWarn continues and records Decision.Detail in the audit trail and
-	// the X-GoModel-Guardrail response headers.
+	// the X-AIGateway-Guardrail response headers.
 	ActionWarn Action = "warn"
 )
 
@@ -35,7 +35,7 @@ type Decision struct {
 	// Detail is a JSON-serializable summary stored in the audit trail. It
 	// must not contain secrets.
 	Detail any
-	// NoStore asks GoModel not to store the response of this request in the
+	// NoStore asks AIGateway not to store the response of this request in the
 	// response cache (exact or semantic), so a later request with the same
 	// or a similar body runs the plugins again instead of replaying it. Set
 	// it when the reply carries request-specific data a plugin puts back on

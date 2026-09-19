@@ -11,7 +11,7 @@ func TestIsCredentialHeader(t *testing.T) {
 		{name: "Authorization", want: true},
 		{name: " X-API-Key ", want: true},
 		{name: "Set-Cookie", want: true},
-		{name: "x-gomodel-key", want: true},
+		{name: "x-aigateway-key", want: true},
 		{name: "X-Team", want: false},
 		{name: "Content-Type", want: false},
 		{name: "", want: false},

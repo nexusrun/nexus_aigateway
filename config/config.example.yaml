@@ -1,4 +1,4 @@
-# GoModel Configuration (optional)
+# AIGateway Configuration (optional)
 # Copy to config/config.yaml to customize.
 # Environment variables always override values in this file.
 # All settings have sensible defaults — no config file is required.
@@ -13,11 +13,11 @@ server:
   pprof_enabled: false # expose /debug/pprof/* for local profiling only
   enable_passthrough_routes: true # expose /p/{provider}/{endpoint} passthrough routes
   allow_passthrough_v1_alias: true # allow /p/{provider}/v1/... while keeping /p/{provider}/... canonical
-  user_path_header: "X-GoModel-User-Path" # env: USER_PATH_HEADER; inbound header used for user_path scoping
+  user_path_header: "X-AIGateway-User-Path" # env: USER_PATH_HEADER; inbound header used for user_path scoping
   enabled_passthrough_providers: ["openai", "anthropic", "cohere", "openrouter", "kilo", "zai", "sglang", "vllm", "llmd", "deepseek", "bailian"] # providers enabled on /p/{provider}/...
   auth_verify_enabled: false # env: AUTH_VERIFY_ENABLED; expose GET /v1/auth/verify, which reports whether the API key a request carries authenticates against this gateway (401 when it does not; 200 with {"valid":false,"method":"none"} when the gateway has no authentication configured). Outside /admin, so it works with the admin API disabled
   realtime_enabled: true # env: REALTIME_ENABLED; expose the /v1/realtime and /v1/realtime/translations websockets, their calls/client_secrets siblings, and /p/{provider}/v1/realtime upgrades
-  pid_file: "data/gomodel.pid" # env: PID_FILE; where the running gateway records its process id so `gomodel --reload` can find it. Set per instance when several gateways share a host; empty writes no pid file and disables --reload; changing it needs a restart, not a reload
+  pid_file: "data/aigateway.pid" # env: PID_FILE; where the running gateway records its process id so `aigateway --reload` can find it. Set per instance when several gateways share a host; empty writes no pid file and disables --reload; changing it needs a restart, not a reload
 
 # Database-backed browser login for the admin dashboard. Set the session
 # secret and bootstrap credentials through environment variables in production.
@@ -164,20 +164,20 @@ cache:
     #   # env: MODEL_LIST_URL. Pricing, context windows, and capabilities. An HTTP
     #   # URL (default: the public catalog on GitHub), a local file path for
     #   # air-gapped installs (re-read on each refresh), or "off".
-    #   url: /etc/gomodel/models.json
+    #   url: /etc/aigateway/models.json
     local:
       cache_dir: ".cache" # local cache directory; kept as fallback if redis is configured but unreachable
     # Redis is preferred when set. Leave `local` in place to start in degraded mode if Redis is down:
     # redis:
     #   url: "redis://localhost:6379"
-    #   key: "gomodel:models"
+    #   key: "aigateway:models"
     #   ttl: 86400 # 24 hours in seconds
   # response:
   #   simple: # omit the whole `simple` key to disable exact-match caching (unless RESPONSE_CACHE_SIMPLE_ENABLED=true)
   #     enabled: true # default when `simple` is present; set false to disable while keeping the block
   #     redis:
   #       url: "redis://localhost:6379"
-  #       key: "gomodel:response:"
+  #       key: "aigateway:response:"
   #       ttl: 3600
   #   semantic: # omit the whole `semantic` key to disable semantic caching (unless SEMANTIC_CACHE_ENABLED=true)
   #     enabled: true
@@ -188,11 +188,11 @@ cache:
   #       type: qdrant # required: qdrant | pgvector | pinecone | weaviate (pick one block below)
   #       qdrant:
   #         url: "http://localhost:6333"
-  #         collection: "gomodel_semantic"
+  #         collection: "aigateway_semantic"
   #         api_key: "" # optional for local Qdrant
   #       # pgvector:
-  #       #   url: "postgres://user:pass@localhost:5432/gomodel"
-  #       #   table: "gomodel_semantic_cache" # optional; default if omitted
+  #       #   url: "postgres://user:pass@localhost:5432/aigateway"
+  #       #   table: "aigateway_semantic_cache" # optional; default if omitted
   #       #   dimension: 1536 # must match embedding model output
   #       # pinecone:
   #       #   host: "https://your-index.svc.region.pinecone.io" # data-plane host
@@ -201,19 +201,19 @@ cache:
   #       #   dimension: 1536 # must match your Pinecone index
   #       # weaviate:
   #       #   url: "http://localhost:8080"
-  #       #   class: "GomodelSemanticCache" # PascalCase recommended (GraphQL)
+  #       #   class: "AigatewaySemanticCache" # PascalCase recommended (GraphQL)
   #       #   api_key: "" # optional
 
 storage:
   type: "sqlite" # "sqlite", "postgresql", or "mongodb"
   sqlite:
-    path: "data/gomodel.db"
+    path: "data/aigateway.db"
   postgresql:
-    url: "postgres://user:pass@localhost/gomodel"
+    url: "postgres://user:pass@localhost/aigateway"
     max_conns: 10
   mongodb:
     url: "mongodb://localhost:27017"
-    database: "gomodel"
+    database: "aigateway"
 
 logging:
   enabled: true
@@ -246,7 +246,7 @@ budgets:
     # Env equivalent:
     # SET_BUDGET_USER__PATH__EXAMPLE="daily=10,weekly=50"
     - path: "/user/path/example"
-      per_child: false # GoModel Pro: true gives each direct child an independent budget
+      per_child: false # AIGateway Pro: true gives each direct child an independent budget
       limits:
         - period: "daily" # hourly, daily, weekly, monthly; stored in DB as period_seconds
           amount: 10.00
@@ -267,7 +267,7 @@ rate_limits:
     # Env equivalent:
     # SET_RATE_LIMIT_USER__PATH__EXAMPLE="rpm=100,tpm=50000,rpd=10000,concurrent=10"
     - path: "/user/path/example"
-      per_child: false # GoModel Pro: true gives each direct child independent counters
+      per_child: false # AIGateway Pro: true gives each direct child independent counters
       limits:
         - period: "minute" # minute, hour, day, concurrent; stored in DB as period_seconds
           max_requests: 100
@@ -307,7 +307,7 @@ metrics:
 # endpoints, timeouts, compression, …) are available through their OTEL_* variable.
 opentelemetry:
   enabled: false
-  service_name: "gomodel"
+  service_name: "aigateway"
   # resource_attributes:
   #   deployment.environment: production
   endpoint: "http://localhost:4318"
@@ -425,8 +425,8 @@ guardrails:
 # from them, routing-strategy plugins for virtual models, and the
 # /admin/plugins and /admin/guardrails endpoints. Off by default;
 # guardrails.enabled: true turns it on implicitly.
-# Shared-object plugins (.so) need a cgo build of GoModel (make build-plugins
-# or the gomodel:<version>-plugins image). A .so is trusted code: keep
+# Shared-object plugins (.so) need a cgo build of AIGateway (make build-plugins
+# or the aigateway:<version>-plugins image). A .so is trusted code: keep
 # search_paths root-owned and pin sha256 in production.
 plugins:
   enabled: false # PLUGINS_ENABLED. Default: false
@@ -606,7 +606,7 @@ providers:
     base_url: "http://quickstart-epp.llm-d.svc.cluster.local/v1"
     # Optional trusted request class injected as llm-d inference headers.
     # inference_objective: "standard-traffic"
-    # Derive the llm-d fairness ID from GoModel's effective user path (default).
+    # Derive the llm-d fairness ID from AIGateway's effective user path (default).
     fairness_from_user_path: true
     # Declare models when the route does not forward GET /v1/models.
     models:
@@ -690,7 +690,7 @@ providers:
   #     - openai.gpt-oss-120b
   #     - xai.grok-3
 
-  # Example: DeepSeek. GoModel translates /v1/responses requests to DeepSeek
+  # Example: DeepSeek. AIGateway translates /v1/responses requests to DeepSeek
   # chat completions because DeepSeek does not expose a native Responses API.
   # deepseek:
   #   type: "deepseek"
@@ -701,7 +701,7 @@ providers:
   # the standard AWS credential chain (env vars, AWS_PROFILE, IAM Identity
   # Center, container/instance roles). Set base_url to either an AWS region
   # ("us-east-1") or a full https endpoint to enable the provider; without it
-  # gomodel falls back to AWS_REGION / AWS_DEFAULT_REGION.
+  # aigateway falls back to AWS_REGION / AWS_DEFAULT_REGION.
   # bedrock:
   #   type: "bedrock"
   #   base_url: "us-east-1"

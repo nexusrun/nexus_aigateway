@@ -19,7 +19,7 @@ func TestRunVersionSkipsSetup(t *testing.T) {
 	var stdout strings.Builder
 
 	err := Run(context.Background(), Options{
-		ProductName: "gomodel-test",
+		ProductName: "aigateway-test",
 		Args:        []string{"--version"},
 		Stdout:      &stdout,
 		Stderr:      io.Discard,
@@ -41,8 +41,8 @@ func TestRunVersionSkipsSetup(t *testing.T) {
 	if setupConfigCalled {
 		t.Error("SetupConfig must not run for --version")
 	}
-	if !strings.HasPrefix(stdout.String(), "gomodel-test ") {
-		t.Errorf("version output = %q, want prefix %q", stdout.String(), "gomodel-test ")
+	if !strings.HasPrefix(stdout.String(), "aigateway-test ") {
+		t.Errorf("version output = %q, want prefix %q", stdout.String(), "aigateway-test ")
 	}
 }
 

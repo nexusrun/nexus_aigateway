@@ -52,7 +52,7 @@ func NewWithHTTPClient(apiKey string, baseURL string, httpClient *http.Client, h
 	})}
 }
 
-// adaptChatRequest maps GoModel's nested reasoning shape (set by the Messages
+// adaptChatRequest maps AIGateway's nested reasoning shape (set by the Messages
 // API's thinking and by clients sending reasoning.effort) onto the flat
 // reasoning_effort field: Fireworks rejects "reasoning" but accepts
 // reasoning_effort on its chat models.

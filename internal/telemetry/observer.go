@@ -66,7 +66,7 @@ func newObserver(tp trace.TracerProvider, mp apiMetric.MeterProvider) (*observer
 		return nil, err
 	}
 	emptyResponses, err := meter.Int64Counter(
-		"gomodel.client.empty_responses",
+		"aigateway.client.empty_responses",
 		apiMetric.WithDescription("Provider responses that returned 200 without choices, output, or usage."),
 		apiMetric.WithUnit("{response}"),
 	)
@@ -187,7 +187,7 @@ func (o *observer) emptyResponse(ctx context.Context, info llmclient.EmptyRespon
 	attrs := []attribute.KeyValue{
 		attribute.String("gen_ai.operation.name", info.Operation),
 		attribute.String("gen_ai.provider.name", semanticProviderName(info.ProviderType, info.Provider)),
-		attribute.String("gomodel.provider.name", info.Provider),
+		attribute.String("aigateway.provider.name", info.Provider),
 		attribute.String("error.type", info.Reason),
 	}
 	if model := modelName(info.Model); model != "" {
@@ -200,7 +200,7 @@ func callAttributes(info llmclient.RequestInfo, operation string) []attribute.Ke
 	attrs := []attribute.KeyValue{
 		attribute.String("gen_ai.operation.name", operation),
 		attribute.String("gen_ai.provider.name", semanticProviderName(info.ProviderType, info.Provider)),
-		attribute.String("gomodel.provider.name", info.Provider),
+		attribute.String("aigateway.provider.name", info.Provider),
 	}
 	if model := modelName(info.Model); model != "" {
 		attrs = append(attrs, attribute.String("gen_ai.request.model", model))
@@ -229,7 +229,7 @@ func operationSpanName(operation, model string) string {
 // semanticProviderName maps a provider type (or, failing that, the configured
 // provider name) onto the gen_ai.provider.name well-known values. Anything
 // else is "unknown"; the exact configured name is always exported separately
-// as gomodel.provider.name.
+// as aigateway.provider.name.
 func semanticProviderName(providerType, provider string) string {
 	name := strings.ToLower(strings.TrimSpace(providerType))
 	if name == "" {

@@ -55,7 +55,7 @@ func (p *Provider) ListModels(ctx context.Context) (*core.ModelsResponse, error)
 	return result, nil
 }
 
-// toCore normalizes a Chutes catalog entry into GoModel's provider-neutral model shape.
+// toCore normalizes a Chutes catalog entry into AIGateway's provider-neutral model shape.
 func (m modelInfo) toCore() core.Model {
 	object := strings.TrimSpace(m.Object)
 	if object == "" {
@@ -85,7 +85,7 @@ func (m modelInfo) toCore() core.Model {
 	}
 }
 
-// modelCapabilities maps Chutes features and input modalities to GoModel capabilities.
+// modelCapabilities maps Chutes features and input modalities to AIGateway capabilities.
 func modelCapabilities(m modelInfo) map[string]bool {
 	capabilities := make(map[string]bool, len(m.SupportedFeatures)+3)
 	for _, feature := range m.SupportedFeatures {
@@ -112,7 +112,7 @@ func modelCapabilities(m modelInfo) map[string]bool {
 	return capabilities
 }
 
-// toCore converts Chutes' per-million-token prices to GoModel pricing metadata.
+// toCore converts Chutes' per-million-token prices to AIGateway pricing metadata.
 func (p *modelPricing) toCore() *core.ModelPricing {
 	if p == nil || (p.Prompt == nil && p.Completion == nil && p.InputCacheRead == nil) {
 		return nil

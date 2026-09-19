@@ -80,8 +80,8 @@ func HostBuildFlags() BuildFlags {
 	return flagsFromSettings(bi.Settings)
 }
 
-// hostModuleVersion returns the version of the gomodel module compiled into
-// this binary: the main module version for the gomodel binary, or the
+// hostModuleVersion returns the version of the aigateway module compiled into
+// this binary: the main module version for the aigateway binary, or the
 // dependency version for custom distributions built on the run package.
 func hostModuleVersion() string {
 	bi, ok := debug.ReadBuildInfo()
@@ -119,7 +119,7 @@ func (b pluginBuild) String() string {
 	if mod == "" {
 		mod = "unknown"
 	}
-	return fmt.Sprintf("%s, gomodel %s, flags %s", b.GoVersion, mod, b.Flags)
+	return fmt.Sprintf("%s, aigateway %s, flags %s", b.GoVersion, mod, b.Flags)
 }
 
 // readPluginBuild reads the Go build info embedded in a shared object without
@@ -140,7 +140,7 @@ func readPluginBuild(path string) (pluginBuild, bool) {
 // that names the file and both toolchains.
 func describeOpenError(path string, err error) error {
 	msg := err.Error()
-	host := fmt.Sprintf("this binary was built with %s, gomodel %s, flags %s", HostBuildInfo.GoVersion, orUnknown(hostModuleVersion()), HostBuildFlags())
+	host := fmt.Sprintf("this binary was built with %s, aigateway %s, flags %s", HostBuildInfo.GoVersion, orUnknown(hostModuleVersion()), HostBuildFlags())
 	switch {
 	case isMissingSymbol(err):
 		return fmt.Errorf("plugin file %s does not export %s (declare `func %s() pluginapi.Plugin` in package main): %w", path, PluginSymbol, PluginSymbol, err)
@@ -149,7 +149,7 @@ func describeOpenError(path string, err error) error {
 		if b, ok := readPluginBuild(path); ok {
 			built = "it was built with " + b.String()
 		}
-		return fmt.Errorf("plugin file %s was built with a different toolchain, flags, or pluginapi sources: %s; %s. Rebuild it with `gomodel plugin build` from this GoModel version: %w", path, built, host, err)
+		return fmt.Errorf("plugin file %s was built with a different toolchain, flags, or pluginapi sources: %s; %s. Rebuild it with `aigateway plugin build` from this AIGateway version: %w", path, built, host, err)
 	case strings.Contains(msg, "not implemented"):
 		return fmt.Errorf("plugin file %s: %w: %w", path, errUnsupported(), err)
 	}

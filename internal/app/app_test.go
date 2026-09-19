@@ -610,8 +610,8 @@ func TestDashboardRuntimeConfig_VirtualModelStrategies(t *testing.T) {
 		adaptiveRouting bool
 		want            string
 	}{
-		{name: "core strategies without a route selector", adaptiveRouting: false, want: "round_robin,cost,failover"},
-		{name: "adaptive offered with a route selector", adaptiveRouting: true, want: "round_robin,cost,failover,adaptive"},
+		{name: "core strategies without a route selector", adaptiveRouting: false, want: "round_robin,cost,failover,schedule"},
+		{name: "adaptive offered with a route selector", adaptiveRouting: true, want: "round_robin,cost,failover,schedule,adaptive"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -629,8 +629,8 @@ func TestDashboardRuntimeConfig_ExposesUserPathHeader(t *testing.T) {
 		cfg  *config.Config
 		want string
 	}{
-		{name: "nil config falls back to default", cfg: nil, want: "X-GoModel-User-Path"},
-		{name: "unset header falls back to default", cfg: &config.Config{}, want: "X-GoModel-User-Path"},
+		{name: "nil config falls back to default", cfg: nil, want: "X-AIGateway-User-Path"},
+		{name: "unset header falls back to default", cfg: &config.Config{}, want: "X-AIGateway-User-Path"},
 		{
 			name: "custom header is canonicalized",
 			cfg:  &config.Config{Server: config.ServerConfig{UserPathHeader: "x-tenant-path"}},

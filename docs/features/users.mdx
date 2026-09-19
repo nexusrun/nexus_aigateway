@@ -85,7 +85,7 @@ Where the pieces come from:
 
 | Piece                   | Source                                                       |
 | ----------------------- | ------------------------------------------------------------ |
-| the request's user path | the managed API key's `user_path`, an SSO session, or the `X-GoModel-User-Path` header |
+| the request's user path | the managed API key's `user_path`, an SSO session, or the `X-AIGateway-User-Path` header |
 | the tree                | derived from the user paths of existing API keys — nothing to create |
 | node policies           | the **Users** page, `users:` in `config.yaml`, or the `USERS` env var |
 | key policies            | the **API Keys** page or `allowed_models` on `POST /admin/auth-keys` |

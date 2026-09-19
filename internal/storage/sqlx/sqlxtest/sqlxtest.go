@@ -7,7 +7,7 @@
 // than opening a *sql.DB directly.
 //
 // SQLite always runs, in memory. PostgreSQL runs only when
-// GOMODEL_TEST_POSTGRES_URL names a reachable server; otherwise that subtest
+// AIGATEWAY_TEST_POSTGRES_URL names a reachable server; otherwise that subtest
 // skips. The variable is deliberately not POSTGRES_URL — pointing a suite that
 // creates and drops schemas at a configured application database should take a
 // separate, explicit opt-in.
@@ -33,7 +33,7 @@ import (
 
 // PostgresURLEnv names the environment variable holding the test PostgreSQL
 // connection string.
-const PostgresURLEnv = "GOMODEL_TEST_POSTGRES_URL"
+const PostgresURLEnv = "AIGATEWAY_TEST_POSTGRES_URL"
 
 // schemaCounter keeps concurrently running PostgreSQL subtests in separate
 // schemas. Tests must not depend on wall-clock time or randomness for naming.
