@@ -140,7 +140,7 @@ func buildDefaultConfig() *Config {
 				RefreshInterval: 3600,
 				RecheckInterval: 60,
 				ModelList: ModelListConfig{
-					URL: "https://raw.githubusercontent.com/nexusrun/ai-model-list/refs/heads/main/models.min.json",
+					URL: "https://raw.githubusercontent.com/ENTERPILOT/ai-model-list/refs/heads/main/models.min.json",
 				},
 				Local: nil,
 				Redis: nil,
