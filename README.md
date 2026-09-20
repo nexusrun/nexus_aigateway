@@ -25,7 +25,9 @@
 
 ## Demo
 
-<video controls width="100%" src="./docs/AI-Gateway.mp4">
+▶️ [Watch the NEXUS AI Gateway demo](./docs/AI-Gateway.mp4)
+
+<video controls autoplay muted playsinline width="100%" src="./docs/AI-Gateway.mp4">
   <a href="./docs/AI-Gateway.mp4">Watch the NEXUS AI Gateway demo</a>
 </video>
 
