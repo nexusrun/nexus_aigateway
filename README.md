@@ -30,7 +30,7 @@
 Clone the repository, create a protected environment file, and authenticate the NEXUS AI CLI:
 
 ```bash
-git clone https://github.com/saifelyzal/aigateway.git
+git clone https://github.com/nexusrun/nexus_aigateway.git
 cd nexusruntime
 cp .env.template .env
 nexus auth login
@@ -97,6 +97,90 @@ The official SDKs therefore work unchanged. Configure their base URLs as follows
 
 - OpenAI SDK: `https://aigateway.nexusai.run/v1`
 - Anthropic SDK: `https://aigateway.nexusai.run` (the SDK appends `/v1/messages`)
+
+## Use NEXUS AI Gateway with coding tools
+
+NEXUS AI Gateway works with Claude Code, Codex, Cursor, and other coding agents.
+Configure the tool to use your gateway URL and a gateway API key, then choose a
+model returned by `GET /v1/models`.
+
+For a local gateway, the common OpenAI-compatible endpoint is:
+
+```text
+Base URL: http://localhost:8080/v1
+API key:  your NEXUS AI Gateway key
+```
+
+### Claude Code
+
+Claude Code uses the Anthropic Messages API. Set the gateway URL and token in
+your shell, then start Claude Code normally:
+
+```bash
+export ANTHROPIC_BASE_URL=http://localhost:8080
+export ANTHROPIC_AUTH_TOKEN=your-gateway-key
+claude
+```
+
+The managed gateway route is `POST /v1/messages`. To pin Claude Code directly
+to the Anthropic passthrough, use `http://localhost:8080/p/anthropic` instead.
+See the [Claude Code integration guide](https://aigateway.nexusai.run/docs/guides/claude-code?utm_source=readme).
+
+### Codex
+
+Codex uses the OpenAI Responses API. Add a custom provider to
+`~/.codex/config.toml`:
+
+```toml
+model_provider = "aigateway"
+model = "your-model-id"
+
+[model_providers.aigateway]
+name = "NEXUS AI Gateway"
+base_url = "http://localhost:8080/v1"
+env_key = "AIGATEWAY_API_KEY"
+wire_api = "responses"
+```
+
+Then export the gateway key and run Codex:
+
+```bash
+export AIGATEWAY_API_KEY=your-gateway-key
+codex
+```
+
+See the [Codex integration guide](https://aigateway.nexusai.run/docs/guides/codex?utm_source=readme)
+for ChatGPT subscription routing and provider-specific notes.
+
+### Cursor
+
+Cursor can route OpenAI BYOK requests through NEXUS AI Gateway:
+
+1. Open **Cursor Settings → Models**.
+2. Set **OpenAI API Key** to a dedicated gateway key.
+3. Enable **Override OpenAI Base URL** and enter
+   `https://your-gateway.example.com/v1`.
+4. Select a model exposed by the gateway.
+
+Cursor requires a publicly reachable HTTPS gateway URL. Use a dedicated managed
+API key rather than the gateway master key. Cursor-hosted models, Tab, and some
+other Cursor features do not route through the OpenAI base URL override.
+See the [Cursor integration guide](https://aigateway.nexusai.run/docs/guides/cursor?utm_source=readme).
+
+### Other coding agents and clients
+
+OpenCode, Cline, Roo Code, OpenAI-compatible SDKs, and similar clients generally
+use the same settings:
+
+```text
+Base URL: http://localhost:8080/v1
+API key:  your NEXUS AI Gateway key
+Model:    an ID returned by GET /v1/models
+```
+
+See the guide for [OpenCode and other agents](https://aigateway.nexusai.run/docs/guides/opencode-and-other-agents?utm_source=readme),
+or the [API endpoints reference](https://aigateway.nexusai.run/docs/advanced/api-endpoints?utm_source=readme)
+for client-specific behavior.
 
 ## List of Supported LLM Providers
 
@@ -179,10 +263,8 @@ for the full list of settings.
 
 ## Roadmap
 
-See the [roadmap](https://aigateway.nexusai.run/docs/about/roadmap?utm_source=readme) for NEXUS AI Gateway Pro and the upcoming 0.2.0 release.
+See the [roadmap and product documentation](http://nexusai.run/docs) for upcoming NEXUS AI Gateway releases.
+
+For the Pro version, visit [NEXUS AI Gateway Pro](https://nexusai.run/ai-gateway).
 
 ## Sponsors
-
-
-## Community
-
