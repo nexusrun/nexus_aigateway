@@ -10,17 +10,20 @@
 
 
 <p align="center">
-  NEXUS AI Gateway is a fast, resource-efficient AI Gateway for routing requests across multiple AI model providers.
+  NEXUS AI Gateway is the control plane for your AI stack: one fast, resource-efficient gateway for routing requests across every model provider you use.
 </p>
 
 <p>
-  NEXUS AI Gateway saves you money and nerves.
+  Spend less. Stay in control.
 </p>
 <p>
-  <strong>Money</strong> - because you can remember the responses on this layer (caching), track your spending and do tricks like prompt compression and intelligent routing.
+  <strong>Spend smarter</strong> - reduce unnecessary model calls with response caching, track usage and costs in one place, and get more from every token with prompt compression and intelligent routing.
 </p>
 <p>
-  <strong>Nerves</strong> - because we strive to achieve good quality and reliability. Our ambition is to be the last AI gateway you will need - the most reliable, resource-optimal, feature-rich and fast.
+  <strong>Operate with confidence</strong> - keep your applications reliable as providers, models, and workloads change. NEXUS AI Gateway brings the performance, failover, observability, and controls you need to run AI in production.
+</p>
+<p>
+  Built to be the last AI gateway you need: fast at the edge, efficient by design, and ready for whatever comes next.
 </p>
 
 ## Demo
@@ -246,27 +249,47 @@ for the full list of settings.
 
 ## Features
 
-- [Caching](https://aigateway.nexusai.run/docs/features/cache?utm_source=readme) - exact and semantic response caching, so repeated prompts cost nothing
-- [Cost tracking](https://aigateway.nexusai.run/docs/features/cost-tracking?utm_source=readme) - per-request cost estimates, usage analytics, and spending breakdowns in the dashboard
-- [Budgets](https://aigateway.nexusai.run/docs/features/budgets?utm_source=readme) - hard spend limits per user, team, or key
-- [Rate limits](https://aigateway.nexusai.run/docs/features/rate-limits?utm_source=readme) - requests, tokens, and concurrency caps per user path, provider, or model
-- [Usage API](https://aigateway.nexusai.run/docs/advanced/usage-api?utm_source=readme) - clients check their own usage, remaining budget, and rate-limit headroom with the key they already use for inference
-- [Virtual models](https://aigateway.nexusai.run/docs/features/virtual-models?utm_source=readme) - aliases and load balancing (round-robin or cost-based) behind stable model names
-- [Session keeping](https://aigateway.nexusai.run/docs/features/session-keeping?utm_source=readme) - detect a client session and pin it to one target and provider key, so provider prompt caches stay warm and audit logs read as threads
-- [Failover](https://aigateway.nexusai.run/docs/features/failover?utm_source=readme) - automatic rerouting to backup providers, with [retries and circuit breakers](https://aigateway.nexusai.run/docs/advanced/resilience?utm_source=readme)
-- [Labelling](https://aigateway.nexusai.run/docs/features/labelling?utm_source=readme) - tag requests from HTTP headers or API keys and break down usage by label
-- [User paths](https://aigateway.nexusai.run/docs/features/user-path?utm_source=readme) - hierarchical scoping of keys, model access, budgets, usage, and audit logs
-- [Model access control](https://aigateway.nexusai.run/docs/features/users?utm_source=readme) - per-group, per-user, and per-key model allowlists that intersect down the user-path tree
-- [MCP gateway](https://aigateway.nexusai.run/docs/features/mcp-gateway?utm_source=readme) - aggregate your MCP servers behind one authenticated endpoint
-- [Passthrough API](https://aigateway.nexusai.run/docs/features/passthrough-api?utm_source=readme) - provider-native APIs under `/p/{provider}/...`, with NEXUS AI Gateway auth and tracking
-- [Audio and image APIs](https://aigateway.nexusai.run/docs/advanced/audio-api?utm_source=readme) - OpenAI-compatible text-to-speech, transcription, and [image generation and editing](https://aigateway.nexusai.run/docs/advanced/images-api?utm_source=readme) with the same access rules, budgets, and cost tracking as chat
-- [Provider replay state](https://aigateway.nexusai.run/docs/advanced/extra-content?utm_source=readme) - preserves Gemini thought signatures and Anthropic thinking blocks across turns, APIs, and providers
-- [Guardrails](https://aigateway.nexusai.run/docs/advanced/guardrails?utm_source=readme) - request and response policies enforced at the gateway
-- [Plugins](https://aigateway.nexusai.run/docs/advanced/plugins?utm_source=readme) - one contract for guardrails, response and stream filters, header edits, and routing strategies; built in, compiled in, or loaded from a `.so` at startup
-- [Workflows](https://aigateway.nexusai.run/docs/advanced/workflows?utm_source=readme) - versioned per-request policies that scope cache, budgets, audit logging, guardrail phases, and failover by user path, provider, or model
-- [Provider key rotation](https://aigateway.nexusai.run/docs/providers/key-rotation?utm_source=readme) - round-robin over multiple API keys to lift per-key rate limits
-- [Observability](https://aigateway.nexusai.run/docs/guides/prometheus-metrics?utm_source=readme) - Prometheus metrics, [OpenTelemetry](https://aigateway.nexusai.run/docs/guides/opentelemetry?utm_source=readme) traces, audit logs, and live request streaming in the dashboard
-- [Playground](https://aigateway.nexusai.run/docs/features/playground?utm_source=readme) - try any model or virtual model from the dashboard and inspect the exact request and response JSON
+NEXUS AI Gateway gives your applications one consistent layer for routing,
+governance, and observability across the AI providers you use.
+
+### Route every request with confidence
+
+- [Virtual models](https://aigateway.nexusai.run/docs/features/virtual-models?utm_source=readme) - stable model aliases, provider-qualified selectors, and load balancing across targets
+- [Failover and resilience](https://aigateway.nexusai.run/docs/features/failover?utm_source=readme) - automatic provider failover with [retries and circuit breakers](https://aigateway.nexusai.run/docs/advanced/resilience?utm_source=readme)
+- [Session keeping](https://aigateway.nexusai.run/docs/features/session-keeping?utm_source=readme) - keep related requests on the same target and provider key so provider-side prompt caches stay warm
+- [Provider key rotation](https://aigateway.nexusai.run/docs/providers/key-rotation?utm_source=readme) - distribute traffic across multiple keys to increase rate-limit headroom
+
+### Control cost and access
+
+- [Response caching](https://aigateway.nexusai.run/docs/features/cache?utm_source=readme) - exact and semantic caching to avoid repeat upstream requests
+- [Cost tracking](https://aigateway.nexusai.run/docs/features/cost-tracking?utm_source=readme) - per-request estimates, usage analytics, and spending breakdowns
+- [Budgets](https://aigateway.nexusai.run/docs/features/budgets?utm_source=readme) - enforce spend limits per user, team, or API key
+- [Rate limits](https://aigateway.nexusai.run/docs/features/rate-limits?utm_source=readme) - cap requests, tokens, and concurrency by user path, provider, or model
+- [User paths and access control](https://aigateway.nexusai.run/docs/features/user-path?utm_source=readme) - scope API keys, model access, budgets, usage, and audit logs across teams and users
+- [Labelling](https://aigateway.nexusai.run/docs/features/labelling?utm_source=readme) - tag requests by HTTP header or API key and break down usage by label
+- [Usage API](https://aigateway.nexusai.run/docs/advanced/usage-api?utm_source=readme) - let clients inspect their own usage, budget, and rate-limit headroom
+
+### Use the APIs your applications already speak
+
+- [OpenAI-compatible APIs](https://aigateway.nexusai.run/docs/advanced/api-endpoints?utm_source=readme) - Chat Completions, Responses, Conversations, embeddings, audio, and image endpoints
+- [Anthropic Messages API](https://aigateway.nexusai.run/docs/advanced/anthropic-messages-api?utm_source=readme) - route native Anthropic requests while preserving provider-specific message state
+- [Provider passthrough](https://aigateway.nexusai.run/docs/features/passthrough-api?utm_source=readme) - access provider-native APIs under `/p/{provider}/...` with gateway authentication and tracking
+- [Provider replay state](https://aigateway.nexusai.run/docs/advanced/extra-content?utm_source=readme) - preserve thinking blocks, thought signatures, and other provider state across turns and providers
+- [Audio and image APIs](https://aigateway.nexusai.run/docs/advanced/audio-api?utm_source=readme) - text-to-speech, transcription, image generation, and image editing with the same access controls and usage tracking
+
+### Extend and operate the platform
+
+- [MCP gateway](https://aigateway.nexusai.run/docs/features/mcp-gateway?utm_source=readme) - aggregate MCP servers behind one authenticated endpoint
+- [Guardrails](https://aigateway.nexusai.run/docs/advanced/guardrails?utm_source=readme) - enforce request and response policies at the gateway
+- [Plugins](https://aigateway.nexusai.run/docs/advanced/plugins?utm_source=readme) - add guardrails, filters, header edits, and routing strategies through one plugin contract
+- [Workflows](https://aigateway.nexusai.run/docs/advanced/workflows?utm_source=readme) - apply versioned per-request policies for caching, budgets, audit logs, guardrails, and failover
+- [Observability](https://aigateway.nexusai.run/docs/guides/prometheus-metrics?utm_source=readme) - Prometheus metrics, [OpenTelemetry](https://aigateway.nexusai.run/docs/guides/opentelemetry?utm_source=readme) traces, audit logs, and live request streaming
+- [Playground](https://aigateway.nexusai.run/docs/features/playground?utm_source=readme) - test models and virtual models from the dashboard and inspect request and response JSON
+- [Admin API and Swagger UI](https://aigateway.nexusai.run/docs/advanced/admin-endpoints?utm_source=readme) - manage the gateway programmatically and explore its API surface
+
+### NEXUS AI Gateway Pro
+
+- [Pro capabilities](https://nexusai.run/ai-gateway) - prompt compression, intelligent routing, and SSO for teams that need deeper optimization and control
 
 
 ## Roadmap
