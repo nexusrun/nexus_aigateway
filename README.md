@@ -3,7 +3,7 @@
 </p>
 
 <h1 align="center">
-  NEXUS AI Gateway - The last AI gateway you will ever need
+  NEXUS AI Gateway - FREE AI gateway
 </h1>
 
 </p>
@@ -22,6 +22,12 @@
 <p>
   <strong>Nerves</strong> - because we strive to achieve good quality and reliability. Our ambition is to be the last AI gateway you will need - the most reliable, resource-optimal, feature-rich and fast.
 </p>
+
+## Demo
+
+<video controls width="100%" src="./docs/AI-Gateway.mp4">
+  <a href="./docs/AI-Gateway.mp4">Watch the NEXUS AI Gateway demo</a>
+</video>
 
 ## Quick Start
 
