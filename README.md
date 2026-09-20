@@ -10,7 +10,7 @@
 
 
 <p align="center">
-  NEXUS AI Gateway is the fastest and the most resource-efficient AI Gateway. It's an alternative to LiteLLM (which was hacked recently) and Portkey (which is no longer maintained on GitHub).
+  NEXUS AI Gateway is a fast, resource-efficient AI Gateway for routing requests across multiple AI model providers.
 </p>
 
 <p>
