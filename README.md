@@ -10,7 +10,7 @@
 
 
 <p align="center">
-  NEXUS AI Gateway is the fastest and the most resource-efficient AI Gateway (<a href="https://aigateway.nexusai.run/docs/about/benchmarks?utm_source=readme">the self-reproducible benchmarks</a>). It's an alternative to LiteLLM (which was hacked recently) and Portkey (which is no longer maintained on GitHub).
+  NEXUS AI Gateway is the fastest and the most resource-efficient AI Gateway. It's an alternative to LiteLLM (which was hacked recently) and Portkey (which is no longer maintained on GitHub).
 </p>
 
 <p>
@@ -48,7 +48,7 @@ Push the current source to the repository that NEXUS AI will build, then deploy 
 git push origin main
 
 nexus deploy source \
-  --repo https://github.com/saifelyzal/aigateway.git \
+  --repo https://github.com/nexusrun/nexus_aigateway.git \
   --name aigateway \
   --branch main \
   --provider docker \
@@ -71,7 +71,7 @@ nexus deploy logs aigateway --lines 200
 **Step 3:** Open the dashboard
 
 ```text
-https://aigateway.nexusai.run/admin/dashboard
+https://aigateway.nexusai.run/
 ```
 
 **Step 4:** Make an API call
