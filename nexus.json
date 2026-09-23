@@ -4,8 +4,10 @@
   "env": {
     "PORT": { "value": "8080" },
     "STORAGE_TYPE": { "value": "sqlite" },
-    "AIGATEWAY_MASTER_KEY": { "required": true, "description": "Key that protects the gateway and dashboard. Keep it." },
-    "OPENAI_API_KEY": { "description": "Set at least one provider key" },
+    "ADMIN_BOOTSTRAP_USERNAME": { "required": true, "description": "Admin UI USERNAME." },
+    "ADMIN_BOOTSTRAP_PASSWORD": { "required": true, "description": "Admin UI PASSWORD." },
+    "AIGATEWAY_MASTER_KEY": { "description": "Key that protects the gateway and dashboard. Keep it." },
+    "OPENAI_API_KEY": { "description": "Optional" },
     "ANTHROPIC_API_KEY": { "description": "Optional" },
     "GEMINI_API_KEY": { "description": "Optional" },
     "GROQ_API_KEY": { "description": "Optional" }
