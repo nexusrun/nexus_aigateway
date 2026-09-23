@@ -11,8 +11,8 @@ AIGateway has two observability outputs:
   plus GenAI provider-call spans and metrics, defined with the OpenTelemetry
   SDK in `internal/telemetry` and pushed over OTLP.
 
-Both attach to the same points — the `llmclient` provider hooks and the Echo
-middleware stack — but instrument independently. Neither sees the other's
+Both attach to the same points, the `llmclient` provider hooks and the Echo
+middleware stack, but instrument independently. Neither sees the other's
 metrics: a Prometheus scrape does not include `gen_ai.*`, and an OTLP backend
 does not receive `aigateway_*`.
 

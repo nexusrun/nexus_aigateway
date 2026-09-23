@@ -22,7 +22,7 @@ first:
 | Lowest cost | the cheapest available target | the other targets, in declared order |
 | **Failover** | the first available target, always | the next targets, in declared order |
 
-Pick **Failover** when the target list is a priority order — always use the
+Pick **Failover** when the target list is a priority order, always use the
 best model unless it is down, and only then cascade to the backups.
 
 For the other strategies the editor shows a **Failover** checkbox, on by
@@ -35,7 +35,7 @@ Failover strategy always fails over, so the checkbox is not offered there.
 
 In the dashboard, open **Models** and edit the model you want to protect:
 the model is already pinned as the first target, so add the fallbacks below
-it in priority order and save — the strategy defaults to **Failover**. To
+it in priority order and save, the strategy defaults to **Failover**. To
 fail over under a new name instead, create a virtual model, list the targets
 in priority order, and pick **Failover** in the **Load-balancing strategy**
 dropdown. Weights and session keeping do not apply to this strategy, so the
@@ -69,8 +69,8 @@ A target may also name another virtual model
 ([chaining](/features/virtual-models#chain-virtual-models)); the sweep then
 tries every concrete model behind it. One exception keeps mutual protection
 possible: when a chain that shadows a real model lists another model that is
-shadowed the same way, that fallback reaches the model only — its fallbacks
-are not swept in turn — which is what lets `gpt-4o` fall back to
+shadowed the same way, that fallback reaches the model only, its fallbacks
+are not swept in turn, which is what lets `gpt-4o` fall back to
 `claude-sonnet-4-6` while `claude-sonnet-4-6` falls back to `gpt-4o`. Any
 other redirect (an alias, a virtual model under a new name) that lists a
 protected model does sweep that model's fallbacks.
@@ -84,7 +84,7 @@ use [resilience settings with per-model breakers](/advanced/resilience#retry-clo
 Failover is attempted only after an attempt returns:
 
 - `5xx`
-- `429`, including a rate limit AIGateway itself enforces on the target — a
+- `429`, including a rate limit AIGateway itself enforces on the target, a
   saturated target is skipped while another target has capacity
 - model unavailable, unsupported, or not found style errors
 - upstream failure messages relayed with a `4xx` status (aggregator providers
@@ -131,7 +131,7 @@ switch failover off). In the environment, separate entries with commas.
 
 A `retry_on_errors` phrase matches when every one of its words appears in the
 error code or message (case-insensitive, substring): `model not found`
-matches `The model 'gpt-9' was not found`. A numeric word — `404` or `4xx` —
+matches `The model 'gpt-9' was not found`. A numeric word, `404` or `4xx`,
 constrains the HTTP status instead of the text, so `404 deprecated` matches a
 404 whose message mentions "deprecated" and nothing else. The default list is:
 
@@ -195,10 +195,10 @@ converted automatically:
   description set from the Models page), the mapping is merged into it and
   the setting is kept. A primary that already has a redirect, a path-scoped
   setting, or is disabled is logged and skipped, and the store is kept until
-  it is resolved — add its fallbacks as targets of that virtual model with
+  it is resolved, add its fallbacks as targets of that virtual model with
   the failover strategy, then delete the row. A mapping whose fallback names
   a virtual model that routes back to its primary is kept the same way, since
-  converting it would form a chain cycle — adjust or remove that virtual
+  converting it would form a chain cycle, adjust or remove that virtual
   model, then restart. A primary listed in
   `disabled_models` converts as a disabled virtual model: its fallbacks are
   kept but inactive until you enable it from the Models page.

@@ -78,7 +78,7 @@ pin expires after `PRO_SMART_ROUTING_SESSION_TTL` of inactivity.
 | Environment variable | Default | Purpose |
 | --- | --- | --- |
 | `PRO_SMART_ROUTING_ENABLED` | `true` | Enable smart tier routing. |
-| `PRO_SMART_ROUTING_ROUTES` | — | JSON map from requested aliases to `easy` and `hard` models. No routes leaves the feature idle. |
+| `PRO_SMART_ROUTING_ROUTES` | N/A | JSON map from requested aliases to `easy` and `hard` models. No routes leaves the feature idle. |
 | `PRO_SMART_ROUTING_THRESHOLD` | `4` | Score at or above this value selects the hard tier. |
 | `PRO_SMART_ROUTING_SESSION_TTL` | `30m` | Sliding lifetime of an escalation-only session pin. |
 
@@ -106,7 +106,7 @@ the threshold against real traffic.
 Adaptive routing replaces the Core `round_robin` and `cost` strategies with a
 health-aware selector. It is registered once at startup for the whole
 gateway, but **only virtual models configured with `strategy: adaptive` use
-it** — every other virtual model keeps the strategy it has.
+it**, every other virtual model keeps the strategy it has.
 
 ```yaml
 virtual_models:
@@ -128,21 +128,21 @@ round-robin.
 Selection is power-of-two-choices: two candidates are drawn in proportion to
 their weights, and the one with the lower instantaneous load (latency estimate
 × in-flight requests) wins. Weights are recomputed per request from in-process
-state — there is no external store on the request path.
+state, there is no external store on the request path.
 
-- **Latency** — each target keeps a peak-EWMA latency estimate (time to first
+- **Latency**: each target keeps a peak-EWMA latency estimate (time to first
   byte for streams) fed by every upstream attempt, including retries and
   failovers.
-- **Cooldowns** — a `429` starts a cooldown of `PRO_ROUTING_COOLDOWN_BASE`
+- **Cooldowns**: a `429` starts a cooldown of `PRO_ROUTING_COOLDOWN_BASE`
   that doubles on each consecutive trigger up to `PRO_ROUTING_COOLDOWN_MAX`;
   `401`, `403`, and `404` cool down for the maximum immediately; repeated 5xx
   or network failures cool down after three in a row. Cooling targets are
   skipped while any other target is available.
-- **Weight floor** — every non-cooling target keeps at least
+- **Weight floor**: every non-cooling target keeps at least
   `PRO_ROUTING_MIN_WEIGHT_FRACTION` of the heaviest candidate's weight, so a
   slow or recovering target still receives a trickle of traffic and its
   recovery is proven on real requests.
-- **Prompt-cache warmth** — the provider that served a detected session last
+- **Prompt-cache warmth**: the provider that served a detected session last
   is boosted by `PRO_ROUTING_WARM_CACHE_WEIGHT` for `PRO_ROUTING_WARM_CACHE_TTL`,
   so a conversation stays on the same credential, endpoint, and region while
   its prompt cache is likely warm. A cooling target loses the boost.
@@ -171,10 +171,10 @@ The objective decides how price enters the weight:
 
 With [Session keeping](/features/session-keeping) on (the default), the
 gateway hands the selector the target already serving each session and lets
-it decide, request by request, whether the session keeps it — whenever more
+it decide, request by request, whether the session keeps it, whenever more
 than one target is viable. (With a single viable target there is nothing to
 choose, so the selector is skipped.) The pin holds
-while that target is healthy — moving a session throws away the provider
+while that target is healthy, moving a session throws away the provider
 prompt cache the pin exists to protect, so even a much cheaper or much faster
 alternative does not take it. A pin is released only when its target enters a
 cooldown, and the session then re-pins to the target the selector picks
@@ -183,7 +183,7 @@ instead.
 This is the one judgement the gateway cannot make on its own: a target that
 is serving `429`s or timing out is still a configured, catalog-supported
 target, so it passes every check the core pin applies. Without the selector
-in the path, an agent session — one session id, thousands of requests — pins
+in the path, an agent session (one session id, thousands of requests) pins
 on its first request and rides a failing target for the pin's whole lifetime,
 visible only as latency and wasted upstream spend, because failover still
 returns `200`s to the client.

@@ -12,9 +12,9 @@
         "dark": "/logo.png"
     },
     "colors": {
-        "primary": "#0891b2",
-        "light": "#22e5ee",
-        "dark": "#065f73"
+        "primary": "#1a6aff",
+        "light": "#00cfff",
+        "dark": "#0b1423"
     },
     "icons": {
         "library": "lucide"
@@ -25,7 +25,7 @@
     "seo": {
         "indexing": "navigable",
         "metatags": {
-            "generator": "AIGateway",
+            "generator": "NEXUS AI Gateway",
             "google-site-verification": "EhaMJtqC22YnPJetcCW5SCi3fdJF2BOai2WHjae8ymY",
             "robots": "index, follow, max-image-preview:large"
         },
@@ -42,11 +42,6 @@
     },
     "metadata": {
         "timestamp": true
-    },
-    "integrations": {
-        "posthog": {
-            "apiKey": "phc_pHSTwDSn6q3sB9jcMfAUGFCG8WjgSqAMERjRsMKDyie9"
-        }
     },
     "redirects": [
         {
@@ -195,8 +190,11 @@
                     "providers/anthropic",
                     "providers/chatgpt",
                     "providers/cohere",
+                    "providers/cerebras",
+                    "providers/cloudflare-workers-ai",
                     "providers/gemini",
                     "providers/deepseek",
+                    "providers/huggingface",
                     "providers/xai",
                     "providers/bailian",
                     "providers/xiaomi",

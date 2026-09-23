@@ -63,7 +63,7 @@ For request and response details, see the dedicated guides:
 
 Speech translation models (OpenAI `gpt-realtime-translate`) run on their own
 session surface, so the gateway mirrors it. Connect to `/v1/realtime/translations`
-— or `/v1/realtime?intent=translation`, which is the same session — and set the
+or `/v1/realtime?intent=translation`, which is the same session, and set the
 target language after the socket opens:
 
 ```bash
@@ -96,8 +96,8 @@ Transcription sessions (`/v1/realtime?intent=transcription`) pick their model in
 request and the gateway pins the in-session selection to it.
 
 Most transcription models report usage in their
-`conversation.item.input_audio_transcription.completed` event — tokens, or
-seconds for whisper-style models — and that report prices the session. A model
+`conversation.item.input_audio_transcription.completed` event, tokens, or
+seconds for whisper-style models, and that report prices the session. A model
 that omits usage there reports nothing, so the gateway falls back to the input
 audio it relayed, at the per-second input rate. The fallback applies only when a
 session reported no usage of its own, so a session is never billed twice. As with
@@ -115,7 +115,7 @@ metered.
 
 | Endpoint    | Method | Description                                                                                                                              |
 | ----------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `/v1/usage` | GET    | Self-service usage, budget, and rate limit status for the caller's effective user path — see [Usage API](/advanced/usage-api) |
+| `/v1/usage` | GET    | Self-service usage, budget, and rate limit status for the caller's effective user path; see [Usage API](/advanced/usage-api) |
 | `/v1/auth/verify` | GET | Report whether the API key the request carries is valid (when `AUTH_VERIFY_ENABLED`) |
 
 ### Key verification
@@ -141,8 +141,8 @@ database, `master_key` the bootstrap key from `AIGATEWAY_MASTER_KEY`. `key_id`
 and `user_path` are present only for managed keys bound to them.
 
 <Note>
-  Where the gateway admits unauthenticated callers — no authentication
-  configured at all, or a route an extension excluded from it — there is no key
+  Where the gateway admits unauthenticated callers, no authentication
+  configured at all, or a route an extension excluded from it, there is no key
   to confirm, and the endpoint answers `200` with
   `{"valid": false, "method": "none"}` rather than claiming the key is valid.
   A status-code consumer such as Caddy's `forward_auth` treats that as allowed,

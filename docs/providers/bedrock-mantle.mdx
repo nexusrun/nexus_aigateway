@@ -184,14 +184,14 @@ This registers `bedrock-mantle-east` and `bedrock-mantle-west`.
 
 ## Troubleshooting
 
-- **GPT-5.6 returns `404` or rejects the request** — use the
+- **GPT-5.6 returns `404` or rejects the request**: use the
   `bedrock-mantle` provider type. The Bedrock Runtime provider uses Converse,
   which GPT-5.6 does not support.
-- **`403` / access denied** — enable model access and verify that the API key
+- **`403` / access denied**: enable model access and verify that the API key
   or IAM principal can invoke Bedrock Mantle inference in that Region.
 - **Provider is not discovered with `AWS_BEARER_TOKEN_BEDROCK` or an IAM
-  role** — set `BEDROCK_MANTLE_BASE_URL` to enable the keyless provider.
-- **A newly released model uses the wrong route** — set
+  role**, set `BEDROCK_MANTLE_BASE_URL` to enable the keyless provider.
+- **A newly released model uses the wrong route**: set
   `BEDROCK_MANTLE_API_MODE=openai` or `standard` for that provider instance.
 
 ## References

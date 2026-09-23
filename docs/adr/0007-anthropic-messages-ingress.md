@@ -11,7 +11,7 @@ AIGateway exposes an OpenAI-compatible public API (`/v1/chat/completions`, `/v1/
 dialect (`POST /v1/messages`) instead. Today those clients can only reach AIGateway through the
 opaque passthrough route `/p/anthropic/v1/messages`, which:
 
-- forwards bytes verbatim to the Anthropic upstream only — it cannot route to OpenAI, Gemini,
+- forwards bytes verbatim to the Anthropic upstream only, it cannot route to OpenAI, Gemini,
   Bedrock, or any other provider;
 - bypasses managed features: model aliases, workflow policy, budgets, failover, and the
   exact/semantic response cache.
@@ -20,7 +20,7 @@ We want a **managed** `/v1/messages` endpoint that accepts the Anthropic request
 can route to **any** configured provider, with the same cost tracking and audit logging as the
 OpenAI-compatible routes.
 
-The existing `/v1/responses` endpoint already solved the structurally identical problem — a
+The existing `/v1/responses` endpoint already solved the structurally identical problem, a
 non-chat-completions dialect that is translated into the canonical chat type and run through the
 shared pipeline. ADR-0002 (ingress frame and semantic envelope) established that dialect
 translation belongs at the ingress boundary.
@@ -65,8 +65,8 @@ directions.
 | `types.go`    | Anthropic Messages wire DTOs (request, response, content blocks, SSE events, error) |
 | `request.go`  | `DecodeMessagesRequest`, `ToChatRequest`, `EstimateInputTokens` |
 | `response.go` | `FromChatResponse` |
-| `stream.go`   | `StreamConverter` — wraps an OpenAI-style chat SSE stream, emits Anthropic SSE events |
-| `errors.go`   | `ErrorFromGateway` — `core.GatewayError` → Anthropic error envelope |
+| `stream.go`   | `StreamConverter`, wraps an OpenAI-style chat SSE stream, emits Anthropic SSE events |
+| `errors.go`   | `ErrorFromGateway`, `core.GatewayError` → Anthropic error envelope |
 
 The HTTP glue lives in `internal/server/messages_handler.go`; `POST /v1/messages` and
 `POST /v1/messages/count_tokens` are registered in `http.go` and classified in
@@ -87,8 +87,8 @@ provider chat SSE
       → HTTP response
 ```
 
-The audit and usage observers wrap the **inner** canonical stream — the format they already
-parse — and the Anthropic converter is the **outermost** layer applied last. This is the
+The audit and usage observers wrap the **inner** canonical stream, the format they already
+parse, and the Anthropic converter is the **outermost** layer applied last. This is the
 opposite ordering from `/v1/responses` (which wraps the converter first and required the audit
 observer to learn a Responses-specific code path); the inner-observer ordering means audit and
 usage need no Anthropic-specific knowledge. `stream_options.include_usage` is set on the
@@ -100,7 +100,7 @@ translated request so the provider emits the final usage chunk.
 character-based heuristic (`≈ characters / 4`) over all request text. No upstream provider has
 a portable cross-provider token-counting endpoint, and adding one would require a new provider
 interface method. The heuristic keeps the endpoint dependency-free, deterministic, and
-universal. It is an **approximation**, not a tokenizer-exact count — see Consequences.
+universal. It is an **approximation**: not a tokenizer-exact count, see Consequences.
 
 **Amended.** Measured against Anthropic's count the flat heuristic under-counted ordinary
 agent traffic (source code plus tool schemas) by about a third and charged nothing for
@@ -124,18 +124,18 @@ end to end, including request-validation and upstream errors.
 
 ### What is explicitly not implemented (v1)
 
-- **`/v1/messages/batches`** (Messages Batches API) — deferred; batches has its own pipeline.
-- **Extended-thinking signatures and `thinking` blocks on input messages** — dropped; the
+- **`/v1/messages/batches`** (Messages Batches API), deferred; batches has its own pipeline.
+- **Extended-thinking signatures and `thinking` blocks on input messages**: dropped; the
   canonical chat type has no first-class field for them.
-- **Server/built-in tools** (web search, code execution, etc.) — a `tools[]` entry
+- **Server/built-in tools** (web search, code execution, etc.), a `tools[]` entry
   with a versioned `type` (e.g. `web_search_20250305`) is **rejected with a clear
   `400`** rather than mistranslated into a phantom custom function the gateway cannot
   execute. Only custom tools (`type` absent or `"custom"`) translate.
-- **`top_k`** — dropped. It is not a valid OpenAI Chat Completions parameter, and the
+- **`top_k`**: dropped. It is not a valid OpenAI Chat Completions parameter, and the
   OpenAI-family providers forward request fields verbatim and reject unknown ones with
   a `400`; carrying it would make any `top_k` request fail when routed to those
   providers. `temperature` and `top_p` are portable and are carried.
-- **`document` and other non-text/image content blocks** — these carry caller payload
+- **`document` and other non-text/image content blocks**: these carry caller payload
   with no canonical chat equivalent, so they are rejected with a clear `400` error
   rather than silently dropped (which would make the model answer as if the attachment
   were never sent). `thinking`/`redacted_thinking` blocks are the exception: they are
@@ -180,16 +180,16 @@ end to end, including request-validation and upstream errors.
 
 ## Alternatives Considered
 
-- **Per-provider `Messages()` interface method** (mirroring `Responses()`) — rejected: it would
+- **Per-provider `Messages()` interface method** (mirroring `Responses()`), rejected: it would
   require touching every provider and a new `core.Provider` method, for no behavioral gain over
   central translation. The Responses API needed per-provider hooks for native Responses
   endpoints; the Messages dialect has no such requirement.
-- **Reusing the `anthropic` provider's wire types** (`anthropicRequest`, etc.) — rejected: they
+- **Reusing the `anthropic` provider's wire types** (`anthropicRequest`, etc.), rejected: they
   are unexported and coupled to upstream egress. Ingress translation is a distinct layer; a
   small amount of DTO duplication is cleaner than a cross-layer dependency.
-- **Anthropic → Anthropic passthrough fast path in v1** — deferred: correct, but adds a second
+- **Anthropic → Anthropic passthrough fast path in v1**: deferred: correct, but adds a second
   code path; the lossy round-trip is an acceptable, documented v1 tradeoff.
-- **Provider-backed count_tokens** (call Anthropic's native count endpoint) — rejected for v1:
+- **Provider-backed count_tokens** (call Anthropic's native count endpoint), rejected for v1:
   only one provider has such an endpoint, so it cannot be universal without a new interface.
   Adopted later as an optional interface with the estimate as the universal fallback (see the
   amendment above).

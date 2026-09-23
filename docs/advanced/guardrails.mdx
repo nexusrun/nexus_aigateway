@@ -64,15 +64,9 @@ That's it. Every request now gets the safety prompt prepended to its system inst
 ## Manage from the Dashboard
 
 Guardrail definitions can also be created and edited from the admin
-dashboard instead of `config.yaml` — useful for iterating on rules without a
+dashboard instead of `config.yaml`, useful for iterating on rules without a
 redeploy, or for operators who don't manage this repo's config directly.
 
-<img
-  src="/advanced/guardrails.png"
-  alt="AIGateway dashboard Plugins &amp; Guardrails page with an empty Guardrails list, a Create Guardrail button, and the loaded plugin list"
-  style={{ width: "100%", maxWidth: "1280px", height: "auto" }}
-  className="rounded-lg"
-/>
 
 Open **Plugins & Guardrails** in the sidebar and click **Create Guardrail**: give it a
 name, pick a type (every loaded plugin with a prompt, response, or stream
@@ -89,7 +83,7 @@ and the instances built from them, with a shield. A routing strategy such as
 
 <Note>
   Runtime guardrail execution still depends on `GUARDRAILS_ENABLED`. With it
-  off, the page still lets you manage definitions — they just don't run on
+  off, the page still lets you manage definitions, they just don't run on
   live traffic yet.
 </Note>
 
@@ -108,7 +102,7 @@ flowchart LR
 3. Edits are applied back to the original request, which continues to the provider
 4. The **response chain** runs on the complete response (or the **stream chain** on the stream) before anything reaches the client
 
-Guardrails never see the raw API request types — they operate on the unified
+Guardrails never see the raw API request types, they operate on the unified
 [`Exchange`](/advanced/plugins#the-exchange). The same guardrail works
 identically for `/chat/completions`, `/responses`, and `/messages`.
 
@@ -435,7 +429,7 @@ complete response.
 
 A reasoning judge model spends its completion on thinking before it writes
 anything: with a cap that runs out first the judge returns no verdict, and the
-instance enforces nothing — it follows `on_unclear` instead, which by default
+instance enforces nothing, it follows `on_unclear` instead, which by default
 only warns. The default cap of `2048` leaves room for that; unused tokens are
 never billed, so raise it further rather than trimming it when the judge model
 reasons a lot.
@@ -451,8 +445,8 @@ answered but could not be parsed:
 
 Check the gateway log for `judge returned no verdict` after configuring an
 instance, and set `on_unclear: block` for a policy that must hold even when the
-judge answers nothing usable. A judge call that fails outright — provider error,
-timeout — is not an unclear verdict: `fail_mode` decides it, like any other
+judge answers nothing usable. A judge call that fails outright, provider error,
+timeout, is not an unclear verdict: `fail_mode` decides it, like any other
 guardrail failure.
 
 #### Example
@@ -575,7 +569,7 @@ placeholders whose angle brackets the provider escaped (Gemini returns
 
 ### Single Safety Guardrail
 
-The simplest setup — add a safety prefix to every request:
+The simplest setup, add a safety prefix to every request:
 
 ```yaml
 guardrails:

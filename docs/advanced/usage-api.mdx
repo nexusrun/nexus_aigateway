@@ -7,7 +7,7 @@ keywords: ["usage API", "/v1/usage", "self-service usage", "budget status", "rat
 
 ## Overview
 
-`GET /v1/usage` returns the caller's own consumption and limits — no admin
+`GET /v1/usage` returns the caller's own consumption and limits, no admin
 access needed. It answers three questions in one call:
 
 - How much have I used (requests, tokens, estimated cost)?
@@ -15,8 +15,8 @@ access needed. It answers three questions in one call:
 - Which rate limits apply to me, and how much headroom remains?
 
 Everything is scoped to the caller's effective
-[user path](/features/user-path), so a tool holding a managed API key — an
-OpenCode plugin, a CLI, a status widget — can poll it with the key it already
+[user path](/features/user-path), so a tool holding a managed API key, an
+OpenCode plugin, a CLI, a status widget, can poll it with the key it already
 uses for inference. Polling does not consume rate limit quota.
 
 ## Quick example
@@ -110,9 +110,9 @@ console.log(usage);
 
 ## Whose usage you see
 
-- **Managed API key** — the key's bound `user_path` is used. No parameters
+- **Managed API key**: the key's bound `user_path` is used. No parameters
   needed, and the key holder cannot read outside their own subtree.
-- **Master key (or unsafe mode)** — pass `X-AIGateway-User-Path` to pick a path,
+- **Master key (or unsafe mode)**: pass `X-AIGateway-User-Path` to pick a path,
   or omit it to see `/` (everything):
 
 <CodeGroup>
@@ -166,9 +166,9 @@ database).
 
 ### `budgets`
 
-One entry per [budget](/features/budgets) covering the path — including
+One entry per [budget](/features/budgets) covering the path, including
 budgets inherited from ancestor paths such as `/`. `remaining` can go
-negative and `usage_ratio` above `1` — both mean the budget is blown through;
+negative and `usage_ratio` above `1`, both mean the budget is blown through;
 `exceeded` mirrors enforcement, so when it is `true` requests are rejected
 until `period_end` (`period_seconds` of `2592000` is the calendar-month
 sentinel, not a literal 30 days). `resets_in_seconds` counts down to
@@ -182,7 +182,7 @@ covering the path. `max_tokens`/`tokens_remaining`/`tokens_usage_ratio`
 appear only on rules with token limits; a `period_label` of `concurrent`
 marks an in-flight cap, where `in_flight` is the current count (and feeds
 `requests_usage_ratio`). The `*_usage_ratio` fields are used/limit per
-dimension, unclamped — token windows can overshoot past `1`. `exhausted` is
+dimension, unclamped, token windows can overshoot past `1`. `exhausted` is
 `true` when any dimension is fully used, and `resets_in_seconds` counts down
 to `window_end` relative to `server_time` (omitted for concurrent rules,
 which have no window). Provider- and model-scoped rules are not listed: they
@@ -197,7 +197,7 @@ describe shared infrastructure capacity, not the caller.
 ## Date window
 
 The `usage` block defaults to the last 30 days (UTC day boundaries). Narrow it
-with query parameters — `days`, or explicit `start_date`/`end_date`
+with query parameters, `days`, or explicit `start_date`/`end_date`
 (YYYY-MM-DD, 365-day maximum):
 
 <CodeGroup>
@@ -257,8 +257,8 @@ budgets and cost. [Response-cache](/features/cache) hits are recorded too, and
 
 | Value      | Counts                                                  |
 | ---------- | -------------------------------------------------------- |
-| `uncached` | Provider-bound requests only — the default               |
-| `cached`   | Local cache hits only — what the cache served for free   |
+| `uncached` | Provider-bound requests only, the default               |
+| `cached`   | Local cache hits only, what the cache served for free   |
 | `all`      | Both, your total request volume                          |
 
 ```bash

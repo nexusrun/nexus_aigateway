@@ -15,13 +15,13 @@ complementary ways:
   sends a trace for every request to Langfuse's OTLP endpoint. Every client of
   the gateway is covered without touching application code, and each trace
   shows the model, the provider that served it, latency, status, and every
-  retry or failover — but never prompts or completions.
+  retry or failover, but never prompts or completions.
 - **Application traces.** The Langfuse SDK's OpenAI drop-in wrapper, pointed
   at AIGateway as its base URL. Langfuse records full prompts, completions, and
   token usage; AIGateway supplies the routing, failover, caching, and its own
   [audit log](/features/audit-logging) and cost tracking underneath.
 
-Use either on its own, or both together — with W3C trace context propagation
+Use either on its own, or both together, with W3C trace context propagation
 they merge into a single Langfuse trace per request (see
 [One trace end to end](#one-trace-end-to-end)).
 
@@ -58,21 +58,21 @@ OTEL_METRICS_EXPORTER=none
 </CodeGroup>
 
 The quotes matter in a shell: the header value contains a space. In a Docker
-`.env` file, drop them — there they would become part of the value.
+`.env` file, drop them, there they would become part of the value.
 
 | Variable | Why |
 | --- | --- |
 | `OTEL_ENABLED` | AIGateway's export switch; off by default. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Langfuse's OTLP ingestion base path. The SDK appends `/v1/traces`. Use `https://us.cloud.langfuse.com/...` for Langfuse Cloud's US region. |
 | `OTEL_EXPORTER_OTLP_HEADERS` | Basic auth from the project's public and secret key, plus the header that ingests straight into Langfuse's current (v4) data model. |
-| `OTEL_METRICS_EXPORTER` | Langfuse accepts only traces, so switch metrics off — or send them to a separate collector with `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` instead. |
+| `OTEL_METRICS_EXPORTER` | Langfuse accepts only traces, so switch metrics off, or send them to a separate collector with `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` instead. |
 
 Keep the default `http/protobuf` protocol: Langfuse's OTLP endpoint does not
 speak gRPC. The API keys come from **Project Settings -> API Keys** in
 Langfuse; self-hosted deployments can also pre-provision them with the
 [`LANGFUSE_INIT_*` variables](https://langfuse.com/self-hosting/administration/headless-initialization).
 To run Langfuse itself, see its
-[docker compose quickstart](https://langfuse.com/self-hosting/deployment/docker-compose) —
+[docker compose quickstart](https://langfuse.com/self-hosting/deployment/docker-compose),
 `git clone https://github.com/langfuse/langfuse.git && cd langfuse && docker compose up`,
 UI on port 3000.
 
@@ -90,16 +90,16 @@ with a nested generation per provider call, named after the operation and
 model (`chat gpt-5-mini`). The generation's metadata carries
 `gen_ai.request.model`, `gen_ai.provider.name`, and `aigateway.provider.name`
 (the exact provider from your configuration), so a request that
-[failed over](/features/failover) shows one generation per attempt — which
+[failed over](/features/failover) shows one generation per attempt, which
 provider failed, with what error class, and which one answered. Langfuse
 matches the model name against its model catalog, so gateway generations
 group under the right model in its dashboards.
 
 Two things are absent by design. Prompts and completions never leave the
-gateway in telemetry — they stay in AIGateway's [audit log](/features/audit-logging);
+gateway in telemetry, they stay in AIGateway's [audit log](/features/audit-logging);
 Langfuse traces from the gateway carry timing and routing metadata only. And
 token usage is not attached either, so cost analytics in Langfuse stay empty
-on this path — AIGateway's own [cost tracking](/features/cost-tracking) has
+on this path, AIGateway's own [cost tracking](/features/cost-tracking) has
 per-request cost, or use the SDK path below to get both into Langfuse.
 Streaming requests keep their HTTP server span but get no separate generation
 span; [OpenTelemetry](/guides/opentelemetry#provider-call-spans-and-genai-metrics)
@@ -108,7 +108,7 @@ explains why.
 ## 2. Capture prompts with the Langfuse SDK
 
 For full prompt-level traces, instrument the application with Langfuse's
-OpenAI wrapper and point it at AIGateway — two changed lines in an existing
+OpenAI wrapper and point it at AIGateway, two changed lines in an existing
 OpenAI-SDK app:
 
 ```python
@@ -139,7 +139,7 @@ works the same way.
 
 ## 3. One trace end to end
 
-With both paths enabled, an LLM call produces two separate Langfuse traces —
+With both paths enabled, an LLM call produces two separate Langfuse traces,
 the SDK's and the gateway's. Propagate W3C trace context to merge them: send
 a `traceparent` header with the request and AIGateway parents its spans under
 the caller's trace.
@@ -161,7 +161,7 @@ with langfuse.start_as_current_observation(name="my-feature", as_type="span"):
 ```
 
 The resulting single trace nests the application span, the SDK generation
-with the prompt, AIGateway's server span, and the provider generation — what
+with the prompt, AIGateway's server span, and the provider generation, what
 the user asked, what it cost, and how the gateway routed it, in one view.
 
 <Note>
@@ -175,7 +175,7 @@ the user asked, what it cost, and how the gateway routed it, in one view.
 
 | Symptom | Fix |
 | --- | --- |
-| No traces appear in Langfuse | Check the `Authorization` header is `Basic` + base64 of `pk-lf-...:sk-lf-...` (not the raw keys), and the endpoint ends in `/api/public/otel`. AIGateway logs `opentelemetry enabled` at startup when the exporter is on. Exports are batched — allow a few seconds. |
+| No traces appear in Langfuse | Check the `Authorization` header is `Basic` + base64 of `pk-lf-...:sk-lf-...` (not the raw keys), and the endpoint ends in `/api/public/otel`. AIGateway logs `opentelemetry enabled` at startup when the exporter is on. Exports are batched, allow a few seconds. |
 | Traces arrive, but a chat has no generation span | Streaming responses get only the HTTP server span from the gateway; see the [OpenTelemetry guide](/guides/opentelemetry). The SDK path records streaming generations fully. |
 | Gateway generations show no prompt, tokens, or cost | By design: AIGateway never exports request content or usage in telemetry. Prompts and costs live in the [audit log](/features/audit-logging) and [cost tracking](/features/cost-tracking); for prompts in Langfuse, use the SDK path. |
 | Connection errors with a gRPC endpoint | Langfuse's OTLP endpoint is HTTP-only. Keep `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf` (the default). |
@@ -187,12 +187,12 @@ the user asked, what it cost, and how the gateway routed it, in one view.
 
 - High-traffic gateways can sample gateway traces
   (`OTEL_TRACES_SAMPLER=parentbased_traceidratio`,
-  `OTEL_TRACES_SAMPLER_ARG=0.1`) — with `parentbased_*`, requests whose
+  `OTEL_TRACES_SAMPLER_ARG=0.1`), with `parentbased_*`, requests whose
   caller sampled their trace keep their gateway spans, so propagated traces
   stay complete.
-- The full exporter reference — YAML config, per-signal endpoints, samplers,
-  reload behavior — is in the [OpenTelemetry guide](/guides/opentelemetry).
+- The full exporter reference, YAML config, per-signal endpoints, samplers,
+  reload behavior, is in the [OpenTelemetry guide](/guides/opentelemetry).
   Everything there applies; Langfuse is just the OTLP backend.
 - For dashboards over request-rate and latency metrics, pair this with
-  [Prometheus metrics](/guides/prometheus-metrics) — Langfuse holds the
+  [Prometheus metrics](/guides/prometheus-metrics), Langfuse holds the
   traces, Prometheus the metrics.

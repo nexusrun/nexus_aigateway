@@ -12,7 +12,7 @@ in addition to its OpenAI-compatible API. Clients and SDKs that speak the Anthro
 format can point at AIGateway unchanged.
 
 The request is translated to AIGateway's canonical chat type at ingress and runs through
-the same pipeline as `/v1/chat/completions` — so virtual models, workflow policy,
+the same pipeline as `/v1/chat/completions`, so virtual models, workflow policy,
 budgets, failover, the response cache, usage/cost tracking, and audit logging all
 apply. Because every provider implements chat completion, an Anthropic-format request
 can be routed to **any** configured provider (OpenAI, Gemini, Bedrock, and others),
@@ -28,9 +28,9 @@ When a `/v1/messages` request resolves to an **Anthropic** provider, AIGateway
 skips the translation round-trip and forwards the original request body
 verbatim (rewriting only the `model` field when an alias resolved to a
 different name), then relays the provider-native response or SSE stream
-unchanged. This preserves everything the canonical translation cannot —
+unchanged. This preserves everything the canonical translation cannot preserve,
 `cache_control` breakpoints, thinking-block signatures, `anthropic-beta`
-headers — which coding agents like Claude Code depend on. Rate limits,
+headers, which coding agents like Claude Code depend on. Rate limits,
 budgets, audit logging, and usage tracking still apply, for both streaming
 and non-streaming responses.
 
@@ -62,7 +62,7 @@ Anthropic unchanged.
 ## Message Batches
 
 `/v1/messages/batches` shares the gateway's native-batch pipeline with the
-OpenAI-compatible `/v1/batches` route — the two are dialect views of the same
+OpenAI-compatible `/v1/batches` route, the two are dialect views of the same
 resource. Batch IDs are interchangeable across the two dialects (`msgbatch_<uuid>`
 here, `batch_<uuid>` there). All requests in one batch must resolve to a single
 provider; per-item `custom_id` values are required and must be unique.
@@ -87,15 +87,15 @@ for entry in client.messages.batches.results(batch.id):
 
 Both credential styles work, so the official Anthropic SDKs are drop-in:
 
-- `Authorization: Bearer <key>` — AIGateway's primary scheme.
-- `x-api-key: <key>` — the Anthropic-native header, accepted as a fallback when no
+- `Authorization: Bearer <key>`, AIGateway's primary scheme.
+- `x-api-key: <key>`, the Anthropic-native header, accepted as a fallback when no
   `Authorization` header is present.
 
 ```python
 import anthropic
 
 client = anthropic.Anthropic(
-    api_key="<your AIGateway key>",       # sent as x-api-key — works as-is
+    api_key="<your AIGateway key>",       # sent as x-api-key, works as-is
     base_url="https://your-gateway",
 )
 client.messages.create(
@@ -177,7 +177,7 @@ is recorded under the `/v1/messages` endpoint so it can be filtered in the dashb
 
 ## Limitations
 
-These limitations apply to the **translated** pipeline — requests routed to a
+These limitations apply to the **translated** pipeline, requests routed to a
 non-Anthropic provider, or to Anthropic with guardrails, response cache, or
 failover engaged. Requests [natively forwarded to Anthropic](#native-forwarding-to-anthropic)
 are preserved byte-for-byte apart from the `model` value when an alias
@@ -199,7 +199,7 @@ features that have no canonical equivalent are not preserved end to end:
   replayed unchanged, so thinking-enabled conversations and tool-use loops
   continue correctly. Other providers never see them.
 - **Reasoning from a provider that does not sign it** (DeepSeek, Fireworks, …)
-  is returned as a `thinking` block with `signature: ""` — the member is
+  is returned as a `thinking` block with `signature: ""`, the member is
   required by the Anthropic schema, and the empty value says the reasoning is
   unsigned. Echo the turn back as-is: the block replays to that provider like
   any other. Anthropic accepts only signatures it minted itself, so a turn
@@ -214,11 +214,11 @@ features that have no canonical equivalent are not preserved end to end:
 - **Server/built-in tools** (web search, code execution, …) and their history
   blocks (`server_tool_use`, `web_search_tool_result`, …) are rejected with a clear
   `400`; only custom tools (`type` absent or `"custom"`) translate.
-- **`top_k`** is dropped — it has no portable OpenAI-compatible equivalent, and
+- **`top_k`** is dropped, it has no portable OpenAI-compatible equivalent, and
   OpenAI-family providers reject unknown request fields. `temperature` and `top_p`
   are forwarded.
 - **Images and documents inside `tool_result` blocks** (screenshots, image and
-  PDF files read by a tool — Claude Code returns them this way) are forwarded as
+  PDF files read by a tool, Claude Code returns them this way) are forwarded as
   native `image` and `document` blocks when routed to Anthropic. Other providers
   receive only the text portion of the tool result.
 - **`document` blocks** (PDF, plain text, URL, or Files API `file_id` sources)

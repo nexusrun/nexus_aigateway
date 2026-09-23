@@ -19,12 +19,6 @@ You can bind a user path to a managed API key in the admin dashboard:
 
 `API Keys -> Create API Key -> User Path`
 
-<img
-  src="/features/auth-keys-labels.png"
-  alt="AIGateway dashboard API Keys page with a User Path column showing values like /agents/team1, /engineering/ai, and /sales/john"
-  style={{ width: "100%", maxWidth: "1280px", height: "auto" }}
-  className="rounded-lg"
-/>
 
 The **API Keys** page lists each key's bound `user_path` alongside its
 labels, so you can confirm which subtree a key resolves to at a glance.
@@ -84,7 +78,7 @@ they were created under. Retrieving, listing, updating, cancelling, or deleting
 one of them by ID succeeds only when that path lies inside the caller's scope;
 otherwise the gateway answers `404`, exactly as for an unknown ID. A
 `/v1/responses` call that references a conversation, or a
-`previous_response_id`, from another subtree fails the same way — including on
+`previous_response_id`, from another subtree fails the same way, including on
 providers that resolve `previous_response_id` themselves.
 
 Scoped credentials can only address objects the gateway tracks: an ID the

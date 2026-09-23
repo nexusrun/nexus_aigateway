@@ -26,6 +26,11 @@ test("providerDocsUrl normalizes the registry type", () => {
     providerDocsUrl("ollama"),
     PROVIDER_DOCS_BASE_URL + "multiple-ollama?" + UTM,
   );
+  // Cloudflare's registry type maps to its descriptive docs page slug.
+  assert.equal(
+    providerDocsUrl("cloudflare"),
+    PROVIDER_DOCS_BASE_URL + "cloudflare-workers-ai?" + UTM,
+  );
 });
 
 test("providerDocsUrl links every documented provider to its own page", () => {
@@ -35,12 +40,15 @@ test("providerDocsUrl links every documented provider to its own page", () => {
     "bailian",
     "bedrock",
     "bedrock-mantle",
+    "cerebras",
     "chatgpt",
     "cohere",
+    "cloudflare-workers-ai",
     "deepseek",
     "elevenlabs",
     "gemini",
     "hetzner",
+    "huggingface",
     "kimicode",
     "llamacpp",
     "llmd",

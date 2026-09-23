@@ -6,7 +6,7 @@ keywords: ["MiniMax", "text-to-speech", "TTS", "t2a_v2", "provider setup"]
 ---
 
 MiniMax speaks an OpenAI-compatible chat API, so chat models work out of the
-box. Text-to-speech, however, uses MiniMax's own `t2a_v2` API — AIGateway
+box. Text-to-speech, however, uses MiniMax's own `t2a_v2` API, AIGateway
 translates the standard `/v1/audio/speech` endpoint into that dialect for you.
 
 ## Configure
@@ -121,7 +121,7 @@ option:
 - Speech `instructions` (pick a voice ID that matches the style you want).
 - Speech `response_format` values other than `mp3`/`wav`/`flac`/`pcm` and
   `speed` outside `0.5`–`2.0`.
-- Speech-to-text — MiniMax has no transcription API, so
+- Speech-to-text, MiniMax has no transcription API, so
   `/v1/audio/transcriptions` is rejected.
-- Realtime voice-to-voice — MiniMax's conversational realtime schema is not
+- Realtime voice-to-voice, MiniMax's conversational realtime schema is not
   OpenAI-compatible, so it is not exposed at `/v1/realtime`.

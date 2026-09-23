@@ -1,0 +1,79 @@
+---
+title: "Cloudflare Workers AI"
+description: "Configure Cloudflare Workers AI's account-scoped OpenAI-compatible endpoints in AIGateway."
+icon: "cloud"
+keywords: ["Cloudflare Workers AI", "Workers AI", "OpenAI compatible", "provider setup"]
+---
+
+Cloudflare Workers AI uses an account-scoped OpenAI-compatible URL. AIGateway
+supports chat completions and embeddings through that endpoint. The gateway
+also provides Responses compatibility: GPT-OSS requests can use Cloudflare's
+native Responses endpoint, while other chat-capable models use the gateway's
+Responses-to-chat translation.
+
+## Configure
+
+Create a Cloudflare API token with Workers AI permissions, then set the token
+and account-scoped base URL:
+
+```bash
+CLOUDFLARE_API_KEY=...
+CLOUDFLARE_BASE_URL=https://api.cloudflare.com/client/v4/accounts/<account-id>/ai/v1
+```
+
+Or in `config.yaml`:
+
+```yaml
+providers:
+  cloudflare:
+    type: cloudflare
+    base_url: "https://api.cloudflare.com/client/v4/accounts/<account-id>/ai/v1"
+    api_key: "${CLOUDFLARE_API_KEY}"
+    models:
+      - id: "@cf/meta/llama-3.1-8b-instruct"
+      - id: "@cf/baai/bge-large-en-v1.5"
+```
+
+The account ID must be part of `CLOUDFLARE_BASE_URL`. If the account endpoint
+does not provide a complete model catalog, declare the model IDs with
+`CLOUDFLARE_MODELS` or in the provider's `models` configuration.
+
+## Chat completions
+
+```bash
+curl http://localhost:8080/v1/chat/completions \
+  -H "Authorization: Bearer $AIGATEWAY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "@cf/meta/llama-3.1-8b-instruct",
+    "messages": [{"role": "user", "content": "Summarize Workers AI in one sentence."}]
+  }'
+```
+
+Use `cloudflare/<model-id>` to select Cloudflare explicitly when several
+providers expose the same model name.
+
+## Embeddings
+
+Cloudflare embedding models use the standard gateway endpoint:
+
+```bash
+curl http://localhost:8080/v1/embeddings \
+  -H "Authorization: Bearer $AIGATEWAY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "@cf/baai/bge-large-en-v1.5",
+    "input": "A short text to embed"
+  }'
+```
+
+## Responses API
+
+Cloudflare's native Responses API is limited to GPT-OSS models and
+non-streaming requests. For other chat models, AIGateway translates the
+Responses request to Chat Completions. Files and batches are not available
+through this provider adapter.
+
+See Cloudflare's [OpenAI-compatible API documentation](https://developers.cloudflare.com/workers-ai/configuration/open-ai-compatibility/)
+and [Workers AI pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/)
+for current model availability, limits, and pricing.

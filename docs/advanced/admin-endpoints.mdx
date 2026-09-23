@@ -7,12 +7,12 @@ keywords: ["admin API", "dashboard", "REST API", "monitoring", "gateway health"]
 
 ## Philosophy
 
-AIGateway ships with admin endpoints **enabled by default**. The goal is simple: you should be able to deploy AIGateway and immediately have visibility into what's happening — no extra services, no separate monitoring stack, no configuration.
+AIGateway ships with admin endpoints **enabled by default**. The goal is simple: you should be able to deploy AIGateway and immediately have visibility into what's happening, no extra services, no separate monitoring stack, no configuration.
 
 The admin layer is split into two independently controllable pieces:
 
-1. **Admin REST API** (`/admin/*`) — machine-readable JSON endpoints for usage data, budgets, and model inventory. Protected by `AIGATEWAY_MASTER_KEY` like all other API routes.
-2. **Admin Dashboard UI** (`/admin/dashboard`) — a lightweight, embedded HTML dashboard that visualizes the same data. No external dependencies, no JavaScript frameworks to install — it's compiled into the binary.
+1. **Admin REST API** (`/admin/*`), machine-readable JSON endpoints for usage data, budgets, and model inventory. Protected by `AIGATEWAY_MASTER_KEY` like all other API routes.
+2. **Admin Dashboard UI** (`/admin/dashboard`) (a lightweight, embedded HTML dashboard that visualizes the same data. No external dependencies, no JavaScript frameworks to install) it's compiled into the binary.
 
 Both are on by default because observability shouldn't be opt-in. If you don't need them, turn them off with a single environment variable.
 
@@ -33,8 +33,8 @@ variables, defaults, and the equivalent `admin:` YAML block.
 
 The admin REST API endpoints (`/admin/*`) accept two credentials as a Bearer token:
 
-- **`AIGATEWAY_MASTER_KEY`** — always has admin access.
-- **A managed API key with dashboard access** — managed keys are created *without* dashboard access by default, so a key handed out for model traffic cannot read the audit log, issue new keys, or change gateway settings. Requests made with a managed key that lacks access return `403` with error code `dashboard_access_denied`.
+- **`AIGATEWAY_MASTER_KEY`**: always has admin access.
+- **A managed API key with dashboard access**: managed keys are created *without* dashboard access by default, so a key handed out for model traffic cannot read the audit log, issue new keys, or change gateway settings. Requests made with a managed key that lacks access return `403` with error code `dashboard_access_denied`.
 
 <CodeGroup>
 
@@ -120,7 +120,7 @@ console.log(authKey);
 
 </CodeGroup>
 
-`GET /admin/auth-keys` rows carry `restricted` and `effective_models` — the
+`GET /admin/auth-keys` rows carry `restricted` and `effective_models`, the
 catalog models a request with that key can actually call, with its user path
 policies, its own allowlist, and model-side policies applied.
 
@@ -179,7 +179,7 @@ key and no header) are visible to global admins only.
 The same scope applies to `/v1` lifecycle objects; see
 [User Path → Object ownership](/features/user-path#object-ownership).
 
-The dashboard UI pages (`/admin/dashboard`) and static assets (`/admin/static/*`) **skip authentication** so the dashboard shell is accessible without configuring API keys in the browser — the data it loads still requires a key with dashboard access.
+The dashboard UI pages (`/admin/dashboard`) and static assets (`/admin/static/*`) **skip authentication** so the dashboard shell is accessible without configuring API keys in the browser, the data it loads still requires a key with dashboard access.
 
 <Warning>
   If your AIGateway instance is publicly accessible, be aware that the dashboard
@@ -192,7 +192,7 @@ The dashboard UI pages (`/admin/dashboard`) and static assets (`/admin/static/*`
 All admin API endpoints are mounted under `/admin`.
 
 <Note>
-  **Legacy path alias** — until **2026-08-09**, the same endpoints are also
+  **Legacy path alias**: until **2026-08-09**: the same endpoints are also
   reachable under `/admin/api/v1/*`. Responses on the legacy path carry
   `Deprecation: true`, `Sunset: Sun, 09 Aug 2026 00:00:00 GMT`, and a `Link`
   header pointing to the new path. To migrate, replace `/admin/api/v1/` with
@@ -295,13 +295,13 @@ provider-bound requests only, so avoided cache cost is not reported as spend.
 | Parameter    | Type   | Description                                      | Default |
 | ------------ | ------ | ------------------------------------------------ | ------- |
 | `days`       | int    | Number of days                                   | `30`    |
-| `start_date` | string | Start date (`YYYY-MM-DD`)                        | —       |
-| `end_date`   | string | End date (`YYYY-MM-DD`)                          | —       |
-| `session_id` | string | Exact detected session id                        | —       |
-| `user_path`  | string | Tracked user-path subtree                        | —       |
-| `model`      | string | Exact model name                                 | —       |
-| `provider`   | string | Provider name or type                            | —       |
-| `label`      | string | Exact request label                              | —       |
+| `start_date` | string | Start date (`YYYY-MM-DD`)                        | N/A |
+| `end_date`   | string | End date (`YYYY-MM-DD`)                          | N/A |
+| `session_id` | string | Exact detected session id                        | N/A |
+| `user_path`  | string | Tracked user-path subtree                        | N/A |
+| `model`      | string | Exact model name                                 | N/A |
+| `provider`   | string | Provider name or type                            | N/A |
+| `label`      | string | Exact request label                              | N/A |
 | `limit`      | int    | Page size, capped at 200                          | `50`    |
 | `offset`     | int    | Pagination offset                                | `0`     |
 
@@ -335,8 +335,8 @@ describe provider spend. Pass `cache_mode` to change that:
 
 | Value      | Counts                                                    |
 | ---------- | --------------------------------------------------------- |
-| `uncached` | Provider-bound requests only — the default                 |
-| `cached`   | Local cache hits only — what the cache served for free     |
+| `uncached` | Provider-bound requests only, the default                 |
+| `cached`   | Local cache hits only, what the cache served for free     |
 | `all`      | Both, the gateway's total request volume                   |
 
 ```bash
@@ -411,7 +411,7 @@ start up to the current time.
 
 Each `provider_latency` series aligns index-by-index with `buckets`. Entries are
 `null` for buckets where the provider served no successful request, and the
-averages cover only successful (2xx) requests that reached the provider — local
+averages cover only successful (2xx) requests that reached the provider, local
 response-cache hits and failed requests are excluded. If audit logging is
 disabled, returns empty buckets.
 
@@ -446,8 +446,8 @@ See [Budgets](/features/budgets) for request examples and enforcement behavior.
 | `PUT`    | `/admin/users`                       | Create or replace one node's policy           |
 | `DELETE` | `/admin/users?user_path=<path>`      | Remove one node's policy                      |
 
-`GET /admin/users` returns every node the gateway knows about — stored
-policies, the user paths of managed API keys, and their ancestors — sorted by
+`GET /admin/users` returns every node the gateway knows about, stored
+policies, the user paths of managed API keys, and their ancestors, sorted by
 path:
 
 ```json
@@ -479,8 +479,8 @@ path:
 
 `allowed_models` is the node's own list in canonical form (`anthropic/` for a
 provider wildcard, `/` for everything); `inherited_from` lists the ancestors
-whose lists also apply. `effective_models` is the path-level result — the node's list, its ancestors'
-lists, and the model-side virtual-model policies — evaluated through the same
+whose lists also apply. `effective_models` is the path-level result, the node's list, its ancestors'
+lists, and the model-side virtual-model policies, evaluated through the same
 authorizer inference uses; a managed API key's own `allowed_models` may narrow
 a request further. An empty list with `restricted: true` means the node's
 lists intersect to nothing. `configured` is `false` for nodes implied only by keys

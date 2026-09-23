@@ -5,12 +5,6 @@ icon: "tags"
 keywords: ["virtual models", "model alias", "load balancing", "model routing", "model swap"]
 ---
 
-<img
-  src="/features/virtual-models.png"
-  alt="AIGateway dashboard models page with the New virtual model button and an active redirect row"
-  style={{ width: "100%", maxWidth: "1280px", height: "auto" }}
-  className="rounded-lg"
-/>
 
 ## What virtual models do
 
@@ -21,7 +15,7 @@ AIGateway picks the kind from whether you give it a target:
   model. Your app sends the name in the `model` field, and AIGateway resolves it
   before sending the request upstream.
 - An **access policy** has no target. It gates an existing model selector by
-  `user_path` — or disables it entirely — without adding a new name. See
+  `user_path` (or disables it entirely) without adding a new name. See
   [User Path](/features/user-path#model-access) for access control.
 
 Create and manage both in the admin dashboard at `Models -> New virtual model`.
@@ -81,7 +75,7 @@ them. Add more than one target in the editor (**Add target**) and pick a
 **strategy**:
 
 - **Round-robin** (default) rotates requests evenly across the targets. Set a
-  per-target **weight** to bias the share — a target with weight `2` receives
+  per-target **weight** to bias the share, a target with weight `2` receives
   twice the traffic of a target with weight `1`.
 - **Lowest cost** routes every request to the cheapest currently-available
   target, ranked by the model registry's input + output per-token price. When a
@@ -117,10 +111,10 @@ it can also be switched off globally or by the request's workflow. See
 adding a failover chain to a real model by shadowing it.
 
 Requests belonging to one detected client session stick to the target that
-served the session first (**Session keeping**, on by default), so
+served the session first (**Session keeping**: on by default), so
 conversations keep their provider prompt cache warm across turns. Untick the
 editor's **Session keeping** checkbox (or set `session_affinity: false`) to
-restore stateless balancing — see
+restore stateless balancing, see
 [Session Keeping](/features/session-keeping).
 
 ```json
@@ -138,7 +132,7 @@ with the cost strategy to always take the cheaper one.
 
 The target list is an ordered list, and the editor keeps it editable: drag the
 **grip handle** (☰) at the left edge of each target row onto another row to change
-its position. The drop row is not replaced — the dragged row moves into its
+its position. The drop row is not replaced, the dragged row moves into its
 position and the rows in between shift. Keyboard users can focus the handle and
 press **ArrowUp** / **ArrowDown** for the same move.
 
@@ -152,7 +146,7 @@ target when it moves.
 
 A redirect target can name **another virtual model** instead of a concrete
 model. The inner virtual model is resolved at request time, so its targets,
-weights, and strategy are defined once and reused everywhere it is referenced —
+weights, and strategy are defined once and reused everywhere it is referenced,
 no duplicated target lists that drift apart.
 
 ```yaml
@@ -182,7 +176,7 @@ keeping pins at every level, so a session stays on the same concrete model.
 
 - The **cost** strategy prices a chained leg at the cheapest concrete model
   currently available behind it.
-- A chained virtual model that is **disabled**, or has no available target, is
+- A chained virtual model that is **disabled**: or has no available target, is
   skipped like an unavailable provider model.
 - Only the **outer** virtual model's `user_paths` and `slowdown` apply to a
   request; the inner one's scope is not consulted when it is reached through a
@@ -190,8 +184,8 @@ keeping pins at every level, so a session stays on the same concrete model.
 - `/v1/models` lists a chained redirect with the metadata of its first
   available concrete model.
 
-A target written as one name is matched by name wherever it is declared —
-`config.yaml`, the dashboard, or the admin API — so `team/cheap` reaches the
+A target written as one name is matched by name wherever it is declared,
+`config.yaml`, the dashboard, or the admin API, so `team/cheap` reaches the
 virtual model of that name even though it looks like `provider/model`. Set
 `provider` explicitly (`{ provider: groq, model: llama-3.3-70b }`) to pin a
 target to a concrete model regardless of any virtual model sharing the name.
@@ -200,13 +194,13 @@ A redirect that [shadows a real model](#shadow-a-model) and lists that model
 among its own targets (the shape the Models page creates when you add
 fallbacks or balancing to a model) covers the model rather than replacing it.
 An alias or any other redirect that names the model chains into that cover, so
-it gets the same balancing and failover a direct request gets — with one
+it gets the same balancing and failover a direct request gets, with one
 exception: the fallback reference of one such cover to another covered model
 reaches the model itself, not the other cover's fallback list. That is what
 lets two models protect each other without forming a cycle, and keeps a
 fallback from sweeping the fallbacks of the fallback. Because a bare
 reference to a covered model names the model rather than the cover, the cover
-can be deleted while such references exist — they simply revert to the
+can be deleted while such references exist, they simply revert to the
 concrete model. A shadow that does *not* list its source replaces the model
 and is chained through like any other virtual model: references chain into
 its targets, and it cannot be deleted or renamed until they are repointed.
@@ -214,18 +208,18 @@ its targets, and it cannot be deleted or renamed until they are repointed.
 Chains must be acyclic (`a -> b -> a` is rejected, with the cycle spelled out)
 and at most 8 virtual models deep. Both rules are enforced when saving from the
 dashboard and at startup for declarative entries. A target must exist when it is
-saved — create the inner virtual model first — and a virtual model that others
+saved (create the inner virtual model first) and a virtual model that others
 chain through cannot be deleted or renamed until they are repointed.
 
 ## Rename or repoint a redirect
 
 Open a redirect in the dashboard and edit its **Source** to rename it. AIGateway
-moves the definition to the new name in one step — the old name stops resolving,
+moves the definition to the new name in one step, the old name stops resolving,
 so update any app still sending it. Renaming onto a name that already belongs to
 another virtual model is rejected; renaming onto a concrete model name shadows
 that model (see [Shadow a model](#shadow-a-model)).
 
-Redirects that shadow a model can be edited the same way — use the model row's
+Redirects that shadow a model can be edited the same way, use the model row's
 **Edit redirect** action. Virtual models declared as code keep their `source`
 fixed in configuration; rename them by editing the declaration.
 
@@ -280,13 +274,13 @@ A target `model` may name another declared virtual model (see
 Leave the targets empty to declare an access policy on the `source` selector. An
 invalid declaration (unknown strategy, missing or self-referential target, a
 chain cycle or a chain deeper than 8 virtual models, or a target `provider` that
-matches no configured provider — a typo) fails startup with a clear error
+matches no configured provider, a typo) fails startup with a clear error
 listing the registered provider names.
 
 Two lenient exceptions keep valid setups booting:
 
-- A target `provider` that is declared under `providers:` but did not register —
-  typically because its credentials are unset in this environment — only logs a
+- A target `provider` that is declared under `providers:` but did not register,
+  typically because its credentials are unset in this environment, only logs a
   warning; the target stays unavailable until the credentials resolve. A
   `config.yaml` shared across environments still boots everywhere.
 - Whether a target *model* exists is never checked at startup: the model catalog

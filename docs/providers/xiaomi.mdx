@@ -30,7 +30,7 @@ providers:
 ## Thinking mode
 
 MiMo models think by default, which increases token usage. Disable it per
-request with MiMo's `thinking` parameter — AIGateway forwards it unchanged:
+request with MiMo's `thinking` parameter, AIGateway forwards it unchanged:
 
 ```json
 {"model": "xiaomi/mimo-v2.5-pro", "thinking": {"type": "disabled"}, ...}
@@ -52,20 +52,20 @@ XIAOMI_MODELS=mimo-v2.5-pro,mimo-v2.5-pro[1m]
 
 ## Text-to-speech and transcription
 
-MiMo has no native `/audio/*` endpoints — TTS (`mimo-v2.5-tts`,
+MiMo has no native `/audio/*` endpoints, TTS (`mimo-v2.5-tts`,
 `mimo-v2.5-tts-voicedesign`, `mimo-v2.5-tts-voiceclone`) and ASR
 (`mimo-v2.5-asr`) run through chat completions. AIGateway exposes both ways:
 
-- **Standard audio endpoints** — `/v1/audio/speech` and
+- **Standard audio endpoints**: `/v1/audio/speech` and
   `/v1/audio/transcriptions` are translated automatically. Speech supports
-  `response_format` `wav` (default) and `pcm`; `mp3` — OpenAI's documented
-  default, which some SDKs send explicitly — is treated as "unspecified" and
+  `response_format` `wav` (default) and `pcm`; `mp3`, OpenAI's documented
+  default, which some SDKs send explicitly, is treated as "unspecified" and
   answered with WAV, so the response `Content-Type` is `audio/wav`.
   `instructions` become the MiMo style prompt and `voice` selects a preset
   voice. Transcription supports
   `json` (default) and `text` response formats, with `language` passed through
   to MiMo's `asr_options` and `temperature` forwarded to the chat request.
-- **MiMo's chat dialect** — send chat completions directly: synthesis text in
+- **MiMo's chat dialect**: send chat completions directly: synthesis text in
   an `assistant` message with a top-level `audio: {format, voice}` parameter,
   or an `input_audio` content part whose `data` is a base64 `data:` URI for
   transcription. AIGateway forwards these shapes untouched.

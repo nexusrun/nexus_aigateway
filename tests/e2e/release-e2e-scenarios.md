@@ -71,7 +71,7 @@ Stateful note:
 - `S149`-`S154` are post-v0.1.48 provider regressions (DeepSeek, Ollama,
   Fireworks through the shared OpenAI-compatible core); they are read-only and
   rerunnable in any order. `S151`/`S152` need a local Ollama server with at
-  least one chat model and `S153`/`S154` need an active Fireworks account —
+  least one chat model and `S153`/`S154` need an active Fireworks account :
   each prints a loud `SKIPPED:` line and exits 0 when its upstream dependency
   is unavailable, and fails on any gateway-side problem
 - `S155`-`S159` exercise scoped rate limits (admin CRUD, user-path request and
@@ -126,11 +126,11 @@ Stateful note:
   both a `user_path` and a `label` budget at once, reset-one, PostgreSQL/MongoDB
   parity, and auth gating); each is self-contained and rerunnable in any
   order. `S200` deliberately registers its managed key on the auth-enabled
-  gateway rather than the no-master-key main SQLite gateway — see the note on
+  gateway rather than the no-master-key main SQLite gateway: see the note on
   that scenario for why
 - `S205`-`S207` exercise request-window persistence across `SIGHUP` reload on
   SQLite, reset-one across reload, and PostgreSQL/MongoDB parity. Each creates
-  a `$QA_SUFFIX`-scoped **shared** hour rule (not `per_child` — this stack has
+  a `$QA_SUFFIX`-scoped **shared** hour rule (not `per_child`: this stack has
   no `quota_templates` entitlement) and deletes it. They reload a shared
   gateway, which is safe in this sequential runner.
 - `S208`-`S215` exercise the OpenAI-compatible image endpoints
@@ -559,7 +559,7 @@ run_release_budget_enforcement() {
 # Spend is a SUM over usage rows, so deleting and recreating a budget does not
 # forget what an earlier run charged against the same subject. A scenario that
 # exits part-way on a failed assertion skips its own cleanup, and the rerun this
-# file recommends — same --qa-suffix, so the same labels — would then meet an
+# file recommends (same --qa-suffix, so the same labels) would then meet an
 # already-exhausted tiny budget and get 429 on its first request, failing for a
 # reason that has nothing to do with what it tests. Resetting after creation
 # makes that first request behave the same on the first run and the fifth.
@@ -2752,7 +2752,7 @@ A target with weight 2 receives twice the share of a weight-1 target. Nine
 requests split 6:3 in favor of the weighted target. Session affinity is declared
 off for the same reason as `S119`: these nine requests are byte-identical, so
 `SESSION_AUTO_DETECT` reads them as one session and affinity would pin every one
-of them to the target that served the first — the weighting would never run.
+of them to the target that served the first: the weighting would never run.
 
 ```bash
 SRC="qa-lb-w-$QA_SUFFIX"
@@ -2927,7 +2927,7 @@ jq -e '.error.type == "invalid_request_error"' "$BODY_FILE" >/dev/null
 
 A fresh chat request shows up in the current minute buckets, confirming the chart
 reads live from the usage store. The assertion checks the two most recent buckets
-are non-empty *after* the request has flushed — a deterministic check that avoids
+are non-empty *after* the request has flushed: a deterministic check that avoids
 a before/after delta, which is racy when an earlier high-traffic bucket rolls out
 of the trailing window exactly at a minute boundary.
 
@@ -2954,7 +2954,7 @@ curl -fsS "$BASE_URL/admin/usage/throughput?granularity=minute" \
 
 The summary accepts `uncached`, `cached`, and `all`; `all` is at least as large
 as `uncached`, and an unrecognized value is tolerated (normalized to uncached,
-not rejected — Postel's law).
+not rejected: Postel's law).
 
 ```bash
 for MODE in uncached cached all; do
@@ -3063,8 +3063,8 @@ curl -sS -o /dev/null -w '%{http_code}' -X DELETE "$BASE_URL/admin/virtual-model
 
 ### S134 Failover strategy always serves the primary target
 
-Creates its own priority list, sends two requests through it — both answered by
-the first target (no rotation) — and removes it.
+Creates its own priority list, sends two requests through it: both answered by
+the first target (no rotation): and removes it.
 
 ```bash
 NAME="qa-failover-$QA_SUFFIX"
@@ -3498,8 +3498,8 @@ curl -fsS "$BASE_URL/v1/chat/completions" \
   > "$RESP_FILE"
 jq '{model,provider,usage,answer:.choices[0].message.content}' "$RESP_FILE"
 # The local model is whatever this machine has pulled, and a small one will not
-# reliably echo a marker, so the assertion covers what the gateway owns —
-# routing, translation, and usage — rather than instruction following.
+# reliably echo a marker, so the assertion covers what the gateway owns :
+# routing, translation, and usage: rather than instruction following.
 jq -e '
   .object == "chat.completion"
   and .provider == "ollama"
@@ -4166,8 +4166,8 @@ mcp_post "$BASE_URL/mcp" "$SID" \
 
 # Session-to-principal binding sees header-based user paths (was a KNOWN BUG
 # until 2026-07-15: /mcp was not stamped with the user-path header, so header
-# principals could ride a leaked session ID). A different header principal —
-# or no header at all — presenting the owner's session ID gets 404.
+# principals could ride a leaked session ID). A different header principal :
+# or no header at all: presenting the owner's session ID gets 404.
 curl -sS -o "$QA_RUN_DIR/s168.stolen.body" -w '%{http_code}' "$BASE_URL/mcp" \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json, text/event-stream' \
@@ -4980,7 +4980,7 @@ no model traffic.
 
 Each scenario that depends on starting from zero spend calls
 `reset_release_budget` right after creating its budget, so a rerun following a
-part-way failure — which skips the failed scenario's cleanup — does not inherit
+part-way failure (which skips the failed scenario's cleanup) does not inherit
 the previous run's spend. Together that makes them self-contained and rerunnable
 in any order.
 
@@ -5156,7 +5156,7 @@ rather than the main SQLite gateway: on a gateway with no `AIGATEWAY_MASTER_KEY`
 creating a managed key switches every endpoint, including `/v1/*`, to require
 bearer auth from then on, and managed keys have no delete endpoint (only
 `deactivate`, which does not undo the switch since it counts stored keys, not
-active ones) — so registering one on the open gateway would leave it
+active ones): so registering one on the open gateway would leave it
 permanently locked down for every later scenario. The auth-enabled gateway
 also has the exact response cache on, so both chat replies are suffixed with
 `$QA_BUDGET_SUFFIX`: a fixed reply string would be served from a prior run's
@@ -5376,7 +5376,7 @@ curl -fsS -H "$ADMIN_AUTH_HEADER" -X DELETE "$AUTH_BASE_URL/admin/budgets" \
 
 These scenarios cover request-window persistence across `aigateway --reload`
 (SIGHUP). Hour windows so the cap outlives the reload wait. Shared
-user-path rules only — the OSS release stack has no `quota_templates`
+user-path rules only: the OSS release stack has no `quota_templates`
 entitlement.
 
 ### S205 Request-window counters survive `--reload` (SQLite)
@@ -5711,7 +5711,7 @@ jq -e '.error.type == "invalid_request_error" and (.error.message | test("mask")
 An image request is billed like any other model call and lands in the audit log
 as an image body. The release stack runs with `LOGGING_LOG_IMAGE_BODIES`
 unset (the default), so each image is a sized placeholder (`stored: false`)
-rather than embedded base64 — the entry stays small and never trips generic body
+rather than embedded base64: the entry stays small and never trips generic body
 truncation. Storing the pixels themselves needs a gateway booted with that
 variable on, so it is covered by unit tests
 (`config/logging_test.go`, `internal/auditlog/image_body_test.go`).
@@ -5970,7 +5970,7 @@ jq -e '
 
 Only OpenAI serves translation sessions today. A translation request routed to
 another realtime provider must fail with a 400 instead of quietly opening an
-ordinary conversation session — or minting a client secret for one.
+ordinary conversation session: or minting a client secret for one.
 
 ```bash
 BODY_FILE=$(mktemp "$QA_RUN_DIR/s223.body.XXXXXX")

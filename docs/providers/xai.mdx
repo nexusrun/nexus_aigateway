@@ -6,7 +6,7 @@ keywords: ["xAI", "Grok", "reasoning effort", "prompt cache", "provider setup"]
 ---
 
 xAI's API is OpenAI-compatible, including a native Responses API. Models such
-as `grok-4.6` are discovered automatically from xAI's `/models` endpoint — no
+as `grok-4.6` are discovered automatically from xAI's `/models` endpoint, no
 configuration beyond the API key is needed.
 
 ## Configure
@@ -39,7 +39,7 @@ them per image; set a `per_image` price for the model if the catalog has none.
 
 Grok reasoning models (e.g. `grok-4.6`, defaulting to `high`) accept
 `reasoning_effort` as a top-level string on Chat Completions. AIGateway rewrites
-the OpenAI-shaped `"reasoning": {"effort": "..."}` into that flat field — no
+the OpenAI-shaped `"reasoning": {"effort": "..."}` into that flat field, no
 client change required. On the Responses API the nested shape is xAI-native
 and passes through unchanged.
 
@@ -64,7 +64,7 @@ tokens are often billed at the uncached price.
 
 - **Chat Completions:** AIGateway forwards a client-supplied `X-Grok-Conv-Id`
   header, and otherwise derives a stable one from the conversation's opening
-  messages — cache affinity works with no client change.
+  messages, cache affinity works with no client change.
 - **Responses API:** pass `prompt_cache_key` in the request body; AIGateway
   forwards it verbatim.
 

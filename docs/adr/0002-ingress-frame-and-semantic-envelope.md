@@ -23,8 +23,6 @@ AIGateway needs a model that preserves the original request faithfully while sti
 
 ## Flow Diagram
 
-![RequestSnapshot and WhiteBoxPrompt request flow](/adr/assets/0002-ingress-frame-flow.svg)
-
 ## Decision
 
 Use `RequestSnapshot` and `WhiteBoxPrompt` for transport-bearing model and provider request routes such as `/v1/chat/completions`, `/v1/responses`, `/v1/embeddings`, `/v1/batches*`, `/v1/files*`, and `/p/{provider}/{endpoint}`.

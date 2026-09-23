@@ -42,14 +42,14 @@ Set `CONFIGURED_PROVIDER_MODELS_MODE=fallback` (default) to use those lists only
 when upstream `/models` fails or is empty, `allowlist` to expose only the
 configured models for providers that define a list and skip their upstream
 `/models` calls, or `merge` to add configured models on top of the discovered
-inventory — useful for models a provider serves but does not include in its
+inventory, useful for models a provider serves but does not include in its
 `/models` listing.
 
 ## Filtering a provider's models
 
 `model_filter` narrows a provider's inventory to the models you actually want
 routable. Use it when a provider's catalog is far larger than what you want to
-expose — for example running OpenRouter's free tier for experiments while a
+expose, for example running OpenRouter's free tier for experiments while a
 separate provider serves production traffic.
 
 ```yaml
@@ -67,22 +67,22 @@ providers:
 | --- | --- | --- |
 | `include` | empty (keep all) | Keeps only models matching at least one pattern. |
 | `exclude` | empty | Drops models matching any pattern. Applied after `include`. |
-| `max_price_per_mtok` | unset (no cap) | Drops models whose highest per-million-token rate — the larger of input and output — is above the cap. |
+| `max_price_per_mtok` | unset (no cap) | Drops models whose highest per-million-token rate (the larger of input and output) is above the cap. |
 
 Patterns are globs matched case-insensitively against the raw provider model ID.
-`*` matches any run of characters **including `/`**, so `*:free` matches
+`*` matches any run of characters **including `/`**: so `*:free` matches
 `deepseek/deepseek-r1:free`; `?` matches exactly one character.
 
 A model with no known pricing is dropped while `max_price_per_mtok` is set: a
 price cap that lets models of unknown price through is not a cap. Prices come
-from the model registry and from what the provider itself reports — OpenRouter
+from the model registry and from what the provider itself reports, OpenRouter
 publishes its own rates, so its catalog (`:free` variants included) is priced
 without extra configuration. Local providers usually report no pricing at all,
 so filter those by pattern rather than by price.
 
 `max_price_per_mtok` must be a finite number of 0 or more. A negative, `NaN`, or
 infinite cap fails startup rather than silently rejecting every model or
-disabling the cap, and so does an env value that is not a number at all — a cost
+disabling the cap, and so does an env value that is not a number at all, a cost
 control the operator believes is in force must never be quietly absent.
 
 Filtering applies to the final inventory, after
@@ -92,7 +92,7 @@ from `GET /v1/models` and requests for them return "model not found".
 
 Filtering is a view over what a provider serves, not a deletion. The gateway
 keeps the unfiltered inventory in memory and in its model cache, so loosening a
-filter — or a model becoming cheap enough to pass the cap — restores it at the
+filter (or a model becoming cheap enough to pass the cap) restores it at the
 next metadata refresh, without waiting for a successful upstream `/models` call.
 
 The same filters are available per provider in env:
@@ -126,7 +126,7 @@ Each layer is applied on top of the previous one, so a provider declared in
 
 Declarative config is parsed strictly: an unknown key is a startup error, not a
 silently ignored one. This catches typos (`prot:` instead of `port:`) and, more
-importantly, misindented sections — see the gotcha below.
+importantly, misindented sections, see the gotcha below.
 
 This applies to `config.yaml` and to the env vars that declare the same
 structures as JSON: `VIRTUAL_MODELS`, `SET_RATE_LIMIT_*`, and `SET_BUDGET_*`.
@@ -134,7 +134,7 @@ Because env entries override YAML entries, a typo in one of them would otherwise
 silently win over a correct YAML entry.
 
 The default is strict because a dropped `providers`, `rate_limits`, `budgets`,
-or `guardrails` entry silently changes routing, cost, or security — a cost cap
+or `guardrails` entry silently changes routing, cost, or security, a cost cap
 that never applies looks exactly like a cost cap that does.
 
 Set `CONFIG_STRICT=false` to downgrade unknown keys to warnings and boot without
@@ -179,7 +179,7 @@ To change the inbound user path header, set `server.user_path_header` or
 `USER_PATH_HEADER`. The default remains `X-AIGateway-User-Path`.
 
 Edits to this file are applied to a running gateway with `aigateway --reload`,
-which re-reads the file and the environment and rebuilds the gateway in place —
+which re-reads the file and the environment and rebuilds the gateway in place,
 see [CLI Operations](/advanced/cli#configuration-reload). Nothing changes if the
 new file fails to load. `server.port` and `server.pid_file` are the exceptions:
 both are fixed for the life of the process, so a reload logs a warning and keeps
@@ -215,8 +215,8 @@ services:
   wins.
 </Tip>
 
-If the mounted path exists but cannot be read — most often a directory
-bind-mounted where a file was expected — startup fails rather than silently
+If the mounted path exists but cannot be read, most often a directory
+bind-mounted where a file was expected, startup fails rather than silently
 falling back to defaults.
 
 ## Gotchas

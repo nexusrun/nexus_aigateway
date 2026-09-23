@@ -134,15 +134,15 @@ root (no `/deployments/...`) and use [virtual models](/features/virtual-models) 
   `/openai/deployments/<deployment>` suffix automatically, so one
   `AZURE_BASE_URL` covers both chat and resource-level calls.
 - `AZURE_API_VERSION` only needs to be set explicitly when you need a different
-  stable or preview version — for example a newer Responses API surface.
+  stable or preview version, for example a newer Responses API surface.
 
 ## Troubleshooting
 
-- **`401 Unauthorized` / `403`** — `AZURE_API_KEY` does not match the resource
+- **`401 Unauthorized` / `403`**: `AZURE_API_KEY` does not match the resource
   hosting the deployment, or the deployment name in the URL is wrong.
-- **`Resource not found` / `DeploymentNotFound`** — the model in the request
+- **`Resource not found` / `DeploymentNotFound`**: the model in the request
   body must be the deployment name, not the underlying base model.
-- **`unsupported api version`** — bump `AZURE_API_VERSION` to a version the
+- **`unsupported api version`**: bump `AZURE_API_VERSION` to a version the
   feature you're calling supports. Newer Responses API features require recent
   preview versions.
 

@@ -134,6 +134,32 @@ body::after {
   overflow: hidden;
 }
 
+/* Provider names may be user-defined and much longer than the viewport. Keep
+   the table scrollable and pin its edit/delete actions so they remain
+   reachable instead of being clipped beyond the right edge. */
+.app .provider-credentials-table {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.provider-credentials-table .data-table th.col-actions,
+.provider-credentials-table .data-table td.col-actions {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  box-shadow: -10px 0 10px -10px rgb(0 0 0 / 0.45);
+}
+
+.provider-credentials-table .data-table th.col-actions {
+  min-width: 82px;
+}
+
+.provider-credentials-table .data-table td.col-actions {
+  /* Let the pinned cell show the same liquid-glass surface as the card
+     instead of introducing a solid block at the table edge. */
+  background: transparent;
+}
+
 .app .data-table th {
   background: color-mix(in srgb, var(--bg) 58%, transparent);
   border-bottom-color: color-mix(in srgb, var(--liquid-border) 78%, transparent);

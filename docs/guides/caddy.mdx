@@ -10,7 +10,7 @@ keywords: ["Caddy", "forward_auth", "reverse proxy", "API key verification", "/v
 Caddy's [`forward_auth`](https://caddyserver.com/docs/caddyfile/directives/forward_auth)
 asks another service whether a request may proceed. Point it at AIGateway's
 [`GET /v1/auth/verify`](/advanced/api-endpoints#key-verification) and Caddy
-gates traffic on AIGateway API keys — without a copy of those keys anywhere in
+gates traffic on AIGateway API keys, without a copy of those keys anywhere in
 the proxy.
 
 Two things this is good for:
@@ -33,12 +33,12 @@ Two things this is good for:
 
 | AIGateway answers | Caddy does |
 | --------------- | ---------- |
-| `200` — the key authenticates | Passes the request to the upstream |
-| `401` — unknown, disabled, or expired key, or no credential | Copies the response to the client and stops |
+| `200`, the key authenticates | Passes the request to the upstream |
+| `401`, unknown, disabled, or expired key, or no credential | Copies the response to the client and stops |
 
 AIGateway's `401` body is its normal OpenAI-shaped error envelope, so a client
 that already understands AIGateway errors sees a familiar shape from the proxy.
-The `200` body (`valid`, `method`, `key_id`, `user_path`) is ignored by Caddy —
+The `200` body (`valid`, `method`, `key_id`, `user_path`) is ignored by Caddy,
 it is there for scripts and services that want to know *which* key answered.
 
 ## Gate another service on AIGateway keys
@@ -72,10 +72,10 @@ for master-key callers and for keys with no bound path.
 Check it:
 
 ```bash
-# No credential — rejected at the edge, upstream never sees it
+# No credential, rejected at the edge, upstream never sees it
 curl -i http://localhost:8090/
 
-# Valid managed key — reaches the upstream
+# Valid managed key, reaches the upstream
 curl -i http://localhost:8090/ -H "Authorization: Bearer sk_gom_..."
 ```
 
@@ -96,7 +96,7 @@ api.example.com {
 
 Every proxied request now costs one extra round trip to the gateway, and the
 gateway authenticates the request a second time when it serves it. That is the
-price of dropping unauthenticated traffic before it reaches the application —
+price of dropping unauthenticated traffic before it reaches the application,
 worth it at an internet-facing edge, not worth it on a private network where
 AIGateway's own authentication is already the only gate.
 
@@ -124,8 +124,8 @@ unauthenticated.
 
 <Warning>
   **The gate is only as strong as the gateway's own authentication.** On a
-  AIGateway instance with no master key and no managed keys — the unsafe
-  development default — every request is accepted, `/v1/auth/verify` answers
+  AIGateway instance with no master key and no managed keys, the unsafe
+  development default, every request is accepted, `/v1/auth/verify` answers
   `200` with `{"valid": false, "method": "none"}` because there is no key to
   confirm, and `forward_auth` passes everything through. Set
   `AIGATEWAY_MASTER_KEY` or issue [managed keys](/features/users) before relying
@@ -138,7 +138,7 @@ unauthenticated.
   `forward_auth`, so the gateway sees one verification call per proxied
   request; `/v1/auth/verify` does no provider work and answers from the key
   store.
-- The endpoint answers `Cache-Control: no-store` — the answer describes one
+- The endpoint answers `Cache-Control: no-store`, the answer describes one
   caller's credential and must not be served to anyone else.
 - Enabling the endpoint exposes a key oracle: anyone who can reach it can test
   whether a key is valid. Expose it only where you need it, and keep AIGateway's

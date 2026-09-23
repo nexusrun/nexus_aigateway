@@ -1,11 +1,12 @@
 # AIGateway Configuration (optional)
 # Copy to config/config.yaml to customize.
 # Environment variables always override values in this file.
-# All settings have sensible defaults — no config file is required.
+# All settings have sensible defaults: no config file is required.
 
 server:
   port: "8080"
   base_path: "/" # env: BASE_PATH; set to "/g" to serve the gateway under https://example.com/g/
+  docs_dir: "" # env: DOCS_DIR; exported product docs directory (Docker sets /app/docs)
   master_key: "your-secret-key"
   body_size_limit: "10M"
   stream_stall_timeout: 60 # env: STREAM_STALL_TIMEOUT; seconds one response write on a model route may wait for the client to read it. Fires only when a client stops reading, never while the provider is slow; 0 disables
@@ -37,7 +38,7 @@ models:
 # Tagging based on headers: label every request from the listed headers. Labels
 # are recorded in usage tracking and audit logs. A header value can carry several
 # labels split by `delimiter` (default: ","). `prefix` is trimmed from each
-# extracted label only — the header itself is forwarded unchanged unless
+# extracted label only: the header itself is forwarded unchanged unless
 # `do_not_pass: true`. An env entry replaces the whole YAML entry with the same
 # header name (unset companion vars reset fields to defaults, they do not
 # inherit the YAML values); other env entries are appended:
@@ -57,7 +58,7 @@ models:
 
 # Session keeping: identify which requests belong to one client session, for
 # sticky virtual-model load balancing and audit-log session grouping. Everything
-# below is the default — omit the section entirely for the same behavior. Extra
+# below is the default: omit the section entirely for the same behavior. Extra
 # headers are merged over the built-in known-tools registry; the optional
 # transform "session-uuid" extracts a session_<uuid> value.
 # session:
@@ -133,7 +134,7 @@ models:
 # can even discover a server (subtree match, like virtual models).
 # mcp:
 #   enabled: true # env: MCP_ENABLED (default: true; a no-op with no servers)
-#   # Browser origins allowed to call /mcp. Default: none — MCP clients are not
+#   # Browser origins allowed to call /mcp. Default: none: MCP clients are not
 #   # web pages, and refusing browsers is what blocks DNS rebinding (a rebound
 #   # page's Origin and Host agree with each other, so comparing them proves
 #   # nothing). Add an origin only if you serve an MCP web client from it.
@@ -153,7 +154,7 @@ models:
 #       transport: stdio # the admin API and dashboard reject them by design
 #       command: npx
 #       args: ["-y", "@modelcontextprotocol/server-filesystem", "/data"]
-#       env: # subprocesses inherit only PATH/HOME/TMPDIR/USER/LANG — never the
+#       env: # subprocesses inherit only PATH/HOME/TMPDIR/USER/LANG: never the
 #         SOME_TOKEN: "${SOME_TOKEN}" # gateway's API keys; pass extras here explicitly
 
 cache:
@@ -506,6 +507,28 @@ providers:
     type: cohere
     api_key: "${COHERE_API_KEY}"
 
+  cerebras:
+    type: cerebras
+    api_key: "${CEREBRAS_API_KEY}"
+
+  # Cloudflare Workers AI uses an account-scoped OpenAI-compatible URL.
+  # The account ID is part of the URL; configure model IDs explicitly when
+  # the account endpoint does not expose a complete /v1/models catalog.
+  cloudflare:
+    type: cloudflare
+    base_url: "https://api.cloudflare.com/client/v4/accounts/<account-id>/ai/v1"
+    api_key: "${CLOUDFLARE_API_KEY}"
+    # models:
+    #   - id: "@cf/meta/llama-3.1-8b-instruct"
+    #   - id: "@cf/baai/bge-large-en-v1.5"
+
+  huggingface:
+    type: huggingface
+    api_key: "${HUGGINGFACE_API_KEY}"
+    # base_url defaults to https://router.huggingface.co/v1.
+    # models:
+    #   - id: "openai/gpt-oss-120b:fastest"
+
   bailian:
     type: bailian
     api_key: "${BAILIAN_API_KEY}"
@@ -626,7 +649,7 @@ providers:
 
   # Example: LM Studio. Despite being "Ollama-like", LM Studio speaks the
   # OpenAI-compatible API (/v1/chat/completions, /v1/embeddings) and has NO
-  # native Ollama API. Configure it as "openai" (or "vllm"), NOT "ollama" —
+  # native Ollama API. Configure it as "openai" (or "vllm"), NOT "ollama" :
   # the ollama type sends embeddings to Ollama's native /api/embed, which LM
   # Studio does not implement.
   # lmstudio:
@@ -697,7 +720,7 @@ providers:
   #   base_url: "https://api.deepseek.com"
   #   api_key: "${DEEPSEEK_API_KEY}"
 
-  # Example: Amazon Bedrock. The provider has no API key — auth is taken from
+  # Example: Amazon Bedrock. The provider has no API key: auth is taken from
   # the standard AWS credential chain (env vars, AWS_PROFILE, IAM Identity
   # Center, container/instance roles). Set base_url to either an AWS region
   # ("us-east-1") or a full https endpoint to enable the provider; without it
@@ -754,8 +777,8 @@ providers:
 #   example:
 #     enabled: true
 
-# Version awareness. Checks https://aigateway.nexusai.run/version once a day —
-# and again on the first dashboard visit of each day — so operators learn that a
+# Version awareness. Checks https://aigateway.nexusai.run/version once a day :
+# and again on the first dashboard visit of each day: so operators learn that a
 # newer release exists. Sends the running version, the distribution name, a random
 # per-deployment install id, and the visiting browser's user agent and language.
 # Never sends API keys, model names, prompts, usage data, client addresses, or

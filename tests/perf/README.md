@@ -58,5 +58,5 @@ per-request cost to that subsystem. These are diagnostic benchmarks (run via
 `make perf-bench`), not guarded.
 
 `TestSessionIDVisibilityByBodySize` pins that content-based session
-auto-detection is independent of request body size — there is no size above
+auto-detection is independent of request body size: there is no size above
 which a request quietly stops carrying a session id to downstream consumers.

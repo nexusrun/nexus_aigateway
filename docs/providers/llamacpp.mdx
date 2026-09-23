@@ -16,7 +16,7 @@ The same provider type fits LM Studio and any other plain OpenAI-compatible
 local server.
 
 Start llama-server first. Without `--alias`, the model ID in `/v1/models` is
-the model file's path — set an alias so requests can use a clean name:
+the model file's path, set an alias so requests can use a clean name:
 
 ```bash
 llama-server -hf ggml-org/gemma-3-4b-it-GGUF --alias gemma-3-4b-it --port 8081
@@ -25,7 +25,7 @@ llama-server -hf ggml-org/gemma-3-4b-it-GGUF --alias gemma-3-4b-it --port 8081
 
 ## Configure
 
-The base URL is required and registers the provider — llama-server's default
+The base URL is required and registers the provider, llama-server's default
 port (8080) collides with AIGateway's own, so there is no default:
 
 ```bash
@@ -36,7 +36,7 @@ AIGATEWAY_MASTER_KEY=change-me
 
 <Note>
   These examples assume AIGateway runs in Docker and llama-server is on the host
-  at `localhost:8081` — hence `host.docker.internal`. If AIGateway runs on the
+  at `localhost:8081`, hence `host.docker.internal`. If AIGateway runs on the
   host directly, use `http://localhost:8081/v1`. Running several llama-server
   instances? Register each under a suffixed name:
   `LLAMACPP_STUDIO_BASE_URL=...` creates provider `llamacpp-studio`.
@@ -61,7 +61,7 @@ curl -s http://localhost:8080/v1/chat/completions \
 `/v1/embeddings` works through AIGateway as long as llama-server can serve it:
 the loaded model must use a pooling type other than `none`. Dedicated embedding
 GGUFs usually declare pooling in their metadata; otherwise pass `--pooling mean`
-(or `cls`/`last`). The `--embeddings` flag is optional — it restricts the
+(or `cls`/`last`). The `--embeddings` flag is optional, it restricts the
 server to embeddings only:
 
 ```bash
@@ -80,14 +80,14 @@ curl -s http://localhost:8080/v1/embeddings \
 Local GGUFs are not in the upstream model catalog, so AIGateway reads what it can
 from llama-server itself and reports it on `GET /v1/models`:
 
-- **Context window** — the per-slot `n_ctx` llama-server reports for the model,
+- **Context window**: the per-slot `n_ctx` llama-server reports for the model,
   which is the context it is *running* with (`--ctx-size`, divided across
   `--parallel` slots) rather than the one the GGUF was trained for. Recent
   builds report it as `meta.n_ctx` in the listing itself; older ones are asked
-  for it via `/props`. If neither answers — LM Studio, or a proxy that hides
-  `/props` — the model's trained `n_ctx_train` is used instead, which is only an
+  for it via `/props`. If neither answers, LM Studio, or a proxy that hides
+  `/props`, the model's trained `n_ctx_train` is used instead, which is only an
   upper bound and may exceed what the server will accept.
-- **Modalities** — a multimodal server (started with `--mmproj`) reports
+- **Modalities**: a multimodal server (started with `--mmproj`) reports
   `vision`, `video`, and `audio` on `/props`; the supported ones become model
   capabilities.
 
@@ -98,14 +98,14 @@ process serves several models, each model carries its own `meta.n_ctx` and needs
 no `/props` at all.
 
 Both are defaults, not decisions: anything you declare under the provider's
-model metadata wins — see [Model metadata](/advanced/model-metadata).
+model metadata wins, see [Model metadata](/advanced/model-metadata).
 
 ## Model classification
 
 llama-server reports nothing that separates a chat model from an embedding one,
 so AIGateway classifies its models by ID: names containing `embed` or matching
 well-known embedding families (`bge`, `e5`, `gte`, `minilm`) are categorized as
-embedding models, and names containing `rerank` as reranking models — namespaced
+embedding models, and names containing `rerank` as reranking models, namespaced
 IDs are checked by their final path segment. For anything that stays
 unclassified, declare `modes` under the provider's model metadata. Categories
 only affect dashboard grouping; `/v1/embeddings` routes
@@ -113,17 +113,17 @@ to any model the provider serves regardless of category.
 
 ## Beyond chat and embeddings
 
-- **Multimodal input** — image and audio *input* in chat messages works with
+- **Multimodal input**: image and audio *input* in chat messages works with
   multimodal models when llama-server is started with a projector
   (`--mmproj`, auto-loaded with `-hf` when available). These requests flow
   through `/v1/chat/completions` normally.
-- **Native endpoints** — llama-server's provider-native routes are reachable
+- **Native endpoints**: llama-server's provider-native routes are reachable
   through [passthrough](/features/passthrough-api) at `/p/llamacpp/...`:
   OpenAI-shaped paths (`chat/completions`, `embeddings`, ...) are served from
   the `/v1` base, everything else (`/health`, `/props`, `/tokenize`,
   `/infill`, ...) from the server root. For a suffixed setup use the instance
   name, e.g. `/p/llamacpp-studio/health`.
-- **Reranking** — llama-server serves reranking (start with a reranker model
+- **Reranking**: llama-server serves reranking (start with a reranker model
   and `--rerank --embedding --pooling rank`), but AIGateway has no rerank
   endpoint; reach it through passthrough: `POST /p/llamacpp/rerank` (or
   `/p/llamacpp/v1/rerank`).

@@ -24,6 +24,7 @@ var bodySizeLimitRegex = regexp.MustCompile(`(?i)^(\d+)([KMG])?B?$`)
 type ServerConfig struct {
 	Port           string `yaml:"port" env:"PORT"`
 	BasePath       string `yaml:"base_path" env:"BASE_PATH"`                                // URL path prefix where the app is mounted (e.g., "/g")
+	DocsDir        string `yaml:"docs_dir" env:"DOCS_DIR"`                                  // Directory containing the exported product docs; empty uses the embedded fallback
 	MasterKey      string `yaml:"master_key" env:"AIGATEWAY_MASTER_KEY,GOMODEL_MASTER_KEY"` // Optional: Master key for authentication
 	BodySizeLimit  string `yaml:"body_size_limit" env:"BODY_SIZE_LIMIT"`                    // Max request body size (e.g., "10M", "1024K")
 	SwaggerEnabled bool   `yaml:"swagger_enabled" env:"SWAGGER_ENABLED"`                    // Whether to expose the Swagger UI at /swagger/index.html

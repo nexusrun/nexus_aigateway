@@ -7,12 +7,12 @@ keywords: ["faq", "update", "uninstall", "data location", "version pinning", "op
 
 ## How do I update AIGateway?
 
-Back up your database first — [Updating AIGateway](/guides/updating) has the
+Back up your database first. [Updating AIGateway](/guides/updating) has the
 backup commands for each storage backend, plus verification and rollback. Then:
 
 <Tabs>
   <Tab title="macOS / Linux">
-    Re-run the installer — it always fetches the latest release and replaces
+    Re-run the installer: it always fetches the latest release and replaces
     the binary in place:
 
     ```bash
@@ -49,7 +49,7 @@ The version is also printed on the first line of the startup log.
 
 ## Can I install a specific version, or roll back?
 
-Yes — set `AIGATEWAY_VERSION` before running the installer:
+Yes, set `AIGATEWAY_VERSION` before running the installer:
 
 ```bash
 curl -fsSL https://aigateway.nexusai.run/install.sh | AIGATEWAY_VERSION=vX.Y.Z sh
@@ -65,7 +65,7 @@ Yes, updating is. The schema is migrated on startup, and an update never moves
 or deletes your database, configuration, or cache.
 
 Rolling back needs care. Most migrations are additive, and an older binary
-ignores what it does not know about — but some releases rebuild storage into a
+ignores what it does not know about, but some releases rebuild storage into a
 new shape, as scoped budgets and rate limits did, and the older binary will not
 find what it expects. Restore a backup taken before the update instead. AIGateway
 ships fast, so take one every update:
@@ -106,8 +106,8 @@ PATH. For Docker, remove the container and image as usual.
 ## Why isn't AIGateway 100% open source?
 
 Almost all of it is. The gateway is MIT-licensed and stays that way. A small
-commercial distribution — [AIGateway Pro](/pro/overview), adding OIDC SSO and a
-couple of other extensions — is coming; it accounts for roughly 3% of the
+commercial distribution, [AIGateway Pro](/pro/overview), with licensed
+extensions including OIDC SSO, is available; it accounts for roughly 3% of the
 codebase.
 
 **It may still end up fully open.** A dual license, or something like the BSL,
@@ -123,6 +123,6 @@ trade available.
 
 **Individual features are negotiable.** If something planned for Pro is a
 feature you need as a developer and paying for Pro doesn't make sense for you,
-say so. A cheaper personal-use license — or open-sourcing that particular
-feature — is on the table. Ask on
+say so. A cheaper personal-use license, or open-sourcing that particular
+feature, is on the table. Ask on
 [GitHub](https://github.com/nexusrun/nexus_aigateway/issues).

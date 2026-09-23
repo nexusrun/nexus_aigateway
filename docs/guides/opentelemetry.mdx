@@ -69,16 +69,16 @@ wins over the YAML value.
 | --- | --- | --- | --- |
 | `OTEL_ENABLED` | `enabled` | `false` | Turn export on. |
 | `OTEL_SERVICE_NAME` | `service_name` | product name (`aigateway`; `aigateway-pro` in Pro) | `service.name` resource attribute. |
-| `OTEL_RESOURCE_ATTRIBUTES` | `resource_attributes` | — | Extra resource attributes such as `deployment.environment`. |
+| `OTEL_RESOURCE_ATTRIBUTES` | `resource_attributes` | N/A | Extra resource attributes such as `deployment.environment`. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `endpoint` | `http://localhost:4318` | Collector endpoint. `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` and `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` override it per signal. |
 | `OTEL_EXPORTER_OTLP_PROTOCOL` | `protocol` | `http/protobuf` | `http/protobuf` or `grpc`; overridable per signal with `OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` and `OTEL_EXPORTER_OTLP_METRICS_PROTOCOL`. |
-| `OTEL_EXPORTER_OTLP_HEADERS` | `headers` | — | Headers such as `authorization` for hosted backends. |
+| `OTEL_EXPORTER_OTLP_HEADERS` | `headers` | N/A | Headers such as `authorization` for hosted backends. |
 | `OTEL_TRACES_EXPORTER` | `traces_exporter` | `otlp` | `otlp` or `none` to switch traces off. |
 | `OTEL_METRICS_EXPORTER` | `metrics_exporter` | `otlp` | `otlp` or `none` to switch metrics off. |
 | `OTEL_TRACES_SAMPLER` | `sampler` | `parentbased_always_on` | Sampler, e.g. `parentbased_traceidratio` to keep a fraction of new traces. |
-| `OTEL_TRACES_SAMPLER_ARG` | `sampler_arg` | — | Sampler argument, e.g. `0.1` for 10%. |
+| `OTEL_TRACES_SAMPLER_ARG` | `sampler_arg` | N/A | Sampler argument, e.g. `0.1` for 10%. |
 | `OTEL_PROPAGATORS` | `propagators` | `tracecontext,baggage` | Comma-separated: `tracecontext`, `baggage`, `b3`, `b3multi`, `jaeger`, `ottrace`, or `none`. |
-| `OTEL_METRIC_EXPORT_INTERVAL` | — | `60000` | Metric export interval in milliseconds. |
+| `OTEL_METRIC_EXPORT_INTERVAL` | N/A | `60000` | Metric export interval in milliseconds. |
 
 A typical production setup:
 

@@ -57,14 +57,8 @@ You can create budgets in the dashboard:
 Budgets -> Create Budget
 ```
 
-<img
-  src="/features/budgets.png"
-  alt="AIGateway dashboard Budgets page listing per-user-path monthly, weekly, and daily budgets with spend bars and remaining amounts"
-  style={{ width: "100%", maxWidth: "1280px", height: "auto" }}
-  className="rounded-lg"
-/>
 
-Set the **scope**, **subject** (a user path or a label), **period**, and
+Set the **scope**: **subject** (a user path or a label), **period**: and
 **amount** in the form. Each row on the Budgets page then shows spend as a
 percentage of the limit, the amount spent versus the cap, and the remaining
 balance for the current period. Label budgets carry a `label` chip next to the
@@ -188,7 +182,7 @@ lookup. The request is rejected if any matching limit is exhausted.
   Dynamic per-child budgets are available in AIGateway Pro and require the
   `quota_templates` license entitlement. Without it, admin API writes are
   rejected with 403 `quota_templates_not_entitled`, and `per_child: true` in
-  configuration aborts startup — AIGateway never silently falls back to one
+  configuration aborts startup, AIGateway never silently falls back to one
   shared subtree budget, since that would change enforcement semantics.
 </Info>
 

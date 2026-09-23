@@ -6,7 +6,7 @@ keywords: ["vLLM", "self-hosted", "Hugging Face models", "OpenAI-compatible serv
 ---
 
 AIGateway talks to vLLM through its OpenAI-compatible HTTP server. Hugging Face
-model IDs with slashes (e.g. `meta-llama/Llama-3.1-8B-Instruct`) work — AIGateway
+model IDs with slashes (e.g. `meta-llama/Llama-3.1-8B-Instruct`) work, AIGateway
 splits provider-qualified selectors on the first slash only.
 
 Start vLLM first:
@@ -26,7 +26,7 @@ AIGATEWAY_MASTER_KEY=change-me
 
 <Note>
   These examples assume AIGateway runs in Docker and vLLM is on the host at
-  `localhost:8000` — hence `host.docker.internal`. If both run in the same
+  `localhost:8000`, hence `host.docker.internal`. If both run in the same
   Docker network, use the vLLM service name. If AIGateway runs on the host
   directly, use `http://localhost:8000/v1`.
 </Note>

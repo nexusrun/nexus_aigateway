@@ -9,8 +9,10 @@ import (
 	"github.com/nexusrun/nexus_aigateway/internal/providers/bailian"
 	"github.com/nexusrun/nexus_aigateway/internal/providers/bedrock"
 	"github.com/nexusrun/nexus_aigateway/internal/providers/bedrockmantle"
+	"github.com/nexusrun/nexus_aigateway/internal/providers/cerebras"
 	"github.com/nexusrun/nexus_aigateway/internal/providers/chatgpt"
 	"github.com/nexusrun/nexus_aigateway/internal/providers/chutes"
+	"github.com/nexusrun/nexus_aigateway/internal/providers/cloudflare"
 	"github.com/nexusrun/nexus_aigateway/internal/providers/cohere"
 	"github.com/nexusrun/nexus_aigateway/internal/providers/deepseek"
 	"github.com/nexusrun/nexus_aigateway/internal/providers/elevenlabs"
@@ -18,6 +20,7 @@ import (
 	"github.com/nexusrun/nexus_aigateway/internal/providers/gemini"
 	"github.com/nexusrun/nexus_aigateway/internal/providers/groq"
 	"github.com/nexusrun/nexus_aigateway/internal/providers/hetzner"
+	"github.com/nexusrun/nexus_aigateway/internal/providers/huggingface"
 	"github.com/nexusrun/nexus_aigateway/internal/providers/kilo"
 	"github.com/nexusrun/nexus_aigateway/internal/providers/kimicode"
 	"github.com/nexusrun/nexus_aigateway/internal/providers/llamacpp"
@@ -56,6 +59,8 @@ func defaultProviderFactory(cfg *config.Config) *providers.ProviderFactory {
 	factory.Add(bedrockmantle.Registration)
 	factory.Add(chatgpt.Registration)
 	factory.Add(chutes.Registration)
+	factory.Add(cerebras.Registration)
+	factory.Add(cloudflare.Registration)
 	factory.Add(cohere.Registration)
 	factory.Add(deepseek.Registration)
 	factory.Add(elevenlabs.Registration)
@@ -64,6 +69,7 @@ func defaultProviderFactory(cfg *config.Config) *providers.ProviderFactory {
 	factory.Add(vertex.Registration)
 	factory.Add(groq.Registration)
 	factory.Add(hetzner.Registration)
+	factory.Add(huggingface.Registration)
 	factory.Add(kilo.Registration)
 	factory.Add(kimicode.Registration)
 	factory.Add(llamacpp.Registration)

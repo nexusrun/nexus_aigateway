@@ -1,4 +1,4 @@
-.PHONY: all build run demo clean tidy mod-check frontend frontend-check test test-race test-dashboard test-e2e test-integration test-contract test-all lint lint-fix fix fix-check record-api swagger docs-openapi install-tools perf-check perf-bench infra image seed-demo-data build-plugins image-plugins example-plugins
+.PHONY: all build run demo clean tidy mod-check frontend frontend-check docs test test-race test-dashboard test-e2e test-integration test-contract test-all lint lint-fix fix fix-check record-api swagger docs-openapi install-tools perf-check perf-bench infra image seed-demo-data build-plugins image-plugins example-plugins
 
 all: frontend build
 
@@ -9,6 +9,7 @@ DATE ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 DOCS_API_SERVERS ?= http://localhost:8080
 LOG_LEVEL ?= debug
 SWAGGER_ENABLED ?= true
+DOCS_DIR ?= bin/docs
 
 # Build tags covering every file the linter and fixers must see. Without these,
 # tag-gated files (tests/e2e, tests/integration, tests/contract) are skipped.
@@ -44,7 +45,7 @@ build: frontend
 # handling instead of behind a supervisor.
 run:
 	go build -tags=swagger -ldflags '$(LDFLAGS)' -o bin/aigateway ./cmd/aigateway
-	LOG_LEVEL="$(LOG_LEVEL)" SWAGGER_ENABLED="$(SWAGGER_ENABLED)" exec ./bin/aigateway
+	LOG_LEVEL="$(LOG_LEVEL)" SWAGGER_ENABLED="$(SWAGGER_ENABLED)" DOCS_DIR="$(DOCS_DIR)" exec ./bin/aigateway
 
 # Seed the local SQLite database and start AIGateway with a populated dashboard.
 # Guardrails (which imply plugins) are on so the seeded guardrail instances and
@@ -129,6 +130,11 @@ frontend:
 frontend-check:
 	@test -f internal/admin/dashboard/static/dist/index.html || { \
 		echo "internal/admin/dashboard/static/dist is missing: run 'make frontend' first." >&2; exit 1; }
+
+# Export the product documentation into bin/docs for local runs. The export
+# skips generated OpenAPI pages because the gateway serves Swagger separately.
+docs:
+	sh tools/export-docs.sh $(DOCS_DIR)
 
 # Run dashboard JavaScript unit tests
 test-dashboard:

@@ -84,7 +84,7 @@ state.
 snapshot is not final, `GET /v1/responses/{id}` re-reads it from the provider
 that created it on every poll and stores the result once the response reaches
 a terminal status (`completed`, `incomplete`, `failed`, or `cancelled`), so the
-usual SDK loop — poll until the status is terminal, then read `output` — works
+usual SDK loop (poll until the status is terminal, then read `output`) works
 through the gateway. Terminal snapshots are served from the store without an
 upstream call. If the refresh fails, the stored snapshot is returned unchanged.
 

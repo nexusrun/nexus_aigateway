@@ -71,7 +71,7 @@ OPENAI_EU_SESSION_STICKY_KEYS=false
 The same setting is the **Session-sticky API keys** checkbox in the dashboard's
 provider editor. It is checked by default.
 
-Any provider that authenticates with an API key can rotate — `ANTHROPIC_API_KEY_2`,
+Any provider that authenticates with an API key can rotate, `ANTHROPIC_API_KEY_2`,
 `GEMINI_API_KEY_2`, `GROQ_API_KEY_2`, and so on. Providers that authenticate
 another way (Vertex AI and Bedrock, which use Google and AWS credentials) ignore
 these variables.
@@ -87,7 +87,7 @@ these variables.
   ascending by number.
 - Environment variables replace the provider's whole `api_keys` list from
   `config.yaml` rather than merging into it.
-- A key that does not resolve — an `${UNSET_VAR}` placeholder — is dropped. A
+- A key that does not resolve (an `${UNSET_VAR}` placeholder) is dropped. A
   provider left with no keys at all is not registered.
 
 <Note>
@@ -122,7 +122,7 @@ completions, responses, embeddings, audio, images, batches, provider-native
 sessions are sticky; sessionless traffic is round robin.
 
 Rotation is per gateway process. Counters live in memory and reset on restart,
-so `N` replicas each rotate independently — which is fine, since the goal is to
+so `N` replicas each rotate independently, which is fine, since the goal is to
 spread load rather than to sequence it exactly.
 
 ## Choosing between rotation and separate providers

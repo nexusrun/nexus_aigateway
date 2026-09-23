@@ -1,7 +1,7 @@
 <p align="center">
   <img alt="NEXUS AI Gateway logo" src="docs/nexus-ai-logo.png" width="220">
 </p>
-
+[![Deploy to NEXUS AI](https://nexusai.run/deploy-button.svg)](https://nexusai.run/deploy?repo=https://github.com/nexusrun/nexus_aigateway)
 <h1 align="center">
   NEXUS AI Gateway - FREE AI gateway
 </h1>
@@ -17,10 +17,10 @@
   Spend less. Stay in control.
 </p>
 <p>
-  <strong>Spend smarter</strong> - reduce unnecessary model calls with response caching, track usage and costs in one place, and get more from every token with prompt compression and intelligent routing.
+  <strong>Spend smarter</strong> reduce unnecessary model calls with response caching, track usage and costs in one place, and get more from every token with prompt compression and intelligent routing.
 </p>
 <p>
-  <strong>Operate with confidence</strong> - keep your applications reliable as providers, models, and workloads change. NEXUS AI Gateway brings the performance, failover, observability, and controls you need to run AI in production.
+  <strong>Operate with confidence</strong> keep your applications reliable as providers, models, and workloads change. NEXUS AI Gateway brings the performance, failover, observability, and controls you need to run AI in production.
 </p>
 <p>
   Built to be the last AI gateway you need: fast at the edge, efficient by design, and ready for whatever comes next.
@@ -34,6 +34,55 @@
   </a>
 </p>
 
+## Local Deployment
+
+Run NEXUS AI Gateway locally with SQLite and the provider of your choice. You
+need Go, Node.js/npm, and at least one provider API key.
+
+```bash
+git clone https://github.com/nexusrun/nexus_aigateway.git
+cd nexus_aigateway
+cp .env.template .env
+```
+
+Edit `.env` and configure local storage plus a provider key. For example:
+
+```env
+STORAGE_TYPE=sqlite
+GROQ_API_KEY=your_key_here
+```
+
+Build the dashboard and start the gateway:
+
+```bash
+make frontend
+make docs
+make run
+```
+
+The local services are available at:
+
+- Dashboard: `http://localhost:8080/admin/dashboard`
+- Product documentation: `http://localhost:8080/docs`
+- Models: `http://localhost:8080/v1/models`
+- OpenAI-compatible API: `http://localhost:8080/v1`
+
+`make docs` exports the product documentation into `bin/docs`. Production
+Docker images build and serve the same documentation automatically at
+`/docs`; Swagger remains available separately at `/swagger/index.html`.
+
+Send a test request using a model returned by `GET /v1/models`:
+
+```bash
+curl http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer change-me" \
+  -d '{
+    "model": "groq/llama-3.3-70b-versatile",
+    "messages": [{"role": "user", "content": "Hello"}]
+  }'
+```
+
 ## Quick Start
 
 **Step 1:** Prepare the NEXUS AI deployment
@@ -42,7 +91,7 @@ Clone the repository, create a protected environment file, and authenticate the 
 
 ```bash
 git clone https://github.com/nexusrun/nexus_aigateway.git
-cd nexusruntime
+cd nexus_aigateway
 cp .env.template .env
 nexus auth login
 ```
@@ -83,6 +132,12 @@ nexus deploy logs aigateway --lines 200
 
 ```text
 https://aigateway.nexusai.run/
+```
+
+The product documentation is served by the same gateway at:
+
+```text
+https://aigateway.nexusai.run/docs
 ```
 
 **Step 4:** Make an API call
@@ -200,6 +255,9 @@ for client-specific behavior.
 - xAI (Grok)
 - Google Gemini
 - Cohere
+- Cerebras Inference
+- Cloudflare Workers AI
+- Hugging Face Inference Providers
 - Vertex AI
 - DeepSeek
 - Groq

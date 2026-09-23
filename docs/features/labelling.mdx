@@ -11,8 +11,8 @@ Labels tag every request for attribution: which team, feature, job, or
 environment produced the traffic. A request can be labelled two ways, and both
 can apply at once:
 
-- **Tagging headers** — labels extracted from configured HTTP headers on each request.
-- **API key labels** — labels bound to a managed API key, applied to every request authenticated with it.
+- **Tagging headers**: labels extracted from configured HTTP headers on each request.
+- **API key labels**: labels bound to a managed API key, applied to every request authenticated with it.
 
 Labels from both sources are merged and de-duplicated. They are recorded on
 usage entries and audit log entries, and power the by-label usage breakdown in
@@ -24,12 +24,6 @@ Assign labels when creating a key in the admin dashboard:
 
 `API Keys -> Create API Key -> Labels`
 
-<img
-  src="/features/auth-keys-labels.png"
-  alt="AIGateway dashboard API Keys page with a Labels column showing chips like env:demo, team:engineering, and priority:high for each key"
-  style={{ width: "100%", maxWidth: "1280px", height: "auto" }}
-  className="rounded-lg"
-/>
 
 The **API Keys** page lists every managed key with its labels as chips next
 to its user path, so you can see attribution at a glance without opening
@@ -82,7 +76,7 @@ console.log(authKey);
 
 </CodeGroup>
 
-Every request authenticated with that key carries those labels — no client
+Every request authenticated with that key carries those labels, no client
 changes needed. This is the simplest way to attribute traffic per team or
 service: issue each consumer its own labelled key.
 
@@ -145,14 +139,8 @@ Tagging rules name headers whose values carry labels. Manage them in the
 dashboard (`Settings -> Tagging based on headers`) or declare them as
 infrastructure-as-code:
 
-<img
-  src="/features/tagging-headers.png"
-  alt="AIGateway dashboard Settings page Tagging based on headers form with two header rows (X-Team, X-Environment) and prefix, delimiter, and do-not-pass-upstream fields"
-  style={{ width: "100%", maxWidth: "1000px", height: "auto" }}
-  className="rounded-lg"
-/>
 
-Click **Add Header**, name the header your clients will send (for example
+Click **Add Header**: name the header your clients will send (for example
 `X-Team`), optionally set a prefix to trim and a delimiter, then **Save
 Tagging Settings**. Check **Do not pass upstream** for headers that should be
 stripped before the request reaches the provider.
@@ -192,15 +180,15 @@ routes; translated routes never forward client headers anyway.
 
 ## Where labels show up
 
-- **Usage dashboard** — the usage page shows a by-label breakdown
+- **Usage dashboard**: the usage page shows a by-label breakdown
   (`GET /admin/usage/labels`). A request with several labels counts once under
   each of them.
-- **Request log** — label chips per request, filterable with the `label` query
+- **Request log**: label chips per request, filterable with the `label` query
   param on `GET /admin/usage/log`.
-- **Audit logs** — recorded under `data.labels` on each entry (audit logging is enabled
+- **Audit logs**: recorded under `data.labels` on each entry (audit logging is enabled
   by default).
-- **API keys page** — each key's labels are listed alongside its user path.
-- **Budgets** — a budget can be scoped to a label, capping the spend of every
+- **API keys page**: each key's labels are listed alongside its user path.
+- **Budgets**: a budget can be scoped to a label, capping the spend of every
   request carrying it. See [Budgets](/features/budgets).
 
 ## Defaults

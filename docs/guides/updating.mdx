@@ -74,7 +74,7 @@ The logs should show the new version on the first line and a
 <Warning>
   **Check that your database is on a volume before you update.** The image
   declares none, so a container without a mount at `/app/data` keeps its SQLite
-  database in the container's own filesystem — and loses everything the moment
+  database in the container's own filesystem, and loses everything the moment
   the container is replaced by the update. See
   [production storage](/guides/production#choose-a-storage-backend).
 </Warning>
@@ -90,7 +90,7 @@ docker inspect aigateway --format '{{json .Mounts}} {{.Config.Env}}'
 
 If nothing is mounted at `/app/data`, the database lives in the container
 filesystem and `docker rm` deletes it. Copy it out and seed the volume you are
-about to mount, while the old container still exists — an empty volume hides the
+about to mount, while the old container still exists, an empty volume hides the
 copy, and the gateway starts with no keys, usage, or logs:
 
 ```bash
@@ -99,7 +99,7 @@ docker run --rm -v aigateway_data:/data -v "$PWD/aigateway-data":/seed alpine \
   sh -c 'cp -a /seed/. /data/ && chown -R 65532:65532 /data'
 ```
 
-`65532` is the image's nonroot UID — the gateway cannot write a volume owned by
+`65532` is the image's nonroot UID, the gateway cannot write a volume owned by
 anyone else.
 
 Then replace the container, passing the same mount and environment flags back:
@@ -131,7 +131,7 @@ place:
   </Tab>
 </Tabs>
 
-Restart the gateway afterwards — there is no in-place hot upgrade.
+Restart the gateway afterwards, there is no in-place hot upgrade.
 
 ## 3. Verify
 
@@ -165,7 +165,7 @@ configuration, or cache.
 
 Most are additive: missing tables, indexes, and columns are created, and a
 partially applied schema is safe to retry on the next start. Some releases
-transform storage instead — when budgets and rate limits gained scopes, their
+transform storage instead, when budgets and rate limits gained scopes, their
 tables were rebuilt and the old ones dropped. Both are safe going forward, which
 is what makes the reverse direction worth care.
 
@@ -206,8 +206,8 @@ outside, so **restore the step 1 backup** unless the older version is known to
 start against the migrated database.
 
 Restoring a SQLite volume backup replaces the volume's contents, so stop the
-gateway first — `docker compose stop aigateway`, or `docker stop aigateway` for a
-standalone container — then unpack the archive and start it again:
+gateway first, `docker compose stop aigateway`, or `docker stop aigateway` for a
+standalone container, then unpack the archive and start it again:
 
 ```bash
 docker run --rm -v aigateway_data:/data -v "$PWD":/backup alpine \

@@ -77,7 +77,7 @@ volumes:
 | `TAGGING_HEADER_1_DONOTPASS` | Keeps the label but strips the header before forwarding, so user emails never reach a provider on [passthrough](/features/passthrough-api) routes. Translated routes never forward client headers. |
 
 Open `http://localhost:3000`, create the first (admin) account, and the model
-picker lists exactly what AIGateway exposes — including Anthropic and Gemini
+picker lists exactly what AIGateway exposes, including Anthropic and Gemini
 models and any [virtual models](/features/virtual-models). Existing
 installations can set the same connection at runtime under
 `Admin Panel -> Settings -> Connections -> OpenAI API` instead of using
@@ -92,8 +92,8 @@ environment variables.
 
 ## 2. Chat, and see every call in AIGateway
 
-Pick any model — `openai/gpt-5-mini`, `anthropic/claude-haiku-4-5-20251001`,
-`gemini/gemini-2.5-flash` — and chat. Streaming responses, and the follow-up
+Pick any model, `openai/gpt-5-mini`, `anthropic/claude-haiku-4-5-20251001`,
+`gemini/gemini-2.5-flash`, and chat. Streaming responses, and the follow-up
 title and tag generation Open WebUI runs after each chat, all pass through
 AIGateway. Each call appears in the audit log with the full prompt, response,
 tokens, cost, and the headers identifying the user.
@@ -134,7 +134,7 @@ keep the picker usable:
 ### Pick a cheap task model
 
 After each chat, Open WebUI generates a title and tags using the same model
-as the chat by default — a few hundred extra prompt tokens per conversation,
+as the chat by default, a few hundred extra prompt tokens per conversation,
 which you will now see itemised in the audit log. Set a small model (for
 example `openai/gpt-5-mini`) as the task model under
 `Admin Panel -> Settings -> Interface` to keep that overhead cheap. Task

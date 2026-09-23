@@ -413,7 +413,7 @@
     },
     "/admin/audit/sessions": {
       "get": {
-        "description": "Groups audit log entries by session id into threads and returns\none summary per thread — its latest matching entry and complete\nrequest count — ordered by latest activity. Entries without a session id\nappear as single-entry threads. Filters apply to entries before\ngrouping.",
+        "description": "Groups audit log entries by session id into threads and returns\none summary per thread (its latest matching entry and complete\nrequest count) ordered by latest activity. Entries without a session id\nappear as single-entry threads. Filters apply to entries before\ngrouping.",
         "tags": [
           "admin"
         ],
@@ -11284,7 +11284,7 @@
             "type": "string"
           },
           "bodies_omitted": {
-            "description": "BodiesOmitted marks a list entry whose request/response bodies (and\nother heavy payloads) were stripped server-side; the full entry is\navailable from GET /admin/audit/detail. It also tells the dashboard\nthe entry is persisted — a slim entry is never an in-flight request.",
+            "description": "BodiesOmitted marks a list entry whose request/response bodies (and\nother heavy payloads) were stripped server-side; the full entry is\navailable from GET /admin/audit/detail. It also tells the dashboard\nthe entry is persisted, a slim entry is never an in-flight request.",
             "type": "boolean"
           },
           "cache_type": {
@@ -11701,7 +11701,7 @@
             "type": "string"
           },
           "options": {
-            "description": "Options are an enumerated field's canonical values, for a client to\noffer as a choice. It is not a whitelist — providers accept further\nspellings of each, and upserts are not rejected for using one. An empty\nvalue always means \"provider default\", so it is never listed.",
+            "description": "Options are an enumerated field's canonical values, for a client to\noffer as a choice. It is not a whitelist, providers accept further\nspellings of each, and upserts are not rejected for using one. An empty\nvalue always means \"provider default\", so it is never listed.",
             "type": "array",
             "items": {
               "type": "string"
@@ -12847,7 +12847,7 @@
             "type": "integer"
           },
           "request_body": {
-            "description": "Optional bodies (when LOGGING_LOG_BODIES=true). Captured JSON is kept\nas json.RawMessage; other captures (string fallbacks, audio/image logs,\nstream-built responses) keep their own types. The MongoDB writer decodes\nraw JSON into documents so they stay queryable — see body.go."
+            "description": "Optional bodies (when LOGGING_LOG_BODIES=true). Captured JSON is kept\nas json.RawMessage; other captures (string fallbacks, audio/image logs,\nstream-built responses) keep their own types. The MongoDB writer decodes\nraw JSON into documents so they stay queryable, see body.go."
           },
           "request_body_too_big_to_handle": {
             "description": "Body capture status flags (set when body exceeds 1MB limit)",
@@ -12861,7 +12861,7 @@
             }
           },
           "request_revisions": {
-            "description": "RequestRevisions captures the ingress request-rewrite chain: one entry\nper registered rewriter that ran, in application order, followed by the\nprompt-guardrail steps. Rewriters that changed the body carry the\nrewritten body; those that left it alone are recorded with NoChange so\nthe audit trail still shows the step ran. Each prompt guardrail that\nedited the prompt is a changed revision, in step order, carrying the\nrequest as it stood right after that step (the next step's input) with\nits sizes; one that objected (warn, block, respond) or failed without\nediting is a NoChange entry carrying the decision, and a silent allow\nleaves no entry. RequestBody always remains the original client\nrequest; the last changed revision is what was forwarded downstream —\nwhen every step was a no-op there is no such revision and the original\nbody is what went upstream.",
+            "description": "RequestRevisions captures the ingress request-rewrite chain: one entry\nper registered rewriter that ran, in application order, followed by the\nprompt-guardrail steps. Rewriters that changed the body carry the\nrewritten body; those that left it alone are recorded with NoChange so\nthe audit trail still shows the step ran. Each prompt guardrail that\nedited the prompt is a changed revision, in step order, carrying the\nrequest as it stood right after that step (the next step's input) with\nits sizes; one that objected (warn, block, respond) or failed without\nediting is a NoChange entry carrying the decision, and a silent allow\nleaves no entry. RequestBody always remains the original client\nrequest; the last changed revision is what was forwarded downstream N/A\nwhen every step was a no-op there is no such revision and the original\nbody is what went upstream.",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/auditlog.RequestRevisionSnapshot"
@@ -12919,7 +12919,7 @@
         "type": "object",
         "properties": {
           "body": {
-            "description": "Body is the request body after this revision (the raw JSON, or a string\nwhen not valid JSON — see body.go). Populated only when body logging is\nenabled and the body is within the capture limit."
+            "description": "Body is the request body after this revision (the raw JSON, or a string\nwhen not valid JSON, see body.go). Populated only when body logging is\nenabled and the body is within the capture limit."
           },
           "bytes_after": {
             "type": "integer"
@@ -12931,7 +12931,7 @@
             "description": "Detail is an optional rewriter-provided structured summary of what\nchanged (for example a compression block report)."
           },
           "no_change": {
-            "description": "NoChange marks a rewriter that ran and left the body untouched. Such\nrevisions record the step for operators — BytesAfter equals BytesBefore,\nBody is empty and TokensSaved is zero, though Detail may explain why\nnothing changed — but are not part of the chain that produced the\nforwarded request. Absent on entries written before no-change steps were\ntracked, which is why the flag is positive: an old revision always\nchanged the body.",
+            "description": "NoChange marks a rewriter that ran and left the body untouched. Such\nrevisions record the step for operators (BytesAfter equals BytesBefore,\nBody is empty and TokensSaved is zero, though Detail may explain why\nnothing changed) but are not part of the chain that produced the\nforwarded request. Absent on entries written before no-change steps were\ntracked, which is why the flag is positive: an old revision always\nchanged the body.",
             "type": "boolean"
           },
           "rewriter": {
@@ -14317,7 +14317,7 @@
             }
           },
           "input": {
-            "description": "string or []ResponsesInputElement — see docs for array form",
+            "description": "string or []ResponsesInputElement, see docs for array form",
             "oneOf": [
               {
                 "type": "string"
@@ -14493,7 +14493,7 @@
             }
           },
           "input": {
-            "description": "string or []ResponsesInputElement — see docs for array form",
+            "description": "string or []ResponsesInputElement, see docs for array form",
             "oneOf": [
               {
                 "type": "string"
@@ -14734,7 +14734,7 @@
             }
           },
           "input": {
-            "description": "string or []ResponsesInputElement — see docs for array form",
+            "description": "string or []ResponsesInputElement, see docs for array form",
             "oneOf": [
               {
                 "type": "string"

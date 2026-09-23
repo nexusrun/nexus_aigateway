@@ -36,7 +36,7 @@ providers:
 
 AIGateway also accepts a Claude subscription OAuth token as the Anthropic
 credential. Generate one with `claude setup-token` (requires a Claude
-subscription — Pro, Max, Team, or Enterprise — and the Claude Code CLI) and
+subscription (Pro, Max, Team, or Enterprise) and the Claude Code CLI) and
 set it as the provider key:
 
 ```bash
@@ -53,7 +53,7 @@ them as `Authorization: Bearer` with the `oauth-2025-04-20` beta instead of
   [Claude Code guide](/guides/claude-code)); requests from other clients are
   rejected upstream with "This credential is only authorized for use with
   Claude Code". Endpoints outside the Claude Code surface (such as model
-  listing) may also be rejected — if provider model discovery fails, configure
+  listing) may also be rejected, if provider model discovery fails, configure
   the `models` list for the provider explicitly.
 </Warning>
 
@@ -70,7 +70,7 @@ depends on whether the model supports **adaptive thinking**.
 
 | Model generation | Thinking config | Effort destination |
 | ---------------- | --------------- | ------------------ |
-| Adaptive — `claude-fable-5`, `claude-fable-5-1`, `claude-mythos-5`, `claude-mythos-5-1`, `claude-opus-5`, `claude-sonnet-5`, `claude-opus-4-8`, `claude-opus-4-7`, `claude-opus-4-6`, `claude-sonnet-4-6` (and dated snapshots of each) | `thinking: {type: "adaptive"}` | `output_config.effort` (passed through) |
+| Adaptive, `claude-fable-5`, `claude-fable-5-1`, `claude-mythos-5`, `claude-mythos-5-1`, `claude-opus-5`, `claude-sonnet-5`, `claude-opus-4-8`, `claude-opus-4-7`, `claude-opus-4-6`, `claude-sonnet-4-6` (and dated snapshots of each) | `thinking: {type: "adaptive"}` | `output_config.effort` (passed through) |
 | Legacy (everything else, e.g. `claude-opus-4-5`, `claude-3-5-sonnet`) | `thinking: {type: "enabled", budget_tokens: N}` | mapped to a token budget |
 
 <Note>
@@ -101,7 +101,7 @@ so on legacy models they are capped at the `high` budget rather than inflating
   always-on note below). Effort is a separate
   control that governs overall token spend (text and tool calls) whether or not
   thinking is engaged, and Anthropic defaults it to `high` when unset. It is a
-  behavioral signal for depth and verbosity, not a hard budget — actual usage
+  behavioral signal for depth and verbosity, not a hard budget, actual usage
   varies per request and is bounded by `max_tokens`.
 </Note>
 
@@ -125,7 +125,7 @@ so on legacy models they are capped at the `high` budget rather than inflating
 ## Sampling parameters
 
 Anthropic removed `temperature` and `top_p` from Fable 5/5.1, Mythos 5/5.1,
-Opus 5, Sonnet 5, and Opus 4.8/4.7 — any value, including the OpenAI SDK
+Opus 5, Sonnet 5, and Opus 4.8/4.7, any value, including the OpenAI SDK
 default of `temperature: 1`, is rejected upstream with a 400. AIGateway drops
 both fields for those models and logs the discarded values, so clients that
 always send a temperature keep working. Older models still receive them as
@@ -147,7 +147,7 @@ it) rather than failing the request.
 Fable 5.1 and Mythos 5.1 accept only `tool_choice: "auto"` and `"none"`;
 forcing a call with `"required"` or `{"type": "function", ...}` returns a 400
 from Anthropic. AIGateway follows Anthropic's documented replacement: the choice
-is downgraded to `auto` and an instruction is appended to the system prompt —
+is downgraded to `auto` and an instruction is appended to the system prompt,
 "You must respond by calling one of the provided tools." for `required`, or
 "You must respond by calling the tool named `<name>`." for a named function.
 The downgrade is logged. `parallel_tool_calls: false` is still honored. Fable 5
