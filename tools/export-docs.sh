@@ -7,9 +7,12 @@ case "$output_dir" in
 	/*) ;;
 	*) output_dir="$repo_root/$output_dir" ;;
 esac
-archive=$(mktemp "${TMPDIR:-/tmp}/nexus-aigateway-docs.XXXXXX.zip")
+# busybox mktemp (Alpine, used by the Docker build) requires the template to
+# end in XXXXXX, so make a temp directory and name the archive inside it.
+archive_dir=$(mktemp -d "${TMPDIR:-/tmp}/nexus-aigateway-docs.XXXXXX")
+archive="$archive_dir/docs.zip"
 staging_dir="${output_dir}.staging.$$"
-trap 'rm -f "$archive"; rm -rf "$staging_dir"' EXIT
+trap 'rm -rf "$archive_dir"; rm -rf "$staging_dir"' EXIT
 
 cd "$repo_root/docs"
 npx --yes -p node@22 -p mint@latest mint export \
