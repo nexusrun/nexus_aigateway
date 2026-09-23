@@ -1,7 +1,9 @@
 <p align="center">
   <img alt="NEXUS AI Gateway logo" src="docs/nexus-ai-logo.png" width="220">
 </p>
+<p>
 [![Deploy to NEXUS AI](https://nexusai.run/deploy-button.svg)](https://nexusai.run/deploy?repo=https://github.com/nexusrun/nexus_aigateway)
+</p>
 <h1 align="center">
   NEXUS AI Gateway - FREE AI gateway
 </h1>
