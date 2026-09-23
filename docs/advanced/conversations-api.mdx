@@ -47,8 +47,8 @@ provider configuration.
 AIGateway enforces the OpenAI Conversations limits so the public contract stays
 compatible:
 
-- `items` — at most 20 entries on create.
-- `metadata` — at most 16 key-value pairs; keys up to 64 characters; values up
+- `items`, at most 20 entries on create.
+- `metadata`, at most 16 key-value pairs; keys up to 64 characters; values up
   to 512 characters.
 
 Item payloads follow the Responses API input/output item union. AIGateway
@@ -78,10 +78,10 @@ evicting the oldest first.
 
 AIGateway returns OpenAI-compatible errors:
 
-- `400 invalid_request_error` — invalid body, missing `metadata` on update, an
+- `400 invalid_request_error`, invalid body, missing `metadata` on update, an
   invalid item, or a limit exceeded (the `param` field names the offending field).
-- `404 not_found_error` — the conversation or requested item does not exist.
-- `404 invalid_request_error` with `param: "after"` — the pagination cursor does
+- `404 not_found_error`, the conversation or requested item does not exist.
+- `404 invalid_request_error` with `param: "after"`, the pagination cursor does
   not identify an item in the conversation.
 
 Conversation persistence is part of a successful `/v1/responses` turn. If the

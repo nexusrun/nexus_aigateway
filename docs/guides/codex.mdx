@@ -44,8 +44,8 @@ docker run --rm -p 8080:8080 \
 See the [ChatGPT provider page](/providers/chatgpt) for the model list, the
 token's ~10-day lifetime, and which Responses parameters that backend accepts.
 
-To bill it to API credit instead, configure any other provider as usual — for
-example `-e OPENAI_API_KEY="sk-..."` — and use one of its models in step 2.
+To bill it to API credit instead, configure any other provider as usual, for
+example `-e OPENAI_API_KEY="sk-..."`, and use one of its models in step 2.
 
 ## 1. Confirm the Responses API
 
@@ -85,7 +85,7 @@ export AIGATEWAY_API_KEY=change-me
 
 <Note>
   Codex requires this variable even when you are signed in with ChatGPT, and it
-  carries the AIGateway master key — not an OpenAI key. Without it the provider
+  carries the AIGateway master key, not an OpenAI key. Without it the provider
   fails to start.
 </Note>
 
@@ -123,7 +123,7 @@ ok
   Codex 0.147.0 logs `failed to refresh available models: missing field
   "models"` at startup. It calls its own catalogue endpoint, which AIGateway
   answers with the standard OpenAI `/v1/models` shape. The message is cosmetic
-  — Codex falls back and the session works.
+ , Codex falls back and the session works.
 </Note>
 
 ## 4. Check the traffic in AIGateway
@@ -153,7 +153,7 @@ providers:
 Then set `model = "deepseek-v4-pro"` in the Codex config from step 2. See the
 [DeepSeek page](/providers/deepseek) for the reasoning-effort mapping, and
 [Responses compatibility](/advanced/responses-compatibility) for what
-chat-translated providers drop — including the `reasoning.encrypted_content`
+chat-translated providers drop, including the `reasoning.encrypted_content`
 Codex asks for on every request.
 
 ## Current status

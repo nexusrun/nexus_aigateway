@@ -277,7 +277,7 @@ block, before it closes, exactly as Anthropic does.
 
 DeepSeek, Fireworks and other providers return reasoning text with nothing to
 authenticate it. The Anthropic Messages API still renders it as a `thinking`
-block, with `signature: ""` — the schema marks the member required, so a
+block, with `signature: ""`, the schema marks the member required, so a
 strictly typed client would reject a block that omits it, and streaming opens
 the block with an empty signature and sends no `signature_delta`, which is the
 shape Anthropic itself streams before the real signature arrives. Echo the turn
@@ -289,7 +289,7 @@ Anthropic accepts only signatures it minted (a missing one fails with
 block is dropped and the rest of the turn is sent as usual.
 
 The other dialects have no thinking block, so they carry the same data under
-`extra_content.anthropic.thinking_blocks` — on the assistant message in Chat
+`extra_content.anthropic.thinking_blocks`, on the assistant message in Chat
 Completions, on the `reasoning` output item in the Responses API. Streaming
 chat deltas carry the value once the thinking block completes, before any
 text, and it is cumulative: the last one seen holds the whole turn.

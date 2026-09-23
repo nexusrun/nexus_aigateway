@@ -120,6 +120,7 @@ func (b *bootstrap) initServerConfig() error {
 	allowPassthroughV1Alias := appCfg.Server.AllowPassthroughV1Alias
 	serverCfg := &server.Config{
 		BasePath:                        appCfg.Server.BasePath,
+		DocsDir:                         appCfg.Server.DocsDir,
 		MasterKey:                       appCfg.Server.MasterKey,
 		Authenticator:                   app.authKeys.Service,
 		MetricsEnabled:                  appCfg.Metrics.Enabled,

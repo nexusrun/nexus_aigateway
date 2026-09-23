@@ -36,8 +36,8 @@ dedicated `frontend` job in GitHub Actions:
 - The job runs with `persist-credentials: false`, has no secrets, uses a pinned
   Node version and pinned action SHAs, installs from `package-lock.json` with
   `npm ci`, and uploads `static/dist` as a workflow artifact.
-- Every job that needs the dashboard — Go tests, the build check, the Docker
-  image, GoReleaser — downloads that artifact instead of building its own.
+- Every job that needs the dashboard, Go tests, the build check, the Docker
+  image, GoReleaser, downloads that artifact instead of building its own.
   The bytes in a release are exactly the bytes the secretless job produced.
 - The `Dockerfile` stays Go-only; the Docker build context contains the
   downloaded `dist`, and the image never runs Node.

@@ -10,7 +10,7 @@ ConverseStream APIs, normalizing responses across model families (Anthropic,
 Amazon Nova, Meta Llama, Mistral, Cohere, AI21, and others) into
 OpenAI-compatible chat completions.
 
-Bedrock has no API key of its own — AIGateway resolves AWS credentials at runtime
+Bedrock has no API key of its own, AIGateway resolves AWS credentials at runtime
 through the standard AWS credential chain (env, `AWS_PROFILE`, IAM Identity
 Center, instance/container roles).
 
@@ -131,7 +131,7 @@ providers:
       - amazon.nova-lite-v1:0
 ```
 
-Behavior follows the global `CONFIGURED_PROVIDER_MODELS_MODE` — `fallback`
+Behavior follows the global `CONFIGURED_PROVIDER_MODELS_MODE`, `fallback`
 (default) uses the list only when `ListFoundationModels` is unavailable or
 empty; `allowlist` exposes only configured models and skips the upstream call.
 
@@ -152,19 +152,19 @@ still come from the standard AWS credential chain.
 
 ## Not yet integrated
 
-- Bedrock embeddings — the `InvokeModel` embedding path is model-specific and
+- Bedrock embeddings, the `InvokeModel` embedding path is model-specific and
   not wired up.
 
 ## Troubleshooting
 
-- **`AccessDeniedException` / `403`** — the AWS principal lacks Bedrock
+- **`AccessDeniedException` / `403`**: the AWS principal lacks Bedrock
   permissions, or model access has not been granted in the Bedrock console.
-- **`on-demand throughput isn't supported`** — the model requires an inference
+- **`on-demand throughput isn't supported`**: the model requires an inference
   profile or provisioned throughput. Set `BEDROCK_MODELS` to the inference
   profile ID.
-- **`model registry has no models`** — region has no on-demand text models, or
+- **`model registry has no models`**: region has no on-demand text models, or
   the control-plane call failed. Set `BEDROCK_MODELS` or check IAM.
-- **Wrong region inferred** — pass `BEDROCK_BASE_URL` explicitly. With a full
+- **Wrong region inferred**: pass `BEDROCK_BASE_URL` explicitly. With a full
   endpoint URL, AIGateway only extracts the region segment when the host ends in
   `.amazonaws.com`; custom endpoints should pair with `AWS_REGION`.
 

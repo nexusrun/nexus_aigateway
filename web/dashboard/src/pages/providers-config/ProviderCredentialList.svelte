@@ -17,7 +17,7 @@
   const showActions = $derived(providerRowsHaveActions(providersConfig.filteredRows));
 </script>
 
-<div class="table-wrapper">
+<div class="table-wrapper provider-credentials-table">
   <table class="data-table">
     <thead>
       <tr>

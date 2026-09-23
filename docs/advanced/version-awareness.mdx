@@ -18,7 +18,7 @@ affected and how many are still on a release that needs patching, so we know how
 urgently to push a fix and how loudly to warn. Without it we would be guessing.
 
 **We recommend leaving it on.** It sends no API keys, no prompts, no model names
-and no usage data — see [What the check sends](#what-the-check-sends) for the
+and no usage data, see [What the check sends](#what-the-check-sends) for the
 exact list, and turn it off with one environment variable if you prefer.
 
 If you have any concerns about this data, please tell us: open an issue on
@@ -36,12 +36,12 @@ The check reads one plain-text file:
 
 Two triggers, both throttled:
 
-- **A daily timer**, so a headless gateway nobody opens a dashboard on still
+- **A daily timer**: so a headless gateway nobody opens a dashboard on still
   notices releases. The first check waits a random few minutes after startup and
   the interval carries ±10% jitter, so a fleet restarted together does not check
   in lockstep.
-- **The first dashboard visit of each day**, per browser. A cookie named
-  `aigateway_version_check` holds `YYYY-MM-DD-{id}` — the day this browser last
+- **The first dashboard visit of each day**: per browser. A cookie named
+  `aigateway_version_check` holds `YYYY-MM-DD-{id}`, the day this browser last
   checked plus a random id minted on its first visit. On every page load after
   the first one each day, the dashboard reads that date and makes no request at
   all.
@@ -69,12 +69,12 @@ A check triggered by a dashboard visit also forwards an **allowlisted** slice of
 that visit: the browser's `User-Agent`, `Accept-Language`, `Sec-CH-UA*` client
 hints, and the visit cookie value (`X-AIGateway-Date`).
 
-Because it is an allowlist, anything not on it is dropped — including `Cookie`,
+Because it is an allowlist, anything not on it is dropped, including `Cookie`,
 `Authorization`, `X-API-Key`, and `Referer`. A dashboard session credential or
 master key cannot leave your deployment through this path.
 
 Two things are withheld on purpose: **the hostname your dashboard is served on**,
-which would identify your organization, and **client IP addresses**, which are
+which would identify your organization, and **client IP addresses**: which are
 personal data. Neither is ever sent.
 
 ### The install identifier
@@ -89,15 +89,15 @@ It is kept in the deployment's database, under the `install_id` key in the
 data directory. The database copy is authoritative: it survives a container
 being recreated, and replicas sharing one database report as one deployment.
 An `install-id` file from an earlier release is adopted unchanged the first time
-the gateway starts with this one, unless the database already holds an id — for
-instance because another replica sharing it started first — in which case the
+the gateway starts with this one, unless the database already holds an id, for
+instance because another replica sharing it started first, in which case the
 database's id wins and the file is rewritten to match. If the database cannot
 be reached at startup, the gateway uses the file (or the fallback below) until
 it can, and switches to the database's id on a later check rather than keeping
 a provisional one for the life of the process.
 
-When neither copy exists — a container recreated without a volume, running
-SQLite — the identifier is derived from `AIGATEWAY_MASTER_KEY` with HMAC-SHA256,
+When neither copy exists, a container recreated without a volume, running
+SQLite, the identifier is derived from `AIGATEWAY_MASTER_KEY` with HMAC-SHA256,
 so the same configuration keeps the same identity. The key itself is never
 sent and cannot be recovered from the identifier. Rotating the key in that
 situation reads as a new deployment; without a master key a fresh random id
@@ -156,7 +156,7 @@ version_check:
 ## The `/version` endpoint
 
 Public and unauthenticated, alongside `/health`. It answers from the cache and
-never blocks on the network — a due check runs in the background, so an
+never blocks on the network, a due check runs in the background, so an
 unreachable release host never slows the dashboard down:
 
 ```bash

@@ -1,0 +1,58 @@
+---
+title: "Cerebras Inference"
+description: "Configure Cerebras Inference in AIGateway through its OpenAI-compatible API."
+icon: "zap"
+keywords: ["Cerebras", "Cerebras Inference", "OpenAI compatible", "provider setup"]
+---
+
+Cerebras Inference exposes an OpenAI-compatible API. AIGateway forwards chat
+requests through the shared OpenAI adapter and translates `/v1/responses` to
+chat completions when a client uses the Responses API.
+
+## Configure
+
+```bash
+CEREBRAS_API_KEY=...
+# CEREBRAS_BASE_URL=https://api.cerebras.ai/v1  # optional override
+```
+
+Or in `config.yaml`:
+
+```yaml
+providers:
+  cerebras:
+    type: cerebras
+    api_key: "${CEREBRAS_API_KEY}"
+```
+
+The default base URL is `https://api.cerebras.ai/v1`. Use the exact model ID
+returned by Cerebras or by AIGateway's `GET /v1/models` response. Model IDs
+change over time; the example below is illustrative.
+
+## Chat completions
+
+```bash
+curl http://localhost:8080/v1/chat/completions \
+  -H "Authorization: Bearer $AIGATEWAY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "qwen-3.8-27b",
+    "messages": [{"role": "user", "content": "Explain this code briefly."}]
+  }'
+```
+
+Use `cerebras/<model-id>` when you want to select Cerebras explicitly among
+multiple configured providers.
+
+## Compatibility notes
+
+- Chat Completions, streaming, tool calls, and model discovery use the shared
+  OpenAI-compatible adapter.
+- `/v1/responses` is translated through Chat Completions.
+- Embeddings, files, and batches are not provided by this adapter.
+- Cerebras model capabilities vary. For example, image input may require a
+  base64 data URI, and some models restrict the combination of tools and
+  structured output.
+
+See the [Cerebras OpenAI compatibility guide](https://inference-docs.cerebras.ai/resources/openai)
+for current model-specific behavior.

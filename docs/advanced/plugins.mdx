@@ -591,7 +591,7 @@ Notes for authors:
 - Implement `pluginapi.ContentEditor` (`EditsContent() bool`) when a plugin
   that declares `Mutates` can be configured not to edit, such as a detector
   set to flag instead of rewrite. AIGateway asks a configured instance before
-  work it does only for editing plugins — replaying the stored history of a
+  work it does only for editing plugins, replaying the stored history of a
   chained Responses request rather than letting the provider resolve
   `previous_response_id` itself. It never changes how a hook runs, and a
   mutating plugin without it is taken to edit.

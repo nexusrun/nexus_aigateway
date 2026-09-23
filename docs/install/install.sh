@@ -81,7 +81,7 @@ if [ -z "$install_dir" ]; then
     fi
 fi
 mkdir -p "$install_dir" || fail "cannot create $install_dir"
-[ -w "$install_dir" ] || fail "$install_dir is not writable — set AIGATEWAY_INSTALL_DIR to a writable directory, or rerun with sudo"
+[ -w "$install_dir" ] || fail "$install_dir is not writable, set AIGATEWAY_INSTALL_DIR to a writable directory, or rerun with sudo"
 install -m 755 "$tmpdir/$BINARY" "$install_dir/$BINARY"
 
 say ""

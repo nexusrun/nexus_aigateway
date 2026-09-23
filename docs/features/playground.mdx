@@ -12,7 +12,7 @@ metered exactly like a client's request. Pick an endpoint (`/v1/chat/completions
 or virtual model by name, and whether to stream; build the conversation
 from editable, reorderable System, User, and Assistant messages; and send a prompt.
 The JSON panel on the right shows the request body as it will be sent (updated live
-as you edit) and the last response with its status, latency, and token usage —
+as you edit) and the last response with its status, latency, and token usage,
 streamed responses are assembled into the same shape a non-streaming call returns.
 Requests are subject to the same budgets, rate limits, guardrails, and audit logging
 as any other client of the gateway.
@@ -25,17 +25,10 @@ the **User path** field next to the model picker. When you select a model whose
 policy declares `user_paths`, the field is prefilled with the first entry; you can
 edit it before sending. On send, the value is carried on the user-path request
 header, exactly as an external client would send it, so the gateway records the
-path on the request snapshot and grants access to models restricted to that path —
+path on the request snapshot and grants access to models restricted to that path,
 a request without the header is denied for those models.
 
 The header name is `X-AIGateway-User-Path` by default. If you customize it through
 `USER_PATH_HEADER` (or `server.user_path_header`), the dashboard reads the
 effective name from `GET /admin/runtime/config` and sends the scoped path under
 that header, so no extra dashboard configuration is needed.
-
-<img
-  src="/features/playground.png"
-  alt="AIGateway dashboard Playground page with the Messages endpoint selected, a model picker, System, User, and Assistant message cards, a prompt composer, and the request JSON panel on the right"
-  style={{ width: "100%", maxWidth: "1280px", height: "auto" }}
-  className="rounded-lg"
-/>

@@ -10,18 +10,18 @@ keywords: ["rate limits", "rpm", "tpm", "429", "concurrency", "throttling", "use
 Rate limits cap request rate, token rate, and in-flight concurrency. Every
 rule has a **scope** that decides what it protects:
 
-- **User path** (consumer control) — e.g. `/team/alpha` can send `100`
+- **User path** (consumer control), e.g. `/team/alpha` can send `100`
   requests per minute, consume `50,000` tokens per minute, and hold `10`
   requests in flight, across everything under that path.
-- **Provider** (upstream protection) — e.g. send provider `openai` at most
+- **Provider** (upstream protection), e.g. send provider `openai` at most
   `500` requests per minute across all consumers and models, so the gateway
   never blows through your provider quota.
-- **Model** — e.g. `openai/gpt-4o` may consume `90,000` tokens per minute; a
+- **Model**: e.g. `openai/gpt-4o` may consume `90,000` tokens per minute; a
   bare id like `gpt-4o` caps the model across every provider.
 
 The scopes behave differently on breach. A **user path** over its limit gets
 `429` with an OpenAI-shaped error, an accurate `Retry-After` header, and
-`x-ratelimit-*` headers — switching models would not help, the consumer is the
+`x-ratelimit-*` headers, switching models would not help, the consumer is the
 subject. A saturated **provider or model** is instead treated like an
 unavailable target: virtual-model load balancing and failover route around it
 while another target has capacity, and only when no viable target remains does
@@ -61,12 +61,6 @@ In the dashboard:
 Rate Limits -> Create Rate Limit
 ```
 
-<img
-  src="/features/rate-limits.png"
-  alt="AIGateway dashboard Rate Limits page listing user-path, provider, and model rules with live usage bars for requests, tokens, and concurrency"
-  style={{ width: "100%", maxWidth: "1280px", height: "auto" }}
-  className="rounded-lg"
-/>
 
 Pick the scope (user path, provider, or model), the subject, a period, and the
 caps. Dashboard-created rules are marked `manual`. Rules loaded from YAML or
@@ -76,8 +70,8 @@ rule's counters, and the trash icon deletes the rule (which also resets it).
 
 The Models page has a gauge button on every model row and provider header that
 opens the same limits for that subject in context: the model's own rules, the
-provider rules it shares, and the global (root user-path) rules — each with
-live usage — plus add and edit actions.
+provider rules it shares, and the global (root user-path) rules, each with
+live usage, plus add and edit actions.
 
 Editing a rule's scope, subject, or period **moves** it: the rule is recreated
 under the new key and its live counters restart. Editing only the caps keeps
@@ -174,7 +168,7 @@ own user path and define rules there.
   Dynamic per-child rate limits are available in AIGateway Pro and require the
   `quota_templates` license entitlement. Without it, admin API writes are
   rejected with 403 `quota_templates_not_entitled`, and `per_child: true` in
-  configuration aborts startup — AIGateway never silently falls back to one
+  configuration aborts startup, AIGateway never silently falls back to one
   shared subtree counter, since that would change enforcement semantics.
 </Info>
 
@@ -207,13 +201,13 @@ A saturated provider or model behaves like one with stale inventory:
   limit), the sweep over the redirect's remaining targets starts immediately,
   and rate-saturated candidates are skipped along the way.
 - **Direct requests** with no virtual model receive `429` with an
-  honest `Retry-After` — the same answer the provider itself would eventually
+  honest `Retry-After`, the same answer the provider itself would eventually
   give, minus the wasted upstream call. Consumer (user path) breaches always
   return `429`: switching targets cannot relieve them.
 
 Token accounting charges the provider and model that actually executed the
 request (recorded on the usage entry), so the windows stay correct under
-aliasing and failover. Batch submissions skip provider/model rules — the
+aliasing and failover. Batch submissions skip provider/model rules, the
 batch file can mix models, so only user-path rules apply at submission.
 
 Details worth knowing:
@@ -221,7 +215,7 @@ Details worth knowing:
 - Request windows use a sliding-window estimate, so bursts cannot double up at
   window boundaries.
 - Token usage is counted after each response completes (streams included).
-  One request can overshoot a token window before the counter catches up —
+  One request can overshoot a token window before the counter catches up,
   the same behavior as other gateways that count tokens from responses.
 - Response-cache hits are served before enforcement and count nothing.
 - A realtime session counts as one request and holds one concurrency slot for
@@ -231,7 +225,7 @@ Details worth knowing:
   to the configured store about once a second (and on shutdown), so they
   survive a restart and `aigateway --reload`. Concurrency gauges are not
   persisted: after a bounce nothing is in flight. With N replicas the
-  effective limit is still about N times the configured value — use budgets
+  effective limit is still about N times the configured value, use budgets
   for durable, cross-instance control. Tune the snapshot interval with
   `RATE_LIMITS_FLUSH_INTERVAL` (seconds; default `1`; `0` skips the periodic
   write but still loads on start and flushes on a clean shutdown).

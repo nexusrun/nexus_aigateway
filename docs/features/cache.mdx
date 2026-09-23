@@ -115,7 +115,7 @@ resolved workflow or the final body sent through execution.
 A cache hit replays the stored response without re-running the response and
 stream guardrail chains, so an entry is only ever served to a request whose
 chain matches the one that produced it. Editing, adding or removing a guardrail
-step — or a second workflow with a different chain — yields a miss instead of a
+step (or a second workflow with a different chain) yields a miss instead of a
 reply those guardrails never saw. Changing guardrail configuration therefore
 invalidates the entries stored under the old chain.
 
@@ -181,7 +181,7 @@ key is hashed from the pre-failover resolution, so storing the backup's answer
 would serve it under the primary's key once the primary recovers.
 
 The practical consequence: a virtual model whose first target is chronically
-down stops accumulating cache entries for as long as it stays down — every
+down stops accumulating cache entries for as long as it stays down, every
 request that misses fails over and is served fresh, and nothing it produces is
 stored. Entries written before the outage keep serving until their TTL expires:
 a lookup runs ahead of dispatch, so a hit is returned without touching either

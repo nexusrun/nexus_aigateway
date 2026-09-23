@@ -26,12 +26,15 @@ const PROVIDER_DOC_SLUGS = new Set([
   "bailian",
   "bedrock",
   "bedrock-mantle",
+  "cerebras",
   "chatgpt",
   "cohere",
+  "cloudflare-workers-ai",
   "deepseek",
   "elevenlabs",
   "gemini",
   "hetzner",
+  "huggingface",
   "kimicode",
   "llamacpp",
   "llmd",
@@ -49,6 +52,7 @@ const PROVIDER_DOC_SLUGS = new Set([
 // slug does not match the provider type. `ollama` is documented under the
 // "multiple-ollama" page (its frontmatter title is "Ollama").
 const PROVIDER_DOC_SLUG_OVERRIDES = {
+  cloudflare: "cloudflare-workers-ai",
   ollama: "multiple-ollama",
 };
 

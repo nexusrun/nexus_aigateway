@@ -17,7 +17,7 @@ access rules ([user paths](/features/user-path)), [budgets](/features/budgets),
 and [rate limits](/features/rate-limits) all apply. Image generation is served by
 OpenAI and the OpenAI-compatible providers that implement the endpoint
 (Azure OpenAI, OpenRouter, [xAI](/providers/xai)), and by
-[Google Gemini](/providers/gemini) — Gemini image models through the native
+[Google Gemini](/providers/gemini), Gemini image models through the native
 API, plus Imagen on [Vertex AI](/providers/vertex). Image edits are served by
 OpenAI and Azure OpenAI, by
 Gemini image models (`gemini-2.5-flash-image`, ...), plus any
@@ -94,13 +94,13 @@ await writeFile("lighthouse.png", Buffer.from(result.data[0].b64_json, "base64")
 
 </CodeGroup>
 
-`model` and `prompt` are required. Every other field — `n`, `size`, `quality`,
+`model` and `prompt` are required. Every other field, `n`, `size`, `quality`,
 `style`, `response_format`, `background`, `output_format`, `output_compression`,
-`moderation`, `user`, and any future parameter — is **forwarded to the provider
+`moderation`, `user`, and any future parameter, is **forwarded to the provider
 unchanged**, so model-specific options work without a gateway update. The
 provider decides which values it accepts and returns its own error otherwise.
 The exception is Gemini's native adapter, which translates `n` and `size` to
-their native equivalents — see [Google Gemini](#google-gemini).
+their native equivalents, see [Google Gemini](#google-gemini).
 
 The response is the OpenAI images envelope. `data[]` entries carry either a
 hosted `url` (DALL·E, `response_format: "url"`) or inline `b64_json`
@@ -173,7 +173,7 @@ Image calls are recorded in [usage tracking](/features/cost-tracking) under the
 `/v1/images/generations` and `/v1/images/edits` endpoints:
 
 The prompt is always priced at `input_per_mtok` when the provider reports input
-tokens. The **generated images** are billed one of two ways, never both — the
+tokens. The **generated images** are billed one of two ways, never both, the
 reported usage decides:
 
 - **Token-billed models** (`gpt-image-1`, Gemini image models) report `usage`.
@@ -192,9 +192,9 @@ is the flat equivalent of one typical image's tokens ($0.039 for a 1290-token
 `gemini-2.5-flash-image`). A response that reported generated tokens is priced
 by those tokens alone, so the two are never added together.
 
-When the pricing cannot cost the generated images — no rate for the image output
+When the pricing cannot cost the generated images, no rate for the image output
 tokens the response reported, or no reported output tokens and no
-`per_image`/`per_request` rate — the usage row is flagged with a
+`per_image`/`per_request` rate, the usage row is flagged with a
 cost-calculation caveat so it reads as "unreported usage" rather than a free
 call.
 
@@ -219,17 +219,17 @@ providers:
 The image endpoints are a thin, model-routed pass to the provider and **do not
 run through the full inference orchestrator**. Compared with `/v1/chat/completions`:
 
-- **No failover, guardrails, or response cache** — these stages are skipped.
+- **No failover, guardrails, or response cache**: these stages are skipped.
   Requests are still authorized, budget-checked, rate-limited, metered, and
   written to the [audit log](/advanced/admin-endpoints).
-- **No streaming** — `stream: true` is rejected with a `400` because streamed
+- **No streaming**: `stream: true` is rejected with a `400` because streamed
   image generation is delivered as server-sent events, which these endpoints do
   not relay. Omit `stream` (or set it to `false`) to receive the complete JSON
   response.
 - **Variations** (`/v1/images/variations`) are not exposed. Use the
   [passthrough API](/features/passthrough-api) (`/p/{provider}/v1/images/...`)
   to reach them on a specific provider.
-- **OpenAI request shape in** — Google Gemini's native image APIs (Imagen
+- **OpenAI request shape in**: Google Gemini's native image APIs (Imagen
   `predict`, Gemini image model `generateContent`) are translated behind these
   endpoints; see [provider notes](#google-gemini) below. Other providers whose
   native image API differs from OpenAI's are not translated; use passthrough
@@ -240,12 +240,12 @@ run through the full inference orchestrator**. Compared with `/v1/chat/completio
 With the Gemini provider in native API mode (the default), Gemini image
 models (`gemini-2.5-flash-image`, ...) generate through `generateContent`,
 and `imagen-*` models through Imagen's `predict` API. Google retired Imagen
-from the Gemini API (AI Studio) on August 17, 2026 — use a Gemini image model
+from the Gemini API (AI Studio) on August 17, 2026, use a Gemini image model
 there; Imagen remains available on [Vertex AI](/providers/vertex).
 
 - Gemini image models do not support multi-candidate output, so `n` (up to
   10) is served as `n` parallel `generateContent` calls whose results are
-  merged — each call is billed by Google. For Imagen, `n` maps to
+  merged, each call is billed by Google. For Imagen, `n` maps to
   `sampleCount`; `size` maps to the closest supported
   aspect ratio (`1024x1024` → `1:1`, `1536x1024` → `3:2`, ...), and a raw
   ratio such as `"16:9"` passes through. Unknown JSON fields are forwarded
@@ -256,7 +256,7 @@ there; Imagen remains available on [Vertex AI](/providers/vertex).
 - Gemini image models report token `usage` (token-billed); Imagen reports
   none (price it `per_image`).
 - Edits work with Gemini image models only: uploads become inline image
-  parts ahead of the prompt. `mask` is not supported — describe the region to
+  parts ahead of the prompt. `mask` is not supported, describe the region to
   change in the prompt. Imagen models only generate.
 
 In OpenAI-compatible mode, generation forwards to Gemini's
@@ -271,7 +271,7 @@ Image requests appear in the audit log like any other model interaction. When
 - The generation request is stored as JSON. An edit request is stored as an
   image body: the prompt and parameters plus one item per uploaded source
   image and mask (filename, content type, size).
-- The response is stored as an image body too — the envelope (`created`,
+- The response is stored as an image body too, the envelope (`created`,
   `usage`, `size`, `quality`, …) plus one item per returned image. Hosted URLs
   are kept as links.
 
@@ -281,5 +281,5 @@ it on, uploads and generated images are embedded as base64 (8 MB per entry)
 and the dashboard renders them inline; `LOGGING_LOG_IMAGE_BODIES_SCOPE` limits
 this to `input` (edit uploads) or `output` (results). Without it, each image
 is a sized placeholder (`stored: false`), so the entry stays small and
-complete — it never hits the generic 1 MB body truncation even for large
+complete, it never hits the generic 1 MB body truncation even for large
 `b64_json` results.

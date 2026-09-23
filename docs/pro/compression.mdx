@@ -6,10 +6,6 @@ tag: "Pro"
 keywords: ["AIGateway Pro", "prompt compression", "token savings", "deduplication", "prompt cache"]
 ---
 
-<Frame caption="Dashboard Usage page: Pro savings over seven days of production traffic.">
-  <img src="/pro/pro-saved.webp" alt="Usage Analytics showing $268.63 estimated cost and $45.17 Pro saved, 14.4% less" />
-</Frame>
-
 ## Proven in production
 
 Prompt compression has been exercised on billions of production tokens across
@@ -24,7 +20,7 @@ agentic coding, chat, and tool-heavy workloads.
   session is replayed byte-for-byte and only new messages are rewritten,
   provider prompt caches keep hitting across turns. Testers actually noticed
   about a 2% *increase* in prompt-cache hits, since shorter, more stable
-  requests fit the cache better — which adds savings on top of the compression
+  requests fit the cache better, which adds savings on top of the compression
   itself.
 - **Real savings of 2%–20%** of input tokens for our testers, depending on
   the use case. Agents that re-read files, replay tool output, or carry long
@@ -72,7 +68,7 @@ prefix it did not observe.
 | --- | --- | --- |
 | `PRO_COMPRESSION_LEVEL` | `high` | Select `none`, `low`, `medium`, or `high`. An explicit value makes the Dashboard setting read-only. |
 | `PRO_COMPRESSION_SCOPE` | `full_history` | Use `new_messages_only` to protect pre-existing conversation history. |
-| `PRO_COMPRESSION_EXCLUDE_MODELS` | — | Comma-separated requested-model globs to skip, such as `ollama/*`. |
+| `PRO_COMPRESSION_EXCLUDE_MODELS` | N/A | Comma-separated requested-model globs to skip, such as `ollama/*`. |
 | `PRO_COMPRESSION_MIN_BLOCK_CHARS` | `128` | Minimum repeated line-run size under the high preset. |
 | `PRO_COMPRESSION_MIN_SAVINGS_TOKENS` | `32` | Minimum estimated net saving under the high preset. |
 | `PRO_COMPRESSION_DEDUPLICATE_CODE` | `false` | Permit repeated source-code runs to be replaced with references. |

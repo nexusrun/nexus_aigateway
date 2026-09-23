@@ -22,13 +22,13 @@ Flow:
   Claude Code can be routed through AIGateway whether or not you personally use a
   Claude Code subscription. For gateway mode, Claude Code talks to AIGateway with
   `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN`. AIGateway still needs its own
-  `ANTHROPIC_API_KEY` to reach Anthropic upstream — either a Console API key
+  `ANTHROPIC_API_KEY` to reach Anthropic upstream, either a Console API key
   or a Claude subscription OAuth token.
 </Note>
 
 ## How to get `ANTHROPIC_API_KEY`
 
-**Option A — Console API key (pay-as-you-go):**
+**Option A, Console API key (pay-as-you-go):**
 
 1. Open the Claude Console and sign in to your API account.
 2. Go to account settings in Console, then create an API key.
@@ -42,7 +42,7 @@ settings.
   are separate. API key usage is billed as API usage.
 </Warning>
 
-**Option B — Claude subscription token (Pro, Max, Team, or Enterprise):**
+**Option B, Claude subscription token (Pro, Max, Team, or Enterprise):**
 
 1. Run `claude setup-token` on a machine where Claude Code is logged in to
    your subscription.
@@ -183,7 +183,7 @@ The managed base URL serves `/v1/messages` with
 requests that resolve to Anthropic are relayed unchanged apart from model
 alias resolution (preserving `cache_control`, thinking signatures, and beta
 headers) while rate limits,
-budgets, audit, and usage tracking apply — and model aliases or virtual models
+budgets, audit, and usage tracking apply, and model aliases or virtual models
 can route Claude Code to other providers. Alternatively,
 `ANTHROPIC_BASE_URL=http://localhost:8080/p/anthropic` uses raw passthrough
 pinned to the Anthropic upstream.

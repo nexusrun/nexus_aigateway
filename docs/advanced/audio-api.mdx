@@ -90,9 +90,9 @@ await writeFile("speech.wav", Buffer.from(await speech.arrayBuffer()));
 
 </CodeGroup>
 
-`model`, `input`, and `voice` are required. Optional fields — `instructions`,
+`model`, `input`, and `voice` are required. Optional fields, `instructions`,
 `response_format` (`mp3` default, plus `opus`, `aac`, `flac`, `wav`, `pcm`), and
-`speed` — are forwarded to the provider. The response `Content-Type` is derived
+`speed`, are forwarded to the provider. The response `Content-Type` is derived
 from `response_format` (for example `wav` → `audio/wav`).
 
 ## Speech-to-text
@@ -147,8 +147,8 @@ console.log(transcription.text);
 
 </CodeGroup>
 
-`file` and `model` are required. Optional form fields — `language`, `prompt`,
-`response_format`, `temperature`, and `timestamp_granularities[]` — are forwarded.
+`file` and `model` are required. Optional form fields, `language`, `prompt`,
+`response_format`, `temperature`, and `timestamp_granularities[]`, are forwarded.
 `response_format` controls the response shape: `json` and `verbose_json` return a
 JSON object; `text`, `srt`, and `vtt` return a `text/plain` body.
 
@@ -164,9 +164,9 @@ unchanged**, so newer OpenAI options and provider-native extras work without
 waiting for a gateway release ([ADR-0011](https://github.com/nexusrun/nexus_aigateway/blob/main/docs/adr/0011-field-forwarding-on-translated-paths.md)
 rule 1):
 
-- `/v1/audio/speech` — unknown JSON members (for example `stream_format`) are
+- `/v1/audio/speech`, unknown JSON members (for example `stream_format`) are
   merged back into the upstream body.
-- `/v1/audio/transcriptions` and `/v1/audio/translations` — unknown form values
+- `/v1/audio/transcriptions` and `/v1/audio/translations`, unknown form values
   (for example `include[]=logprobs`, `chunking_strategy`, `stream`) are written
   into the upstream multipart body, repeated values included.
 
@@ -174,7 +174,7 @@ The provider stays the authority on what it accepts: a field it rejects comes
 back as that provider's own error rather than a silent 200.
 
 Two things never travel: the fields AIGateway controls itself (`model`, `file`,
-and the routing hint `provider`, plus the transcription options it re-emits —
+and the routing hint `provider`, plus the transcription options it re-emits,
 `language`, `prompt`, `response_format`, `temperature`, and both
 `timestamp_granularities[]` and its unbracketed alias
 `timestamp_granularities`), and extra **file** parts on a transcription
@@ -188,7 +188,7 @@ the entry records only the field **names** under `forwarded_fields`.
   **Streaming is relayed, not streamed.** A forwarded `stream_format: "sse"`
   (speech) or `stream: true` (transcription) makes the upstream answer with
   server-sent events, and AIGateway returns that body with its
-  `text/event-stream` Content-Type — but the bytes are buffered and delivered
+  `text/event-stream` Content-Type, but the bytes are buffered and delivered
   in one piece, so a client sees the complete event sequence at the end of the
   call rather than incrementally.
 </Note>
@@ -213,7 +213,7 @@ bills, not by tokens:
 - **Transcriptions and translations** are priced by the duration of the uploaded
   audio (`audio_seconds`, priced with `per_second_input`). AIGateway takes the
   duration the provider reports in `usage.seconds` or `verbose_json`'s
-  `duration`, and otherwise measures the upload itself — so the cost does not
+  `duration`, and otherwise measures the upload itself, so the cost does not
   depend on the `response_format` the client asked for, and providers that report
   no usage at all (Groq, ElevenLabs) are still metered.
 - **Token-billed transcription models** (`gpt-4o-transcribe` and similar) report
@@ -221,8 +221,8 @@ bills, not by tokens:
   A model that publishes both a token rate and a per-second rate is billed by
   whichever unit the provider reported, never both.
 
-When nothing billable is available — the provider reported no usage and the
-upload is in a container AIGateway cannot measure (`m4a`, `ogg`, `flac`, `webm`) —
+When nothing billable is available, the provider reported no usage and the
+upload is in a container AIGateway cannot measure (`m4a`, `ogg`, `flac`, `webm`),
 the usage row is flagged with a cost-calculation caveat instead of a $0 cost.
 
 ## Limitations
@@ -230,11 +230,11 @@ the usage row is flagged with a cost-calculation caveat instead of a $0 cost.
 The audio endpoints are a thin, model-routed pass to the provider and **do not run
 through the full inference orchestrator**. Compared with `/v1/chat/completions`:
 
-- **No failover, guardrails, or response cache** — these stages are skipped.
+- **No failover, guardrails, or response cache**: these stages are skipped.
   Requests are still authorized, budget-checked, metered (see
   [cost tracking](#cost-tracking)), and written to the
   [audit log](/advanced/admin-endpoints) under their `/v1/audio/*` path.
-- **OpenAI request shape in, provider dialect out** — clients always send OpenAI's
+- **OpenAI request shape in, provider dialect out**: clients always send OpenAI's
   audio format. OpenAI-compatible upstreams receive it unchanged; Xiaomi MiMo,
   Cohere, and MiniMax requests are translated to each provider's native audio
   contract. Providers beyond those are not adapted behind this endpoint.
@@ -249,14 +249,14 @@ forward bytes verbatim to that upstream.
 Audio requests appear in the audit log like any other model interaction. Because
 audio payloads are binary and large, their bodies are gated by a dedicated
 setting, [`LOGGING_LOG_AUDIO_BODIES`](/advanced/configuration#audit-logging)
-(default `false`), which **refines** `LOGGING_LOG_BODIES` — it has no effect
+(default `false`), which **refines** `LOGGING_LOG_BODIES`, it has no effect
 unless body logging is enabled:
 
-- **Body logging off** (`LOGGING_LOG_BODIES=false`) — no audio body is stored,
+- **Body logging off** (`LOGGING_LOG_BODIES=false`), no audio body is stored,
   regardless of this setting.
-- **Body logging on, audio off** (the default) — the audio response is recorded
+- **Body logging on, audio off** (the default), the audio response is recorded
   as a lightweight `{__audio__, content_type, bytes, stored: false}` placeholder; no audio bytes are stored.
-- **Body logging on, audio on** — `/v1/audio/speech` stores its text input and the
+- **Body logging on, audio on**: `/v1/audio/speech` stores its text input and the
   generated audio (base64, capped at 8 MB) so the **dashboard renders an inline
   player**, and `/v1/audio/transcriptions` stores the uploaded audio (base64,
   capped at 8 MB, also playable in the dashboard) alongside the upload metadata

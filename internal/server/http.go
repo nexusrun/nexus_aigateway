@@ -25,6 +25,7 @@ import (
 	batchstore "github.com/nexusrun/nexus_aigateway/internal/batch"
 	"github.com/nexusrun/nexus_aigateway/internal/conversationstore"
 	"github.com/nexusrun/nexus_aigateway/internal/core"
+	"github.com/nexusrun/nexus_aigateway/internal/docs"
 	"github.com/nexusrun/nexus_aigateway/internal/filestore"
 	"github.com/nexusrun/nexus_aigateway/internal/gateway"
 	"github.com/nexusrun/nexus_aigateway/internal/mcpgateway"
@@ -68,6 +69,7 @@ const (
 // Config holds server configuration options
 type Config struct {
 	BasePath                        string                                 // URL path prefix where the app is mounted (default: /)
+	DocsDir                         string                                 // Directory containing the exported product docs; empty uses the embedded fallback
 	MasterKey                       string                                 // Optional: Master key for authentication
 	Authenticator                   BearerTokenAuthenticator               // Optional: managed API key authenticator
 	MetricsEnabled                  bool                                   // Whether to expose Prometheus metrics endpoint
@@ -192,6 +194,11 @@ func New(provider core.RoutableProvider, cfg *Config) *Server {
 	}
 
 	handler := newHandlerWithAuthorizer(provider, auditLogger, usageLogger, pricingResolver, modelResolver, modelAuthorizer, workflowPolicyResolver, failoverResolver, translatedRequestPatcher)
+	docsDir := ""
+	if cfg != nil {
+		docsDir = cfg.DocsDir
+	}
+	docsHandler := docs.New(docsDir, basePath)
 	handler.budgetChecker = budgetChecker
 	if cfg != nil {
 		handler.failoverPolicy = cfg.FailoverPolicy
@@ -408,6 +415,8 @@ func New(provider core.RoutableProvider, cfg *Config) *Server {
 	e.Use(WorkflowResolutionWithResolverAndPolicy(provider, modelResolver, workflowPolicyResolver))
 
 	// Public routes
+	e.GET("/docs", docsHandler.Serve)
+	e.GET("/docs/*", docsHandler.Serve)
 	e.GET("/health", handler.Health)
 	e.GET("/health/ready", handler.Ready)
 	e.GET("/version", handler.Version)

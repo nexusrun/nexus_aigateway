@@ -38,7 +38,7 @@ invalid, so an authentication boundary cannot disappear silently.
 
 Per-child quota templates let one `user_path` budget definition apply
 independently to each direct child path instead of one shared subtree budget.
-Set `per_child: true` on a `budgets.user_paths` entry — see
+Set `per_child: true` on a `budgets.user_paths` entry, see
 [Budgets](/features/budgets#dynamic-per-child-budgets) for YAML and
 environment-variable examples and matching rules. Without the
 `quota_templates` entitlement, `per_child: true` in configuration aborts

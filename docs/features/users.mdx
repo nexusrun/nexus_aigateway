@@ -11,8 +11,8 @@ The **Users** page turns the [`user_path`](/features/user-path) hierarchy
 behind your API keys into a tree of groups and users, and lets each node
 restrict which models requests under it may call:
 
-- `/acme` and `/acme/eng` are **groups** — they contain other paths.
-- `/acme/eng/alice` is a **user** — API keys are bound directly to it.
+- `/acme` and `/acme/eng` are **groups**: they contain other paths.
+- `/acme/eng/alice` is a **user**: API keys are bound directly to it.
 
 Nothing needs to be created up front. The tree is derived from the user paths
 of existing API keys; add a policy to a node only when you want to restrict it.
@@ -86,7 +86,7 @@ Where the pieces come from:
 | Piece                   | Source                                                       |
 | ----------------------- | ------------------------------------------------------------ |
 | the request's user path | the managed API key's `user_path`, an SSO session, or the `X-AIGateway-User-Path` header |
-| the tree                | derived from the user paths of existing API keys — nothing to create |
+| the tree                | derived from the user paths of existing API keys, nothing to create |
 | node policies           | the **Users** page, `users:` in `config.yaml`, or the `USERS` env var |
 | key policies            | the **API Keys** page or `allowed_models` on `POST /admin/auth-keys` |
 | model-side policies     | [virtual models](/features/virtual-models) with `user_paths` or `enabled: false` |
@@ -142,10 +142,10 @@ A denied request receives `400` with code `model_access_denied`.
 
 ### Dashboard
 
-`Users` lists every node with its own allowlist, its **effective models** —
+`Users` lists every node with its own allowlist and its **effective models**,
 the path-level result once its own list, every parent's list, and the
 model-side virtual-model policies are applied (a red **None** flags a node
-whose lists intersect to nothing) — and how many API keys are bound to it. A
+whose lists intersect to nothing), and how many API keys are bound to it. A
 managed API key's own `allowed_models` can narrow a request further than the
 path shows. The editor warns while you type when the
 list would leave no model available. Add or edit a node to
@@ -157,7 +157,7 @@ the path prefilled.
 
 Per-key allowlists live on the **API Keys** page: set `Allowed models` when
 creating a key or edit them later from the key's row. Its **Effective models**
-column is the final answer for that credential — path policies, the key's own
+column is the final answer for that credential, path policies, the key's own
 list, and model-side policies combined.
 
 ### Configuration

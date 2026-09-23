@@ -75,7 +75,7 @@ providers:
 ```
 
 The `discovery` block makes omp fetch AIGateway's `/v1/models` catalog at
-startup, so every model AIGateway can route appears in omp automatically —
+startup, so every model AIGateway can route appears in omp automatically,
 including context window and output limits from AIGateway's model metadata. You
 do not list models by hand.
 
@@ -124,7 +124,7 @@ The expected output is `ok`.
 
 omp's `--thinking` levels (`low`, `medium`, `high`, ...) are sent as the
 OpenAI-compatible `reasoning_effort` field, and AIGateway translates that field
-for each upstream — for Anthropic models it becomes a thinking budget, and the
+for each upstream, for Anthropic models it becomes a thinking budget, and the
 model's thinking streams back as `reasoning_content`, which omp renders as
 thought blocks.
 

@@ -18,23 +18,23 @@ real bugs (an alias `user_paths` feature that re-implemented matching the
 overrides already had, and shipped without a migration, breaking existing
 databases).
 
-We also want **load balancing** — one name resolving to several real models,
-chosen per request — and there is no home for it today.
+We also want **load balancing**: one name resolving to several real models,
+chosen per request, and there is no home for it today.
 
 ## Decision
 
-Introduce one entity, the **virtual model**, persisted in `virtual_models` and
+Introduce one entity, the **virtual model**: persisted in `virtual_models` and
 keyed uniquely by `source`.
 
 - A row with `targets` is a **redirect**: `source` is a new name that rewrites
   to a real model. One target is an alias; many targets are load balancing,
   distributed by `strategy` (`round_robin`, honoring per-target `weight`, or
-  `cost`). This was implemented as the additive follow-up the staging enabled —
+  `cost`). This was implemented as the additive follow-up the staging enabled,
   the `targets`, `strategy`, and `weight` columns were already persisted.
 - A row without `targets` is an **access policy**: `source` is a scoped
   selector over existing models, gated by `user_paths`.
 
-Behavior is **derived from the presence of `targets`** — there is no `role`
+Behavior is **derived from the presence of `targets`**: there is no `role`
 column. Storage, the service object, the admin API, and the dashboard are
 unified, but resolution stays **staged**: redirect runs early, the access gate
 runs late, exactly as before.
@@ -90,7 +90,7 @@ and rollback to a release that reads them is no longer needed.
 - Rollback is lossless only before the first virtual-model edit, because new
   writes go only to `virtual_models`.
 
-## Update — single native engine, authoritative `Enabled`, scoped redirects, unified UI
+## Update: single native engine, authoritative `Enabled`, scoped redirects, unified UI
 
 A follow-up change completed the unification the first version staged:
 
@@ -113,12 +113,12 @@ A follow-up change completed the unification the first version staged:
 - **One admin surface and UI.** A single `GET/PUT/DELETE /admin/virtual-models`
   endpoint replaces `/admin/aliases` and `/admin/model-overrides`, and the
   dashboard collapses the separate alias and access-override modals into one
-  virtual-model editor (Source — locked when editing an existing model — an
+  virtual-model editor (Source (locked when editing an existing model) an
   always-present target field, `user_paths`, `enabled`, description) plus a
   per-row enable/disable toggle and alias-like styling for any model that carries
   a virtual model.
 
-## Update — chained virtual models
+## Update: chained virtual models
 
 A redirect target may name another virtual model's `source`, turning the
 redirect graph from a star into a DAG without adding an entity:
@@ -137,7 +137,7 @@ redirect graph from a star into a DAG without adding an entity:
   virtual model makes its leg unavailable. Only the outer redirect's
   `user_paths` and `slowdown` apply to a request.
 
-## Update — failover is a load-balancing behaviour of redirects
+## Update: failover is a load-balancing behaviour of redirects
 
 The standalone failover feature (per-model `failover_rules` rows, the
 `/admin/failover` endpoints, the `failover.rules` configuration and the
@@ -147,7 +147,7 @@ dashboard's shuffle icon) is folded into virtual models (#530, #560):
   request is sent to first; `Service.ResolveFailovers` returns the redirect's
   remaining available targets (descending chains) as the gateway's failover
   chain. The gateway sweep, attempt recording and the workflow/`FAILOVER_ENABLED`
-  gates are unchanged — only the source of the chain moved.
+  gates are unchanged, only the source of the chain moved.
 - **`failover` strategy.** A priority list: always the first available target,
   no weights, no session pinning.
 - **Self target = shadowed model.** A redirect may list its own source as a

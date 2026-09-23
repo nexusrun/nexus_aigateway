@@ -43,7 +43,7 @@ GEMINI_API_KEY=... go run ./cmd/recordapi -provider=gemini-native   -endpoint=ge
 ```
 
 The `inlineData.data` payload in `native_image_generation.json` is truncated
-post-recording to a 1x1 PNG — the recorded envelope (field names, casing,
+post-recording to a 1x1 PNG: the recorded envelope (field names, casing,
 usage metadata) is unchanged.
 
 ## Running

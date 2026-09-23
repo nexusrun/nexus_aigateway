@@ -5,19 +5,19 @@ icon: "pin"
 ---
 
 Coding agents and chat apps send many requests that belong to one logical
-session — one conversation, one agent task. AIGateway detects that session and
+session, one conversation, one agent task. AIGateway detects that session and
 uses it throughout routing and observability:
 
-- **Sticky load balancing** — a load-balanced virtual model routes every
+- **Sticky load balancing**: a load-balanced virtual model routes every
   request of a session to the target that served it first, which keeps provider
   prompt caches warm and model behavior consistent mid-conversation.
-- **Sticky API-key selection** — when one provider has several keys, every
+- **Sticky API-key selection**: when one provider has several keys, every
   request in a detected session uses the same key, preserving provider
   prompt-cache affinity.
-- **Threaded audit logs** — the dashboard's Audit Logs page groups a session's
+- **Threaded audit logs**: the dashboard's Audit Logs page groups a session's
   requests into one thread: the latest request as the row, with an expander
   that unfolds the older requests beneath it.
-- **Per-session usage and cost** — usage records carry the same scoped session
+- **Per-session usage and cost**: usage records carry the same scoped session
   id, so the dashboard and admin API can report the requests, tokens, and
   provider spend for one conversation or agent task.
 
@@ -28,7 +28,7 @@ options below exist for the rare cases they don't.
 
 The first matching signal wins:
 
-1. **Session headers** — a built-in registry covers the headers known tools
+1. **Session headers**: a built-in registry covers the headers known tools
    send, plus gateway conventions:
 
    | Header | Sent by |
@@ -41,14 +41,14 @@ The first matching signal wins:
    | `Helicone-Session-Id` | Helicone convention |
    | `Agent-Session-Id` | Goose |
 
-2. **Body fields** — for clients that mark sessions in the request body:
+2. **Body fields**: for clients that mark sessions in the request body:
    Anthropic `metadata.user_id` (Claude Code embeds its session UUID there,
    both current and legacy formats are parsed), `session_id` (OpenRouter
    convention), `litellm_session_id`, `prompt_cache_key` (Zed and other OpenAI
    clients that reuse a cache key per conversation), and `/v1/responses`
    `conversation` references.
 
-3. **Automatic detection** — chat and responses requests with no explicit
+3. **Automatic detection**: chat and responses requests with no explicit
    signal are grouped by their conversation opening: the model, system
    context, tools, and the messages through the first user turn. Follow-up
    requests resend that prefix unchanged, so an agent that simply replays its
@@ -71,17 +71,17 @@ When a request carries a session and resolves through a
 [virtual model](/features/virtual-models) with several targets, the first
 request picks a target via the redirect's strategy (`round_robin` or `cost`)
 and later requests stick to it. If the pinned target becomes unavailable or
-saturated, the strategy picks again and the session re-pins — a session is
+saturated, the strategy picks again and the session re-pins, a session is
 never glued to a dead target, and the all-saturated honest-429 behavior is
 unchanged.
 
 Under the `adaptive` strategy the pin is handed to the route selector, which
-decides on every request whether the session keeps it — whenever more than
+decides on every request whether the session keeps it, whenever more than
 one target is viable. (With a single viable target there is nothing to
 choose, so the selector is skipped and the redirect behaves like a plain
 alias.) "Unavailable" then
-also covers a target the selector has backed off — one serving 429s or
-failing repeatedly — which stays in the target list and so looks fine to the
+also covers a target the selector has backed off, one serving 429s or
+failing repeatedly, which stays in the target list and so looks fine to the
 checks above. The session moves to a healthy target and re-pins there. A
 target that is merely *slow* still keeps its session: moving it would throw
 away the provider prompt cache the pin exists to protect. See

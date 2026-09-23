@@ -8,7 +8,7 @@ keywords: ["MCP gateway", "Model Context Protocol", "MCP servers", "tool aggrega
 ## What the MCP gateway does
 
 AIGateway can sit between your agent clients (Claude Code, Claude Desktop,
-Cursor, VS Code, …) and the MCP (Model Context Protocol) servers they use —
+Cursor, VS Code, …) and the MCP (Model Context Protocol) servers they use,
 the same way it already sits between your apps and model providers:
 
 - **One endpoint, one key.** Clients connect to `https://your-gateway/mcp`
@@ -18,13 +18,13 @@ the same way it already sits between your apps and model providers:
   server appear in one catalog as `{slug}_{name}` (for example
   `github_create_issue`), in a stable, deterministic order.
 - **Least-privilege discovery.** A server can be scoped to `user_paths`;
-  callers outside the subtree do not merely get errors — the tools never
+  callers outside the subtree do not merely get errors; the tools never
   appear in their `tools/list` at all. Operator-level `allowed_tools` /
   `disallowed_tools` filters trim noisy servers, which keeps agent context
   small.
 - **Observability.** Every tool call becomes a usage entry (server, tool,
   duration, sizes, error flag, labels, user path) and MCP requests appear in
-  the audit log and request log like any other model traffic — labelled with
+  the audit log and request log like any other model traffic, labelled with
   the JSON-RPC method, and with the tool or prompt name for calls, so a
   `tools/call` row reads `github_create_issue`, not a bare path. With
   `LOGGING_LOG_BODIES=true` the JSON-RPC request and response frames are
@@ -56,37 +56,31 @@ verification steps, see [Connect Claude Code and Codex](/mcp-proxy/claude-code-a
 
 Three ways to narrow what a client sees:
 
-- `/mcp` — everything the key's user path may see, namespaced.
-- `/mcp/{slug}` — a single server with its **original** tool names.
-- `X-MCP-Servers: github,jira` header — a comma-separated subset on `/mcp`.
+- `/mcp`, everything the key's user path may see, namespaced.
+- `/mcp/{slug}`, a single server with its **original** tool names.
+- `X-MCP-Servers: github,jira` header, a comma-separated subset on `/mcp`.
 
 ## Declare servers
 
 Servers can be managed in the dashboard (**MCP Servers** page) or declared as
-infrastructure-as-code — declarative entries override same-slug dashboard
+infrastructure-as-code, declarative entries override same-slug dashboard
 rows and are read-only there:
 
-<img
-  src="/features/mcp-servers.png"
-  alt="AIGateway dashboard MCP Servers page listing two servers with their transport, endpoint, status, tool count, and enabled toggle"
-  style={{ width: "100%", maxWidth: "1280px", height: "auto" }}
-  className="rounded-lg"
-/>
 
 ### Add a server from the dashboard
 
 Open **MCP Servers** and click **Add MCP Server**. Fill in:
 
-- **Name** — human-facing; you can rename it later.
-- **Transport** — `http` (streamable HTTP, default) or `sse` (legacy).
-- **URL** — the upstream MCP endpoint.
-- **Headers** — upstream credentials (for example `Authorization: Bearer …`);
+- **Name**: human-facing; you can rename it later.
+- **Transport**: `http` (streamable HTTP, default) or `sse` (legacy).
+- **URL**: the upstream MCP endpoint.
+- **Headers**: upstream credentials (for example `Authorization: Bearer …`);
   saved values are shown redacted afterward.
 - Optional **allowed/disallowed tools** and **user paths** to scope
   visibility, the same fields available in `config.yaml`.
 
 Save to connect immediately. Use the row's refresh icon to force a
-**Reconnect**, the list icon to open the catalog inspector, and the pencil
+**Reconnect**: the list icon to open the catalog inspector, and the pencil
 icon to edit. Rows added this way accept edits and deletes; rows sourced from
 `config.yaml` or `MCP_SERVERS` show as read-only here.
 
@@ -127,10 +121,10 @@ Per-server fields:
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `url` | — | Endpoint for `http` (streamable HTTP) and `sse` transports |
+| `url` | N/A | Endpoint for `http` (streamable HTTP) and `sse` transports |
 | `transport` | `http` | `http`, `sse` (legacy), or `stdio` (config-only) |
-| `headers` | — | Sent verbatim upstream; values support `${ENV}` |
-| `command`, `args`, `env` | — | stdio subprocess definition |
+| `headers` | N/A | Sent verbatim upstream; values support `${ENV}` |
+| `command`, `args`, `env` | N/A | stdio subprocess definition |
 | `enabled` | `true` | Toggle without deleting |
 | `allowed_tools` | all | Allowlist of upstream tool names |
 | `disallowed_tools` | none | Blocklist, applied after the allowlist |
@@ -142,8 +136,8 @@ abort startup with a clear error rather than silently dropping the server.
 
 ## Health and lifecycle
 
-The dashboard shows each server as **connected**, **degraded**, **connecting**,
-or **disabled**, with tool counts and the last error, and the Overview page
+The dashboard shows each server as **connected**: **degraded**: **connecting**,
+or **disabled**: with tool counts and the last error, and the Overview page
 summarizes MCP server health whenever servers are configured. A server whose
 listing fails keeps its previous catalog (marked degraded) and is re-probed
 every 60 seconds; healthy catalogs re-list every 5 minutes and refresh
@@ -155,7 +149,7 @@ forces a redial.
 
 The dashboard's catalog inspector (or
 `GET /admin/mcp-servers/{slug}/catalog`) lists exactly what a server
-currently exposes through the gateway — tools, prompts, resources, and
+currently exposes through the gateway, tools, prompts, resources, and
 resource templates with their descriptions, after your `allowed_tools` /
 `disallowed_tools` filters. Names are the upstream originals; the aggregated
 `/mcp` endpoint serves them as `{slug}_{name}`.
@@ -170,29 +164,29 @@ resource templates with their descriptions, after your `allowed_tools` /
   `/mcp` refuses any request carrying browser fetch metadata (`Origin` or
   `Sec-Fetch-Site`) unless it comes from an origin listed in
   `mcp.allowed_origins` (`MCP_ALLOWED_ORIGINS`). Write entries as a browser
-  serializes them — `https://console.example.com`, no trailing slash, default
+  serializes them, `https://console.example.com`, no trailing slash, default
   ports optional. An allowlisted origin gets a whole session, including the
   `GET` notification stream, which browsers send without an `Origin` header. This is what blocks browser-based DNS rebinding:
   rebinding changes only which address a hostname resolves to, so a rebound
   page's `Origin` and `Host` still agree with each other and the browser still
-  reports `Sec-Fetch-Site: same-origin` — comparing them proves nothing, and
+  reports `Sec-Fetch-Site: same-origin`, comparing them proves nothing, and
   only an explicit allowlist tells your origin apart from an attacker's. Set
   `allowed_origins` only if you serve an MCP web client from a known origin;
   `"*"` trusts every origin, disables the defense, and is warned about at
   startup.
 - **stdio is declarative-only.** stdio servers spawn subprocesses on the
   gateway host, so they can only be declared in `config.yaml` / `MCP_SERVERS`.
-  The admin API and dashboard reject them — a dashboard login must never be
+  The admin API and dashboard reject them, a dashboard login must never be
   equivalent to code execution on the gateway.
 - **stdio subprocesses get a minimal environment.** Only `PATH`, `HOME`,
-  `TMPDIR`, `USER`, and `LANG` are inherited — never the gateway's provider
+  `TMPDIR`, `USER`, and `LANG` are inherited, never the gateway's provider
   API keys or master key. Pass anything else explicitly via the server's
   `env:` map (values support `${VAR}`).
 - **Dashboard-managed credentials live in the gateway database.** Headers of
   admin-created servers are stored in the configured storage backend (they
   are only redacted at the API/UI layer). If your threat model excludes
   secrets in the database, declare those servers in `config.yaml` /
-  `MCP_SERVERS` instead — `${ENV}` references keep the secret in the
+  `MCP_SERVERS` instead, `${ENV}` references keep the secret in the
   environment, and declarative servers never touch the store.
 - **Remote URLs are server-side egress.** Dashboard-managed HTTP/SSE servers
   deliberately support private and loopback endpoints. Protect admin write

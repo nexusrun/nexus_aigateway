@@ -1,105 +1,140 @@
 ---
 title: "Quick Start"
-description: "AIGateway AI gateway: run an OpenAI-compatible LLM gateway in 20 seconds, send your first request and see the real-time logs."
+description: "Run NEXUS AI Gateway locally from the repository, configure a provider, and send an OpenAI-compatible request."
 icon: "rocket"
-keywords: ["quick start", "install", "getting started", "AI gateway setup", "Docker"]
+keywords: ["quick start", "local deployment", "getting started", "AI gateway setup"]
 ---
 
-## Run AIGateway in 20 Seconds
+This guide follows the repository's current build and runtime defaults. It runs
+the gateway with SQLite, the embedded dashboard, and one provider configured
+through environment variables.
 
-### 1. Install and start AIGateway
+## Prerequisites
 
-<Tabs>
-  <Tab title="macOS / Linux">
-    ```bash
-    curl -fsSL https://aigateway.nexusai.run/install.sh | sh
-    aigateway
-    ```
-  </Tab>
-  <Tab title="Windows">
-    ```powershell
-    irm https://aigateway.nexusai.run/install.ps1 | iex
-    aigateway
-    ```
-  </Tab>
-  <Tab title="Docker">
-    ```bash
-    docker run --rm -p 8080:8080 nexusrun/nexus_aigateway
-    ```
-  </Tab>
-  <Tab title="Live Demo" icon="monitor-play">
-    [https://aigateway.nexusai.run/admin/dashboard](https://aigateway.nexusai.run/admin/dashboard?utm_source=aigateway_docs)
-  </Tab>
-</Tabs>
+- Go 1.27 or later
+- Node.js and npm for the dashboard and documentation build
+- At least one provider API key
 
-### 2. Set up a provider
+## 1. Clone and configure
 
-You can do this with an [environment variable](/advanced/configuration#auto-discovery-from-environment-variables),
-a [config.yaml file](/advanced/config-yaml) (infrastructure as code), or from
-the Dashboard's [Providers page](/providers/overview#configuring-providers-without-env-vars) -
-(no restart required in this case).
+```bash
+git clone https://github.com/nexusrun/nexus_aigateway.git
+cd nexus_aigateway
+cp .env.template .env
+```
 
-![Add Provider dialog in the AIGateway dashboard](./images/add-provider.png)
+Edit `.env` and make the local storage and authentication settings explicit:
 
-### 3. Send your first request
+```env
+STORAGE_TYPE=sqlite
+SQLITE_PATH=data/aigateway.db
+AIGATEWAY_MASTER_KEY=replace-with-a-long-local-secret
+OPENAI_API_KEY=your-provider-key
+```
 
-Use `curl`, the OpenAI SDK, or the Anthropic SDK for Python and JavaScript
-against the same gateway:
+Use the environment variable for the provider you selected. The gateway
+discovers configured providers from their documented `*_API_KEY` variables.
+See [Providers](/providers/overview) for provider-specific variables and model
+support.
 
-<CodeGroup>
+<Warning>
+  The gateway starts without a master key for local experimentation, but that
+  is unauthenticated mode. Always set `AIGATEWAY_MASTER_KEY` before exposing
+  the gateway beyond your local machine.
+</Warning>
 
-```bash curl
+## 2. Build and start
+
+Build the dashboard, then start the Go gateway:
+
+```bash
+make frontend
+make run
+```
+
+The dashboard is embedded into the binary. To serve the full product
+documentation locally at `/docs`, export it once before starting:
+
+```bash
+make docs
+make run
+```
+
+The documentation export is generated into `bin/docs` and is not source code.
+If you skip `make docs`, the gateway still builds and serves a small fallback
+page at `/docs`.
+
+## 3. Open the app
+
+| Surface | URL |
+| --- | --- |
+| Dashboard | `http://localhost:8080/admin/dashboard` |
+| Product documentation | `http://localhost:8080/docs` |
+| Model inventory | `http://localhost:8080/v1/models` |
+| OpenAI-compatible API | `http://localhost:8080/v1` |
+| Swagger UI | `http://localhost:8080/swagger/index.html` |
+
+The dashboard and admin API are enabled by default. Requests use the master key
+as a bearer token until you create managed API keys in the dashboard.
+
+## 4. Send a request
+
+First inspect the models exposed by the configured provider:
+
+```bash
+curl http://localhost:8080/v1/models \
+  -H "Authorization: Bearer replace-with-a-long-local-secret"
+```
+
+Use one of the returned model IDs in an OpenAI-compatible request:
+
+```bash
 curl http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer change-me" \
+  -H "Authorization: Bearer replace-with-a-long-local-secret" \
   -d '{
-    "model": "gpt-4o-mini",
+    "model": "openai/gpt-4o-mini",
     "messages": [{"role": "user", "content": "Say hello in one sentence."}]
   }'
 ```
 
-```python Python
+The provider-qualified model name is an example. Use the exact ID returned by
+`GET /v1/models`; model availability depends on the provider account and its
+configured model filters.
+
+## 5. Use an SDK
+
+OpenAI-compatible clients use `/v1` as their base URL:
+
+```python
 from openai import OpenAI
 
 client = OpenAI(
     base_url="http://localhost:8080/v1",
-    api_key="change-me",
+    api_key="replace-with-a-long-local-secret",
 )
 
-completion = client.chat.completions.create(
-    model="gpt-4o-mini",
+response = client.chat.completions.create(
+    model="openai/gpt-4o-mini",
     messages=[{"role": "user", "content": "Say hello in one sentence."}],
 )
 
-print(completion.choices[0].message.content)
+print(response.choices[0].message.content)
 ```
 
-```javascript JavaScript
-import OpenAI from "openai";
+For Anthropic-compatible clients, use the gateway root as the base URL. The
+client sends requests to `/v1/messages`:
 
-const client = new OpenAI({
-  baseURL: "http://localhost:8080/v1",
-  apiKey: "change-me",
-});
-
-const completion = await client.chat.completions.create({
-  model: "gpt-4o-mini",
-  messages: [{ role: "user", content: "Say hello in one sentence." }],
-});
-
-console.log(completion.choices[0].message.content);
-```
-
-```python Python (Anthropic)
+```python
 import anthropic
 
 client = anthropic.Anthropic(
     base_url="http://localhost:8080",
-    api_key="change-me",
+    api_key="replace-with-a-long-local-secret",
 )
 
 message = client.messages.create(
-    model="claude-sonnet-4-6",
+    model="anthropic/claude-sonnet-4-6",
     max_tokens=256,
     messages=[{"role": "user", "content": "Say hello in one sentence."}],
 )
@@ -107,57 +142,10 @@ message = client.messages.create(
 print(message.content[0].text)
 ```
 
-```javascript JavaScript (Anthropic)
-import Anthropic from "@anthropic-ai/sdk";
+## Next steps
 
-const client = new Anthropic({
-  baseURL: "http://localhost:8080",
-  apiKey: "change-me",
-});
-
-const message = await client.messages.create({
-  model: "claude-sonnet-4-6",
-  max_tokens: 256,
-  messages: [{ role: "user", content: "Say hello in one sentence." }],
-});
-
-console.log(message.content[0].text);
-```
-
-</CodeGroup>
-
-<Tip>
-  The Anthropic SDK examples call `POST /v1/messages`, AIGateway's
-  [Anthropic-compatible endpoint](/advanced/anthropic-messages-api). Any
-  configured provider's model can be used there, not only Anthropic's.
-</Tip>
-
-## Admin Panel Preview
-
-Open this URL in your browser to see the management dashboard and real-time audit logs and more:
-
-`http://localhost:8080/admin/dashboard`
-
-<Tip>
-  Dashboard UI is enabled by default (`ADMIN_UI_ENABLED=true`). Admin API
-  endpoints are at `/admin/*` and use the same bearer auth as the main
-  API.
-</Tip>
-
-### Usage Analytics
-
-![AIGateway AI gateway usage analytics dashboard](./images/usage-analytics.png)
-
-### Audit Logs
-
-![AIGateway AI gateway audit logs dashboard](./images/audit-logs.png)
-
-## Next Steps
-
-- Take it to production: [Production Deployment](/guides/production)
-- Update, pin a version, or uninstall: [FAQ](/about/faq)
-- Understand response caching: [Cache](/features/cache)
-- Add spend limits: [Budgets](/features/budgets)
-- Configure production settings: [Configuration](/advanced/configuration)
-- Add request policies: [Guardrails](/advanced/guardrails)
-- Connect OpenClaw: [Using AIGateway with OpenClaw](/guides/openclaw)
+- [Configure providers](/providers/overview)
+- [Connect Claude Code, Codex, and Cursor](/guides/claude-code)
+- [Create virtual models](/features/virtual-models)
+- [Deploy in production](/guides/production)
+- [Review the API surface](/advanced/api-endpoints)

@@ -1,0 +1,65 @@
+---
+title: "Hugging Face Inference Providers"
+description: "Configure the Hugging Face Inference Providers router in AIGateway and route requests to supported inference partners."
+icon: "layers"
+keywords: ["Hugging Face", "Inference Providers", "serverless inference", "provider setup"]
+---
+
+Hugging Face Inference Providers gives one API access to models served by
+multiple inference partners. AIGateway uses Hugging Face's OpenAI-compatible
+router and preserves model policy suffixes such as `:fastest` and `:cheapest`.
+
+## Configure
+
+Create a Hugging Face token with inference access:
+
+```bash
+HUGGINGFACE_API_KEY=hf_...
+# HUGGINGFACE_BASE_URL=https://router.huggingface.co/v1  # optional override
+```
+
+Or in `config.yaml`:
+
+```yaml
+providers:
+  huggingface:
+    type: huggingface
+    api_key: "${HUGGINGFACE_API_KEY}"
+    models:
+      - id: "openai/gpt-oss-120b:fastest"
+```
+
+The default base URL is `https://router.huggingface.co/v1`. You can also set
+`HUGGINGFACE_MODELS` when you want an explicit model allowlist or when model
+discovery is unavailable.
+
+## Chat completions
+
+```bash
+curl http://localhost:8080/v1/chat/completions \
+  -H "Authorization: Bearer $AIGATEWAY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "openai/gpt-oss-120b:fastest",
+    "messages": [{"role": "user", "content": "Explain inference routing briefly."}]
+  }'
+```
+
+Supported model routing suffixes include `:fastest`, `:cheapest`,
+`:preferred`, and provider-specific suffixes such as `:groq`. Use
+`huggingface/<model-id>` when selecting the provider explicitly among multiple
+configured providers.
+
+## Responses compatibility
+
+The gateway exposes `/v1/responses` for Hugging Face models by translating
+Responses requests through Chat Completions. For Hugging Face features outside
+the OpenAI-compatible chat router, use the provider's native task APIs through
+the [provider passthrough API](/features/passthrough-api) when supported.
+
+Hugging Face documents a limited free-user credit and changing provider limits;
+see the current [Inference Providers pricing and billing guide](https://huggingface.co/docs/inference-providers/pricing)
+before planning production traffic.
+
+See the [Hugging Face Inference Providers documentation](https://huggingface.co/docs/inference-providers/index)
+for current provider availability and model routing behavior.

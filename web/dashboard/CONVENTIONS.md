@@ -1,4 +1,4 @@
-# AIGateway dashboard — Svelte conventions
+# AIGateway dashboard: Svelte conventions
 
 The admin dashboard is a Svelte 5 SPA in `web/dashboard/`. Every page MUST
 follow these rules so the pages compose into one coherent app.
@@ -7,14 +7,14 @@ follow these rules so the pages compose into one coherent app.
 
 1. **Preserve the admin API contract.** Keep every admin API endpoint,
    request/response field, query parameter, and behavioral rule exactly as
-   the Go backend implements it — `internal/admin/*.go` is the source of
+   the Go backend implements it: `internal/admin/*.go` is the source of
    truth. Do not invent endpoints or payload fields.
 2. **CSS lives with its owner.** Component-specific styles are scoped
    `<style>` blocks in the owning component; the shared design system
    (tokens, reset, typography, buttons, forms, tables, alerts, layout,
-   keyframes) plus rules that target child-component DOM — a class passed
+   keyframes) plus rules that target child-component DOM: a class passed
    as a prop into `Icon` or `LoadingState` renders in the child's markup,
-   where the parent's scope hash cannot match — lives in `src/styles/`.
+   where the parent's scope hash cannot match: lives in `src/styles/`.
    `dashboard.css` is only the entry point: it `@import`s the modules in
    cascade order, so append new rules to the module that owns them and
    never reorder the imports. No CSS preprocessor, on purpose: scoped
@@ -40,14 +40,14 @@ follow these rules so the pages compose into one coherent app.
    directory (atomic design: compose from
    `$lib/components/atoms|molecules|organisms`). Keep files under ~400 lines
    where practical.
-6. **Shared foundation code lives in `src/lib/`** (plus `src/App.svelte`) —
+6. **Shared foundation code lives in `src/lib/`** (plus `src/App.svelte`) :
    changes there affect every page, so keep them deliberate. Page-specific
    helpers belong in the page directory.
 
-## Foundation — use it, don't re-implement
+## Foundation: use it, don't re-implement
 
 Imports use the `$lib` alias. **Each module documents its own exports and
-props in its header comment** — read those for the details; this list exists
+props in its header comment**: read those for the details; this list exists
 so you know what already exists.
 
 ### HTTP: `$lib/api/client.js`
@@ -63,7 +63,7 @@ const saved = await sendJSON("/admin/foo", "POST", payload, { label: "save foo" 
 - 401s are handled globally (the auth dialog opens); `result.ok` is `false`.
 - `errorMessage(result, fallback)` reads a result envelope;
   `errorPayloadMessage(data, fallback)` reads a raw `{error:{message}}` body.
-  Both really live in `$lib/api/errors.js`, which imports no Svelte runtime —
+  Both really live in `$lib/api/errors.js`, which imports no Svelte runtime :
   pure page logic and its `node:test` suite import them from there directly.
 - `apiFetch(path, options)` is the raw escape hatch (SSE, blobs); it adds auth
   + timezone headers and the base path. Never call `fetch` on `/admin/...`.
@@ -73,24 +73,24 @@ const saved = await sendJSON("/admin/foo", "POST", payload, { label: "save foo" 
   unavailable-503, then errors; 401 loads stay silent). Apply the outcome
   to your `$state` fields instead of re-implementing the branches.
 
-### Stores (`$lib/stores/*.svelte.js`) — all singletons
+### Stores (`$lib/stores/*.svelte.js`): all singletons
 
 `auth` · `router` · `themeStore` (bump `tick` to rebuild charts) · `sidebar` ·
-`modals` (owned by the `Modal` atom — don't touch) · `timezone` ·
+`modals` (owned by the `Modal` atom: don't touch) · `timezone` ·
 `runtimeConfig` (feature-flag visibility) · `modelsStore` · `dateRange`
 (shared reporting window) · `usageData` · `flash` · `confirmDialog` (typed
 confirmations).
 
 ### Components
 
-- **atoms** — `Icon` (kebab-case lucide names), `Spinner`, `Modal`,
+- **atoms**: `Icon` (kebab-case lucide names), `Spinner`, `Modal`,
   `EmptyState`, `NoDataIllustration`, `CopyButton`, `TableActionButton`,
   `DialogCloseButton`, `SegmentedControl`, `EnabledToggle`, `AIGatewayLogo`.
-- **molecules** — `LoadingState`, `Pagination`, `DatePicker`, `FilterInput`,
+- **molecules**: `LoadingState`, `Pagination`, `DatePicker`, `FilterInput`,
   `SearchSelect` (searchable single-value dropdown; use it instead of a
   `<datalist>` or a long `<select>`), `InlineHelpSection`, `ChartCanvas`,
   `DemoModeBanner`, `FormField`.
-- **organisms** — `AuthBanner`, `AuthDialog`, `Sidebar` (nav items in
+- **organisms**: `AuthBanner`, `AuthDialog`, `Sidebar` (nav items in
   `navigation.js`), `ThemeToggle`, `FlashMessages`,
   `TypedConfirmationDialog`, `EditorDialog`.
 
@@ -99,7 +99,7 @@ confirmations).
 so reactive reads are tracked and theme changes rebuild automatically.
 **Every create/edit modal composes `EditorDialog`** (shell + header + error
 banner + actions + the Escape-under-auth-dialog guard) with `FormField`
-cells inside — never hand-roll that shell again.
+cells inside: never hand-roll that shell again.
 
 ### Utils
 
@@ -108,7 +108,7 @@ provider/model display) · `dateKeys.js` (UTC "YYYY-MM-DD" day-key math shared
 by the timezone store, the reporting window and the contribution calendar) ·
 `chartTheme.js` (theme colors + the shared Chart.js style fragments) ·
 `clipboard.svelte.js` · `debounce.js` · `storage.js` (localStorage can be
-absent or blocked — never touch it directly) · `api/paths.js` (`aigatewayPath`) ·
+absent or blocked: never touch it directly) · `api/paths.js` (`aigatewayPath`) ·
 `attachments.js` (`{@attach ...}` behaviours: `dismissOnOutside`,
 `autofocusWithin`).
 
@@ -153,7 +153,7 @@ Pure logic (formatting, reducers, query building) lives in plain `.js` files
 in the page directory and is tested in `web/dashboard/tests/<name>.test.js`
 using `node:test` + `assert` (ESM imports; no DOM).
 
-Those `.js` files must use **relative** imports, not `$lib` — node runs them
+Those `.js` files must use **relative** imports, not `$lib`: node runs them
 without Vite, so the alias does not resolve. That also means they cannot
 import a `.svelte.js` store (runes need the compiler); keep shared helpers
 they need in a plain module.
@@ -165,5 +165,5 @@ Run from `web/dashboard/`:
 ```sh
 npm run check   # svelte-check: zero errors required (warnings OK)
 npm test        # compile messages + node --test tests/*.test.js
-npm run build   # keeps the embedded dist/ in sync — CI enforces drift
+npm run build   # keeps the embedded dist/ in sync: CI enforces drift
 ```

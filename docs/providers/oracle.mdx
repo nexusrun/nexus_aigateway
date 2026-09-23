@@ -29,7 +29,7 @@ AIGATEWAY_MASTER_KEY=change-me
 ```
 
 `ORACLE_MODELS` is a comma-separated list (whitespace trimmed). Behavior
-follows the global `CONFIGURED_PROVIDER_MODELS_MODE` — `fallback` (default)
+follows the global `CONFIGURED_PROVIDER_MODELS_MODE`, `fallback` (default)
 uses the list when Oracle's `/models` is unavailable or empty; `allowlist`
 exposes only configured models and skips the upstream call.
 
@@ -151,10 +151,10 @@ don't fit or you want per-provider resilience overrides.
 
 ## Troubleshooting
 
-- **`404 Authorization failed or requested resource not found`** — missing OCI
+- **`404 Authorization failed or requested resource not found`**: missing OCI
   policy, wrong region, or model not available to the account.
-- **`model registry has no models`** — set `ORACLE_MODELS` or YAML `models:`.
-- **OCI CLI works but Oracle bearer requests fail** — different auth flows.
+- **`model registry has no models`**: set `ORACLE_MODELS` or YAML `models:`.
+- **OCI CLI works but Oracle bearer requests fail**: different auth flows.
   OCI CLI uses API signing keys; Oracle Generative AI inference uses the
   Generative AI bearer API key.
 

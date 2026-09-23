@@ -17,7 +17,7 @@ the OpenAI-compatible endpoint (`/compatible-mode/v1`).
 
 Because Bailian deprecated `max_tokens` in April 2026 in favor of
 `max_completion_tokens`, AIGateway automatically maps the standard
-`max_tokens` field to `max_completion_tokens` for every request — no
+`max_tokens` field to `max_completion_tokens` for every request, no
 client change required.
 
 ## Configure
@@ -50,7 +50,7 @@ Model Studio's OpenAI-compatible API is available in multiple regions. Set
 
 ## Model IDs
 
-Common Qwen model identifiers — check the [Model Studio model
+Common Qwen model identifiers, check the [Model Studio model
 list](https://www.alibabacloud.com/help/zh/model-studio/model-list) for the
 current catalog:
 
@@ -71,7 +71,7 @@ Model Studio deprecated `max_tokens` on 2026-04-20 (effective 2026-05-30).
 Its compatible-mode models now require `max_completion_tokens` instead.
 
 AIGateway transparently maps the standard `max_tokens` parameter to
-`max_completion_tokens` for every `bailian` provider request — send
+`max_completion_tokens` for every `bailian` provider request, send
 `max_tokens` as you normally would, and AIGateway rewrites it before forwarding to
 Model Studio.
 

@@ -8,7 +8,7 @@ keywords: ["AI providers", "supported providers", "LLM providers", "provider lis
 AIGateway routes OpenAI-compatible requests to many AI providers through one
 gateway. For most providers, setting the API key is the whole setup. The pages
 in this section exist for the ones whose setup is **not** purely "set an API
-key" — auth flows from cloud credentials, deployment-based URLs, region or
+key", auth flows from cloud credentials, deployment-based URLs, region or
 project requirements, dual native + OpenAI-compatible API surfaces, or other
 quirks.
 
@@ -16,7 +16,7 @@ quirks.
 
 Every credential below (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, ...) can
 instead be set from the **Providers** page in the admin dashboard
-(`/admin/dashboard`) — no restart required. This is the easiest way to run
+(`/admin/dashboard`), no restart required. This is the easiest way to run
 AIGateway with zero provider env vars: start the gateway with none configured
 (the catalog starts empty; the gateway still boots and serves the dashboard),
 then add providers from the UI. A provider added this way registers into the
@@ -26,7 +26,7 @@ Providers declared via env vars or `config.yaml` always take precedence: a
 name configured either way is **read-only** in the dashboard (shown with a
 "Config" badge), the same rule AIGateway already applies to MCP servers,
 virtual models, and rate limits. API keys and service-account secrets are
-masked (`***`) once saved — editing a provider re-sends `***` for anything you
+masked (`***`) once saved, editing a provider re-sends `***` for anything you
 didn't change, and the gateway keeps the stored value. Disabling a provider
 (rather than deleting it) unregisters it from routing but keeps its
 configuration on file. The same multi-key rotation env vars support
@@ -40,20 +40,23 @@ support, not every individual model capability exposed by an upstream provider.
 
 | Provider | Credential | Example Model | Chat | `/responses` | Embed | Files | Batches | Passthru | Guide |
 | -------- | ---------- | ------------- | :--: | :----------: | :---: | :---: | :-----: | :------: | ----- |
-| OpenAI | `OPENAI_API_KEY` | `gpt-5.5` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
+| OpenAI | `OPENAI_API_KEY` | `gpt-5.5` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A |
 | ChatGPT subscription | `CHATGPT_API_KEY` (Codex sign-in token) | `gpt-5.6-sol` | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | [ChatGPT subscription](/providers/chatgpt) |
 | Anthropic | `ANTHROPIC_API_KEY` | `claude-sonnet-4-20250514` | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | [Anthropic](/providers/anthropic) |
 | Cohere | `COHERE_API_KEY` | `command-a-plus-05-2026` | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | [Cohere](/providers/cohere) |
+| Cerebras Inference | `CEREBRAS_API_KEY` | `qwen-3.8-27b` | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | [Cerebras Inference](/providers/cerebras) |
+| Cloudflare Workers AI | `CLOUDFLARE_API_KEY` + `CLOUDFLARE_BASE_URL` | `@cf/meta/llama-3.1-8b-instruct` | ✅ | ✅* | ✅ | ❌ | ❌ | ✅ | [Cloudflare Workers AI](/providers/cloudflare-workers-ai) |
 | Google Gemini | `GEMINI_API_KEY` | `gemini-3.7-flash` | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | [Google Gemini](/providers/gemini) |
 | Google Vertex AI | `VERTEX_PROJECT` + `VERTEX_LOCATION` + GCP credentials | `google/gemini-2.5-flash` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | [Google Vertex AI](/providers/vertex) |
 | DeepSeek | `DEEPSEEK_API_KEY` | `deepseek-v4-pro` | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | [DeepSeek](/providers/deepseek) |
-| Groq | `GROQ_API_KEY` | `llama-3.3-70b-versatile` | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | — |
-| Fireworks AI | `FIREWORKS_API_KEY` (`FIREWORKS_BASE_URL` optional) | `accounts/fireworks/models/gpt-oss-120b` | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | — |
-| Chutes AI | `CHUTES_API_KEY` (`CHUTES_BASE_URL` optional) | `Qwen/Qwen3-32B-TEE` | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | — |
-| Meta (Muse Spark) | `META_API_KEY` (`META_BASE_URL` optional) | `muse-spark-1.1` | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | — |
-| OpenRouter | `OPENROUTER_API_KEY` | `google/gemini-2.5-flash` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — |
-| Kilo AI | `KILO_API_KEY` (`KILO_BASE_URL` optional) | `anthropic/claude-sonnet-4.5` | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | — |
-| Z.ai | `ZAI_API_KEY` (`ZAI_BASE_URL` optional) | `glm-5.1` | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | — |
+| Groq | `GROQ_API_KEY` | `llama-3.3-70b-versatile` | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | N/A |
+| Fireworks AI | `FIREWORKS_API_KEY` (`FIREWORKS_BASE_URL` optional) | `accounts/fireworks/models/gpt-oss-120b` | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A |
+| Hugging Face Inference Providers | `HUGGINGFACE_API_KEY` (`HUGGINGFACE_BASE_URL` optional) | `openai/gpt-oss-120b:fastest` | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | [Hugging Face Inference Providers](/providers/huggingface) |
+| Chutes AI | `CHUTES_API_KEY` (`CHUTES_BASE_URL` optional) | `Qwen/Qwen3-32B-TEE` | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | N/A |
+| Meta (Muse Spark) | `META_API_KEY` (`META_BASE_URL` optional) | `muse-spark-1.1` | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | N/A |
+| OpenRouter | `OPENROUTER_API_KEY` | `google/gemini-2.5-flash` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A |
+| Kilo AI | `KILO_API_KEY` (`KILO_BASE_URL` optional) | `anthropic/claude-sonnet-4.5` | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | N/A |
+| Z.ai | `ZAI_API_KEY` (`ZAI_BASE_URL` optional) | `glm-5.1` | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | N/A |
 | xAI (Grok) | `XAI_API_KEY` | `grok-4.6` | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | [xAI (Grok)](/providers/xai) |
 | Alibaba Cloud Model Studio (Bailian) | `BAILIAN_API_KEY` (`BAILIAN_BASE_URL` optional) | `qwen3-max` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | [Alibaba Cloud Model Studio](/providers/bailian) |
 | MiniMax | `MINIMAX_API_KEY` (`MINIMAX_BASE_URL` optional) | `MiniMax-M3` | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | [MiniMax](/providers/minimax) |
@@ -74,20 +77,34 @@ support, not every individual model capability exposed by an upstream provider.
 
 ✅ Supported ❌ Unsupported
 
+\* Cloudflare Workers AI exposes native Responses only for GPT-OSS models;
+  other chat-capable models use the gateway's Responses-to-chat translation.
+
 ## Provider notes
 
-- **llm-d** — point `LLMD_BASE_URL` at the Router/EPP service and declare
+- **llm-d**: point `LLMD_BASE_URL` at the Router/EPP service and declare
   `LLMD_MODELS` when the route does not serve `/v1/models`. The dedicated
   provider injects trusted inference-objective and user-path fairness headers.
-- **Z.ai GLM Coding Plan** — set
+- **Z.ai GLM Coding Plan**: set
   `ZAI_BASE_URL=https://api.z.ai/api/coding/paas/v4`.
-- **Groq reasoning and transcriptions** — on the gpt-oss and qwen3 families
+- **Groq reasoning and transcriptions**: on the gpt-oss and qwen3 families
   AIGateway defaults Groq's `reasoning_format` to `parsed`, so chain of thought
   arrives in `reasoning` instead of as inline `<think>…</think>` text inside
   the answer. Send `reasoning_format` yourself (`raw` or `hidden`) to override
   it. JSON transcription and translation responses have Groq's vendor `x_groq`
   member removed so they match the OpenAI shape.
-- **MiniMax regions and current text models** — the default global endpoint is
+- **Cloudflare Workers AI**: `CLOUDFLARE_BASE_URL` must include the account ID
+  and end in `/ai/v1`. Chat Completions and embeddings use the OpenAI-compatible
+  endpoints; Responses is available only for GPT-OSS models and is limited to
+  non-streaming requests. Declare `CLOUDFLARE_MODELS` when model discovery is
+  unavailable.
+- **Hugging Face Inference Providers**: model IDs may include `:fastest`,
+  `:cheapest`, `:preferred`, or a provider suffix such as `:groq`. The OpenAI-
+  compatible router is chat-focused; use the provider-specific native APIs for
+  tasks outside chat and Responses.
+- **Cerebras Inference**: the default endpoint is
+  `https://api.cerebras.ai/v1`, and model IDs are forwarded unchanged.
+- **MiniMax regions and current text models**: the default global endpoint is
   `https://api.minimax.io/v1`; accounts on the China platform should set
   `MINIMAX_BASE_URL=https://api.minimaxi.com/v1`. The current text model IDs
   are `MiniMax-M3` (1,000,000-token context; text, image, and video input) and
@@ -95,41 +112,41 @@ support, not every individual model capability exposed by an upstream provider.
   pricing is $0.60 input, $2.40 output, and $0.12 cached input for M3, and
   $0.30 input, $1.20 output, $0.06 cached input, and $0.375 cache writes for
   M2.7. M3 supports adaptive or disabled thinking; M2.7 always thinks.
-- **Amazon Bedrock Mantle** — GPT-5.6 Sol, Terra, and Luna accept only the
+- **Amazon Bedrock Mantle**: GPT-5.6 Sol, Terra, and Luna accept only the
   Responses API on Mantle. AIGateway sends `/v1/responses` requests directly to
   AWS and selects the required `/openai/v1/responses` upstream path.
-- **Fireworks AI** — model IDs are account-scoped paths such as
+- **Fireworks AI**: model IDs are account-scoped paths such as
   `accounts/fireworks/models/gpt-oss-120b`; use them verbatim in requests and
   in `FIREWORKS_MODELS`.
-- **ElevenLabs** — a voice-only provider: `/v1/audio/speech` (text-to-speech)
+- **ElevenLabs**: a voice-only provider: `/v1/audio/speech` (text-to-speech)
   and `/v1/audio/transcriptions` (speech-to-text) are supported, but chat,
   `/v1/responses`, and embeddings are not (the ❌s above reflect that, not a
   gateway limitation). The OpenAI `voice` field must be an ElevenLabs
   voice_id. See the [ElevenLabs guide](/providers/elevenlabs) for supported
   audio formats and speech-to-text models.
-- **Chutes AI** — defaults to `https://llm.chutes.ai/v1` and discovers its
+- **Chutes AI**: defaults to `https://llm.chutes.ai/v1` and discovers its
   current model IDs, context limits, capabilities, and pricing from the live
   catalog. AIGateway translates `/v1/responses` requests to chat completions;
   Chutes' shared LLM endpoint does not expose embeddings. Passthrough support
   requires explicit operator opt-in by adding `chutes` to
   `ENABLED_PASSTHROUGH_PROVIDERS`.
-- **Meta (Muse Spark)** — the Meta Model API is OpenAI-compatible; set
+- **Meta (Muse Spark)**: the Meta Model API is OpenAI-compatible; set
   `META_API_KEY` and route to `muse-spark-1.1`. Muse Spark models are not in
   the upstream model catalog yet, so declare `context_window` and `pricing`
   under `providers.meta.models` metadata in `config.yaml` if you want cost
   tracking and context-window reporting.
-- **Kilo AI** — model IDs use `provider/model` (for example,
+- **Kilo AI**: model IDs use `provider/model` (for example,
   `anthropic/claude-sonnet-4.5`) and are forwarded unchanged. AIGateway serves
   `/v1/responses` by translating it to Kilo's chat-completions endpoint. If
   another configured provider exposes the same raw model ID, select Kilo
   explicitly with `kilo/anthropic/claude-sonnet-4.5`; AIGateway removes only the
   outer `kilo/` routing qualifier before forwarding.
-- **Xiaomi MiMo** — TTS (`mimo-v2.5-tts*`) and ASR (`mimo-v2.5-asr`) are served
+- **Xiaomi MiMo**: TTS (`mimo-v2.5-tts*`) and ASR (`mimo-v2.5-asr`) are served
   through `/v1/audio/speech` and `/v1/audio/transcriptions` (translated to
   MiMo's chat-completions audio dialect) as well as directly via chat
   completions; for 1M context append `[1m]` to the model ID and list it in
   `XIAOMI_MODELS`.
-- **OpenCode Go (OpenCode Zen)** — routes per model: most models use
+- **OpenCode Go (OpenCode Zen)**: routes per model: most models use
   OpenAI-style `/chat/completions`, while `/messages`-only models (default
   `qwen3.7-max`, override with `OPENCODE_GO_MESSAGES_MODELS`) are sent to the
   Anthropic-native endpoint. Chat requests without a reasoning parameter get
@@ -137,19 +154,19 @@ support, not every individual model capability exposed by an upstream provider.
   reject requests that omit it (override with
   `OPENCODE_GO_DEFAULT_REASONING_EFFORT`). Set `OPENCODE_GO_API_KEY`; the base
   URL defaults to `https://opencode.ai/zen/go/v1`.
-- **ChatGPT subscription** — serves `/v1/responses` only, billed against the
+- **ChatGPT subscription**: serves `/v1/responses` only, billed against the
   ChatGPT plan's quota rather than API credit. The upstream accepts a strict
   parameter allowlist and streams only; AIGateway adapts requests and collapses
   the stream for non-streaming callers. Set `CHATGPT_API_KEY` to the access
   token from `codex login`. Reported cost is not real spend: these model IDs
   also exist on the OpenAI Platform, so the registry attaches their per-token
-  prices to flat-rate subscription traffic — keep budgets and `cost` load
+  prices to flat-rate subscription traffic, keep budgets and `cost` load
   balancing off it.
-- **Kimi Code** — no per-token pricing; quota refreshes weekly and is also
+- **Kimi Code**: no per-token pricing; quota refreshes weekly and is also
   constrained by a rolling 5-hour window. Usage-cost tracking reports zero for
   Kimi Code, so `cost` load-balancing cannot price it; prefer conservative
   retry strategies.
-- **Hetzner (experimental)** — Hetzner declares the inference API experimental:
+- **Hetzner (experimental)**: Hetzner declares the inference API experimental:
   expect breaking changes and no SLA. The model catalogue and rate-limit windows
   change while the experiment runs; query the live `/v1/models` endpoint and the
   official docs instead of relying on snapshots. The example model ID in the table
@@ -157,12 +174,12 @@ support, not every individual model capability exposed by an upstream provider.
   of 2026-08-17 and may differ at read time. Free while experimental, so
   usage-cost tracking reports zero and `cost` load-balancing cannot price it.
   No embeddings endpoint; chat, `/v1/responses` (via chat), model listing, and
-  passthrough only. Passthrough is a generic forwarder — the ✅ marks adapter
+  passthrough only. Passthrough is a generic forwarder, the ✅ marks adapter
   capability; Hetzner's tolerance for arbitrary upstream paths is unverified
   while the API is experimental. `hetzner` is included in the default
   `ENABLED_PASSTHROUGH_PROVIDERS` allowlist so `/p/hetzner/...` routes work
   without operator opt-in; remove it from the list to gate them.
-- **Configured model lists** — available for every provider with
+- **Configured model lists**: available for every provider with
   `<PROVIDER>_MODELS`, for example
   `OPENROUTER_MODELS=openai/gpt-oss-120b,anthropic/claude-sonnet-4` or
   `ORACLE_MODELS=openai.gpt-oss-120b,xai.grok-3`. DeepSeek defaults to
@@ -172,12 +189,12 @@ support, not every individual model capability exposed by an upstream provider.
   `/models` is unavailable or empty. Set
   `CONFIGURED_PROVIDER_MODELS_MODE=allowlist` to expose only configured models
   for providers that define a list, skipping their upstream `/models` calls.
-- **Model filters** — narrow a large catalog by glob pattern or price instead of
+- **Model filters**: narrow a large catalog by glob pattern or price instead of
   listing models one by one: `OPENROUTER_MODEL_FILTER_INCLUDE=*:free` keeps only
   OpenRouter's free tier, and `<PROVIDER>_MODEL_FILTER_MAX_PRICE_PER_MTOK` caps
   what a provider may route to. See
   [Filtering a provider's models](/advanced/config-yaml#filtering-a-providers-models).
-- **Model categories (chat vs embeddings vs audio)** — a model's category comes
+- **Model categories (chat vs embeddings vs audio)**: a model's category comes
   from its `modes`, resolved from four sources in precedence order: the remote
   model registry, operator metadata declared under `providers.<name>.models` in
   `config.yaml` (e.g. `modes: [embedding]`), capability signals in the
@@ -186,30 +203,30 @@ support, not every individual model capability exposed by an upstream provider.
   capabilities), and finally a conservative name check for models still
   unclassified: IDs containing `embed` or matching well-known embedding
   families (`bge`, `e5`, `gte`, `minilm`) are categorized as embedding models,
-  and IDs containing `rerank` as reranking models — namespaced IDs like
+  and IDs containing `rerank` as reranking models, namespaced IDs like
   `org/model` are checked by their final path segment. Declare operator
   metadata only when a model stays unclassified after all of this. Categories
   affect dashboard grouping only; `/v1/embeddings`
   routes to any model the provider serves regardless of category.
-- **vLLM** — set `VLLM_API_KEY` only if the upstream server was started with
+- **vLLM**: set `VLLM_API_KEY` only if the upstream server was started with
   `--api-key`.
-- **llama.cpp / LM Studio** — `LLAMACPP_BASE_URL` is required (llama-server's
+- **llama.cpp / LM Studio**: `LLAMACPP_BASE_URL` is required (llama-server's
   default port collides with AIGateway's own 8080, so there is no default);
   `LLAMACPP_API_KEY` is optional. Do not register these servers as `ollama`,
   which speaks Ollama's native API. See [llama.cpp](/providers/llamacpp).
-- **llm-d** — `LLMD_BASE_URL` is required. `LLMD_API_KEY` is optional and is
+- **llm-d**: `LLMD_BASE_URL` is required. `LLMD_API_KEY` is optional and is
   sent only when the Gateway in front of the Router requires bearer auth.
-- **SGLang** — set `SGLANG_API_KEY` only if the upstream server was started
+- **SGLang**: set `SGLANG_API_KEY` only if the upstream server was started
   with `--api-key`; otherwise `SGLANG_BASE_URL` is enough.
-- **Multiple API keys for one provider** — set `OPENAI_API_KEY_2`,
+- **Multiple API keys for one provider**: set `OPENAI_API_KEY_2`,
   `OPENAI_API_KEY_3`, and so on to spread sessions across keys while keeping
   each conversation on one key for prompt-cache affinity. See
   [API key rotation](/providers/key-rotation).
-- **Multiple instances of one provider type** — without `config.yaml`, use
+- **Multiple instances of one provider type**: without `config.yaml`, use
   suffixed env vars such as `OPENAI_EAST_API_KEY` and `OPENAI_EAST_BASE_URL`;
   add `OPENAI_EAST_MODELS` to configure that instance's model list. This
   registers provider `openai-east` with type `openai`. Vertex AI follows the
-  same suffix pattern — `VERTEX_US_PROJECT` registers provider `vertex-us`.
+  same suffix pattern, `VERTEX_US_PROJECT` registers provider `vertex-us`.
   Vertex project and location env vars must match the instance prefix: for a
   suffixed instance such as `VERTEX_US_PROJECT`, also set `VERTEX_US_LOCATION`
   and any other suffixed settings for that instance, rather than the generic
@@ -228,7 +245,7 @@ forwards everything else exactly as the provider sent it.
 - **Vendor members are not stripped.** Groq's `x_groq` and its
   `queue_time` / `prompt_time` / `completion_time` usage timings, and
   DeepSeek's `prompt_cache_hit_tokens` / `prompt_cache_miss_tokens`, reach the
-  client untouched — that passthrough is how you get at provider-native extras
+  client untouched, that passthrough is how you get at provider-native extras
   without waiting for a AIGateway release. Read cache hits from the portable
   `usage.prompt_tokens_details.cached_tokens` if you want provider-independent
   code. See [ADR-0011](https://github.com/nexusrun/nexus_aigateway/blob/main/docs/adr/0011-field-forwarding-on-translated-paths.md).
@@ -238,7 +255,7 @@ forwards everything else exactly as the provider sent it.
   as-is; OpenAI's own API omits usage unless the client asks. Most providers
   send it as a separate trailing chunk with an empty `choices` array, DeepSeek
   attaches it to its last content chunk. Ignore the member, or set
-  `ENFORCE_RETURNING_USAGE_DATA=false` to stop AIGateway asking for it — at the
+  `ENFORCE_RETURNING_USAGE_DATA=false` to stop AIGateway asking for it, at the
   cost of usage records for streamed requests on providers that only report
   usage when asked.
 
@@ -246,27 +263,27 @@ forwards everything else exactly as the provider sent it.
 
 These are the providers most users hit friction on:
 
-- **Google Vertex AI** — needs a GCP project, region, and either Application
+- **Google Vertex AI**: needs a GCP project, region, and either Application
   Default Credentials or a service-account JSON key.
-- **Amazon Bedrock** — no API key of its own; uses the AWS credential chain
+- **Amazon Bedrock**: no API key of its own; uses the AWS credential chain
   and requires explicit model access in the Bedrock console.
-- **Azure OpenAI** — deployment-scoped base URLs, the `api-version` query
+- **Azure OpenAI**: deployment-scoped base URLs, the `api-version` query
   parameter, and the `api-key` header instead of `Authorization: Bearer`.
-- **Oracle GenAI** — requires an OCI IAM policy for `generativeaiapikey` and a
+- **Oracle GenAI**: requires an OCI IAM policy for `generativeaiapikey` and a
   region-specific OpenAI-compatible endpoint URL.
-- **Google Gemini (AI Studio)** — two routing modes (native `generateContent`
+- **Google Gemini (AI Studio)**: two routing modes (native `generateContent`
   vs OpenAI-compatible) with different image-input behavior.
-- **Anthropic** — reasoning effort maps to Claude's adaptive thinking and
+- **Anthropic**: reasoning effort maps to Claude's adaptive thinking and
   effort control, which differ across model generations.
-- **DeepSeek** — reasoning effort mapping quirks for DeepSeek V4.
-- **Ollama / SGLang / vLLM** — local-model hosting with optional multi-instance setup
+- **DeepSeek**: reasoning effort mapping quirks for DeepSeek V4.
+- **Ollama / SGLang / vLLM**: local-model hosting with optional multi-instance setup
   through suffixed env vars and provider-qualified model IDs.
-- **Xiaomi MiMo** — thinking mode on by default, a `[1m]` context suffix, and
+- **Xiaomi MiMo**: thinking mode on by default, a `[1m]` context suffix, and
   TTS/ASR that run through chat completions rather than native audio endpoints.
-- **OpenCode Go** — OpenCode Zen splits models across OpenAI-style
+- **OpenCode Go**: OpenCode Zen splits models across OpenAI-style
   `/chat/completions` and Anthropic-native `/messages`; AIGateway routes per model
   (the `/messages`-only set is maintained manually, default `qwen3.7-max`).
-- **ChatGPT subscription** — a Responses-only upstream with a strict parameter
+- **ChatGPT subscription**: a Responses-only upstream with a strict parameter
   allowlist, used to put AIGateway between Codex and a ChatGPT plan.
 
 <Tip>
@@ -288,14 +305,8 @@ The admin dashboard (`/admin/dashboard`) shows live status for every
 configured provider in the **Providers Overview** section of the
 **Overview** page.
 
-<img
-  src="/providers/provider-status.png"
-  alt="AIGateway dashboard Providers Overview with a Degraded openai card showing a failing model and a Healthy vllm card"
-  style={{ width: "100%", maxWidth: "1280px", height: "auto" }}
-  className="rounded-lg"
-/>
 
-Each card's status pill combines two signals — **model discovery** (can the
+Each card's status pill combines two signals, **model discovery** (can the
 provider's model inventory be fetched?) and **request health** (are real
 requests through the gateway succeeding?). Real-traffic signals only ever
 worsen a status, never mask a discovery failure. Hover over the pill for the
@@ -315,20 +326,20 @@ classification reason and the most recent error.
 Expand a card (the arrow strip at the bottom, or the section-wide
 **Show Details** switch) to see request health details:
 
-- **Recent Requests** — requests and errors through the gateway in the last
+- **Recent Requests**: requests and errors through the gateway in the last
   10 minutes.
-- **Breaker State** — the provider's live circuit-breaker state
+- **Breaker State**: the provider's live circuit-breaker state
   (see [Resilience](/advanced/resilience#circuit-breaker-and-dashboard-provider-health)).
-- **Models (Recent Traffic)** — per-model request/error counts. A model with
+- **Models (Recent Traffic)**: per-model request/error counts. A model with
   at least 3 errors making up half or more of its windowed requests is
-  flagged in red — this catches a single broken model on an otherwise
+  flagged in red, this catches a single broken model on an otherwise
   healthy provider, which model discovery alone cannot see. Hover a row for
   the model's latest error message. A `200` response with no choices, no
   output, or no token usage counts as an error here too.
 
 Request-health tracking is passive: it observes traffic your clients already
-send (the gateway's own background probes — model discovery and availability
-checks — are excluded), so an idle provider simply shows no recent requests. Counters are in-memory per gateway instance and
+send (the gateway's own background probes, model discovery and availability
+checks, are excluded), so an idle provider simply shows no recent requests. Counters are in-memory per gateway instance and
 reset on restart.
 
 The same data is available as JSON from `GET /admin/providers/status` for

@@ -30,7 +30,7 @@ Allowed types are `feat`, `fix`, `perf`, `docs`, `refactor`, `test`, `build`, `c
 
 The admin dashboard is a Svelte 5 single-page app in `web/dashboard/`. Vite
 builds it into `internal/admin/dashboard/static/dist/`, which the Go binary
-embeds. The build output is not committed — CI builds it in a secretless job
+embeds. The build output is not committed: CI builds it in a secretless job
 and feeds the result to the tests and release builds (see
 [ADR-0010](docs/adr/0010-dashboard-built-in-ci.md)). On a fresh clone, run
 `make frontend` once (requires Node 22+) before `make test` or starting the

@@ -52,7 +52,7 @@ auth) and a few models only on the Anthropic-native `/messages` endpoint
 - **Anthropic-only models** are translated to the Anthropic Messages dialect and
   sent to `/messages`, mirroring how AIGateway already serves native Anthropic.
   Both paths normalize to the same OpenAI-compatible response, so clients see
-  one consistent surface regardless of which model they pick — whether they call
+  one consistent surface regardless of which model they pick, whether they call
   `/v1/chat/completions` or `/v1/messages`.
 
 The set of `/messages`-only models is currently maintained manually (default:
@@ -128,7 +128,7 @@ high / max set OpenCode Zen accepts:
 
 Any other value (`turbo`, say) is forwarded unchanged for the upstream to judge.
 `reasoning.effort` is AIGateway's canonical field, so a request that sets both it
-and a top-level `reasoning_effort` is sent with the mapped `reasoning.effort` —
+and a top-level `reasoning_effort` is sent with the mapped `reasoning.effort`,
 the same precedence every other AIGateway provider applies.
 
 Models routed to `/messages` use the Anthropic thinking dialect instead and are
