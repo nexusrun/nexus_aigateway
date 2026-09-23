@@ -1,7 +1,6 @@
 {
   "name": "NEXUS AI Gateway",
   "description": "OpenAI-compatible AI gateway with a dashboard, audit logs and spend control.",
-  "services": ["postgres"],
   "env": {
     "PORT": { "value": "8080" },
     "STORAGE_TYPE": { "value": "sqlite" },
