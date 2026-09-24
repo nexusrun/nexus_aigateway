@@ -4,9 +4,12 @@
   "env": {
     "PORT": { "value": "8080" },
     "STORAGE_TYPE": { "value": "sqlite" },
-    "ADMIN_BOOTSTRAP_USERNAME": { "required": true, "description": "Admin UI USERNAME." },
-    "ADMIN_BOOTSTRAP_PASSWORD": { "required": true, "description": "Admin UI PASSWORD." },
-    "OPENAI_API_KEY": { "description": "Optional" },
+    "ADMIN_AUTH_ENABLED": { "value": "true" },
+    "ADMIN_SESSION_SECRET": { "generator": "secret" },
+    "ADMIN_BOOTSTRAP_USERNAME": { "required": true, "description": "Username for the first dashboard admin account." },
+    "ADMIN_BOOTSTRAP_PASSWORD": { "required": true, "description": "Password for that account. Use a long, unique password." },
+    "AIGATEWAY_MASTER_KEY": { "description": "Optional. A bearer key for API calls before you create API keys in the dashboard." },
+    "OPENAI_API_KEY": { "description": "Optional. You can also add provider keys later in the dashboard." },
     "ANTHROPIC_API_KEY": { "description": "Optional" },
     "GEMINI_API_KEY": { "description": "Optional" },
     "GROQ_API_KEY": { "description": "Optional" }
