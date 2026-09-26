@@ -131,15 +131,49 @@ func isNonReasoningChatModel(model string) bool {
 	return strings.HasPrefix(m, "gpt-3.5") || strings.HasPrefix(m, "gpt-4") || strings.HasPrefix(m, "chatgpt-")
 }
 
+// needsReasoningOffForTools reports whether a request would hit OpenAI's 400
+// "Function tools with reasoning_effort are not supported ... in
+// /v1/chat/completions". GPT-5.6 and GPT-6 reason by default and accept
+// function tools on Chat Completions only with reasoning_effort "none", so a
+// tool request that sets no effort gets "none". gpt-6-astra rejects "none"
+// too and is left alone: only /v1/responses serves it tools. An explicit
+// effort from the client is kept, and older models accept tools at their
+// default effort.
+func needsReasoningOffForTools(req *core.ChatRequest) bool {
+	if len(req.Tools) == 0 || req.ExtraFields.Lookup("reasoning_effort") != nil {
+		return false
+	}
+	m := strings.ToLower(strings.TrimSpace(req.Model))
+	if strings.HasPrefix(m, "gpt-6-astra") {
+		return false
+	}
+	for _, family := range []string{"gpt-5.6", "gpt-6"} {
+		if rest, ok := strings.CutPrefix(m, family); ok && (rest == "" || rest[0] == '-' || rest[0] == '.') {
+			return true
+		}
+	}
+	return false
+}
+
 // adaptChatRequest maps AIGateway's nested reasoning shape (set by the Messages
 // API's thinking and by clients sending reasoning.effort) onto the flat
 // reasoning_effort field: OpenAI Chat Completions rejects "reasoning".
 // Models that cannot reason reject reasoning_effort too, so it is dropped.
+// Tool requests to GPT-5.6 / GPT-6 with no effort get "none" (see above).
 func adaptChatRequest(req *core.ChatRequest) (*core.ChatRequest, error) {
-	if req == nil || req.Reasoning == nil {
+	if req == nil {
 		return req, nil
 	}
-	effort := strings.TrimSpace(req.Reasoning.Effort)
+	effort := ""
+	if req.Reasoning != nil {
+		effort = strings.TrimSpace(req.Reasoning.Effort)
+	}
+	if effort == "" && needsReasoningOffForTools(req) {
+		return providers.AdaptReasoningEffortRequest(req, "none")
+	}
+	if req.Reasoning == nil {
+		return req, nil
+	}
 	if effort == "" || isNonReasoningChatModel(req.Model) {
 		return providers.DropReasoning(req), nil
 	}
