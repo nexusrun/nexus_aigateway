@@ -136,7 +136,7 @@ func isNonReasoningChatModel(model string) bool {
 // /v1/chat/completions". GPT-5.6 and GPT-6 reason by default and accept
 // function tools on Chat Completions only with reasoning_effort "none", so a
 // tool request that sets no effort gets "none". gpt-6-astra rejects "none"
-// too and is left alone: only /v1/responses serves it tools. An explicit
+// too, so its tool requests go to /v1/responses (chat_via_responses.go). An explicit
 // effort from the client is kept, and older models accept tools at their
 // default effort.
 func needsReasoningOffForTools(req *core.ChatRequest) bool {
